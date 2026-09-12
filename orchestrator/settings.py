@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -122,14 +123,21 @@ class Runtime:
             self.litellm_base_url.rstrip("/").removesuffix("/v1") + "/v1/model/info",
             headers={"Authorization": f"Bearer {self.litellm_api_key}"},
         )
-        try:
-            with urllib.request.urlopen(request, timeout=15) as response:
-                payload = json.load(response)
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-            raise ConfigError(
-                f"Could not reach the LiteLLM proxy at {self.litellm_base_url}: {exc}"
-            ) from exc
-        return {entry["model_name"] for entry in payload.get("data", [])}
+        # A momentary network drop should not abort a long unattended run, so
+        # retry briefly before declaring the proxy unreachable.
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(request, timeout=15) as response:
+                    return {e["model_name"] for e in json.load(response).get("data", [])}
+            except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+                last_error = exc
+                if attempt < 2:
+                    time.sleep(2 * (attempt + 1))
+        raise ConfigError(
+            f"Could not reach the LiteLLM proxy at {self.litellm_base_url} "
+            f"after 3 attempts: {last_error}"
+        ) from last_error
 
     def verify_access(self) -> None:
         """Fail before any phase runs if the key cannot reach both models.
