@@ -1,0 +1,24 @@
+# Multi-Agent Workflow Guidelines
+
+## Roles & Lifecycle Strategy
+
+### 1. Coordinator (Execution Manager)
+- **Trigger:** Reading new tasks from Obsidian via MCP (`obsidian_read_notes`).
+- **Action:** Coordinates work between Architect, Senior Engineer, and Junior Engineer steps.
+
+### 2. Architect Agent (Planning Phase)
+- **Model:** Route via `claude-sonnet-5-cloud-plan`.
+- **Task:** Read task specifications from Obsidian. Design system architecture and step-by-step implementation logic.
+- **Output:** Write architectural plan to `Obsidian/Plans/<task-name>-plan.md` using the Obsidian MCP server.
+
+### 3. Senior Engineer Agent (Review & Task Breakdown)
+- **Model:** Route via `claude-sonnet-5-cloud-plan`.
+- **Task:** Inspect `Obsidian/Plans/` for unverified architectural plans. Validate technical feasibility and safety.
+- **Output:** Break plan into granular, actionable sub-tasks and write them to `Obsidian/Tasks/<task-name>-tasks.md`.
+
+### 4. Junior Software Engineer Agent (Action Phase)
+- **Model:** Route via `qwen3-coder-local` (Ollama Qwen3-Coder 30B).
+- **Task:** Read individual granular tasks from `Obsidian/Tasks/`. Execute actual code creation and file edits in the workspace.
+- **Handoff Rules:** 
+  - If execution fails or the architectural plan contains errors, write an issue ticket to `Obsidian/Plans/issues.md` and alert the Coordinator to re-engage the Architect.
+  - When finished, update task status in `Obsidian/Tasks/` to `[Completed]` and notify Coordinator.

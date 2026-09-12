@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Tooling
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets and run state
+.env
+.runs/
+
+# Application data
+logs/
+data/
+*.db

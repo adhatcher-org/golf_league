@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% block title %}Golf League{% endblock %}</title>
+    <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+    <header>
+        <h1>Golf League</h1>
+    </header>
+    
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    
+    <footer>
+        <p>&copy; 2026 Golf League</p>
+    </footer>
+    
+    <script src="/static/app.js"></script>
+</body>
+</html>
