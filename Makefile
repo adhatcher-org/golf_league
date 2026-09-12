@@ -13,15 +13,15 @@ lint:
 	ruff check .
 
 test:
-	pytest tests/ -v
+	uv run pytest tests/ -v
 
 coverage:
-	coverage run -m pytest tests/
-	coverage report
-	coverage html
+	uv run coverage run -m pytest tests/
+	uv run coverage report
+	uv run coverage html
 
 security:
-	python -m pip check
+	uv run pip check
 
 dependency-check:
 	uv pip list --outdated
