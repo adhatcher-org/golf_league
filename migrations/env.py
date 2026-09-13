@@ -1,9 +1,7 @@
 from logging.config import fileConfig
-import os
-
-from sqlalchemy import engine_from_config, pool
 
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -11,16 +9,17 @@ config = context.config
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
-if config.log_file:
-    fileConfig(config.config_file_name, options={'log_file': config.log_file})
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-import golf_league.models
 from golf_league.config import get_settings
-target_metadata = golf_league.models.Base.metadata
+from golf_league.models import Base
+
+target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -30,7 +29,7 @@ target_metadata = golf_league.models.Base.metadata
 
 def run_migrations_offline():
     """Run migrations in 'offline' mode.
-    
+
     This configures the context with just a URL
     and not an Engine, which is useful for testing
     migrations against a database that may not be
@@ -51,14 +50,14 @@ def run_migrations_offline():
 
 def run_migrations_online():
     """Run migrations in 'online' mode.
-    
+
     In this scenario we need to create an Engine
     and associate a connection with the context.
     """
     configuration = config.get_section(config.config_ini_section)
     configuration["sqlalchemy.url"] = get_settings().database_url
     configuration["render_as_batch"] = True
-    
+
     connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",
