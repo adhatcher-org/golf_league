@@ -35,7 +35,7 @@ def run_migrations_offline():
     available/easily available - e.g., in a
     CI setting.
     """
-    url = get_settings().database_url
+    url = config.get_main_option("sqlalchemy.url") or get_settings().database_url
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -53,7 +53,7 @@ def run_migrations_online():
     In this scenario we need to create an Engine
     and associate a connection with the context.
     """
-    database_url = get_settings().database_url
+    database_url = config.get_main_option("sqlalchemy.url") or get_settings().database_url
     ensure_sqlite_directory(database_url)
 
     configuration = config.get_section(config.config_ini_section)
