@@ -3,6 +3,10 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from golf_league.config import get_settings
+from golf_league.database import ensure_sqlite_directory
+from golf_league.models import Base
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
@@ -14,11 +18,6 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-from golf_league.config import get_settings
-from golf_league.models import Base
-
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
@@ -54,8 +53,11 @@ def run_migrations_online():
     In this scenario we need to create an Engine
     and associate a connection with the context.
     """
+    database_url = get_settings().database_url
+    ensure_sqlite_directory(database_url)
+
     configuration = config.get_section(config.config_ini_section)
-    configuration["sqlalchemy.url"] = get_settings().database_url
+    configuration["sqlalchemy.url"] = database_url
     configuration["render_as_batch"] = True
 
     connectable = engine_from_config(

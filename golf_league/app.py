@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
@@ -8,26 +9,38 @@ from golf_league.config import get_settings
 from golf_league.database import make_engine
 from golf_league.migrations import upgrade_to_head
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
     database_url = settings.database_url
 
-    # Create engine
-    engine = make_engine(database_url)
-    app.state.engine = engine
+    app.state.ready = False
+    app.state.migration_error = None
+    engine = None
 
-    # Run migrations to head
-    upgrade_to_head(database_url)
+    try:
+        # Create engine and run migrations to head. A failure here must not
+        # abort ASGI startup: the app has to stay up so /readyz can honestly
+        # report 503 instead of the process refusing connections outright.
+        engine = make_engine(database_url)
+        app.state.engine = engine
 
-    # Mark app as ready after successful migration
-    app.state.ready = True
+        upgrade_to_head(database_url)
+
+        app.state.ready = True
+    except Exception as exc:
+        logger.exception("startup failed: database/migration error")
+        app.state.ready = False
+        app.state.migration_error = str(exc)
 
     yield
 
     # Cleanup on shutdown
-    engine.dispose()
+    if engine is not None:
+        engine.dispose()
 
 
 def create_app(settings=None) -> FastAPI:
