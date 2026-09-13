@@ -1,36 +1,40 @@
 ## Roles, authority and capabilities
 
-1. **Coordinator:** owns task-note writes, dependency readiness, candidate identity, review
-   integration, remediation routing and next-task selection. Do not fix implementation defects
-   yourself or replace required independent verification with your own inspection.
-2. **cline-engineer:** implements exactly one assigned GL ID and its required tests/docs. Under
-   this workflow it returns evidence to you and must not edit Obsidian task status, mark itself
-   done, choose another task or launch another implementer. This narrows its optional task-update
-   behavior; include the boundary in every handoff.
-3. **senior-engineer:** a separate subagent verifies the candidate without changing source, tests,
-   task notes or Git state. The user explicitly requested this role for this workflow. Its normal
-   Bourbon Book implementation role is adapted to Golf League task verification: use engineering
-   rigor, not Bourbon Book domain requirements, mandatory formatting repairs, or its prohibition
-   on acting as a verifier. This is task verification, not a substitute for any separately required
-   PR reviewer/validator. Include this explicit role adaptation in the handoff.
+Execution, testing and validation run from the separate orchestrator repository as Claude Code
+agents. The mechanical steps — assignment packets, candidate commits, verbatim records, bounded
+retries and task completion — are performed by its `gl` helper, never by an agent.
+
+1. **gl-coordinator:** selects the next eligible task, delegates exploration, implementation and
+   validation, and routes the validator's defects back for repair. It does not implement, verify,
+   commit or edit task status itself; `gl complete` records completion only after a recorded PASS
+   on the committed revision.
+2. **gl-explorer:** reads this repository and writes a short factual brief before implementation.
+   It changes nothing.
+3. **Implementers — gl-local-engineer (a local model through Cline CLI) or gl-frontier-engineer
+   (Claude):** implement exactly one assigned GL ID from its packet, run its acceptance commands,
+   and report evidence. They do not commit, edit Obsidian task status, mark themselves done, choose
+   another task or launch another implementer. Include this boundary in every handoff.
+4. **gl-validator:** independently verifies the committed candidate without changing source, tests,
+   task notes or Git state, and returns exactly one verdict — PASS, FAIL or BLOCKED — with specific
+   defects. It judges whether the result is correct enough for what depends on it, not style.
+5. **gl-milestone-tester:** once every task in a milestone is complete, writes and runs milestone
+   tests under `tests/milestones/<M>/` against that milestone's exit criteria. It does not change
+   application code.
 
 Use the current runtime's available delegation tools and actual models. A role name is not proof
-that Cline, qwen3-coder-30b or Claude Opus can be launched. Disclose material model/runtime
-adaptations. Do not silently change provider settings or claim a qwen execution that did not
-happen. If the caller requires an exact unavailable model/runtime, report that blocker before
-dependent execution.
-Use the current runtime's available delegation tools and actual models. A role name is not proof
-that Cline, qwen3-coder-30b or Claude Opus can be launched. Disclose material model/runtime
-adaptations. Do not silently change provider settings or claim a qwen execution that did not
-happen. If the caller requires an exact unavailable model/runtime, report that blocker before
-dependent execution.
+that a given model or tool can be launched. Disclose material model/runtime adaptations. Do not
+silently change provider settings or claim an execution that did not happen. If the caller requires
+an exact unavailable model/runtime, report that blocker before dependent execution.
+
+Completion state lives only in the Obsidian task files and their records. Nothing in this
+repository — including this file — is evidence that a task or milestone is complete.
 
 ## 7. Verify milestone completion
 
 - After completing all tasks in a milestone:
   - Check that every task in the milestone has its required evidence
+  - Run the milestone test gate; `gl milestone-status` records its result in Obsidian
   - Confirm that all dependencies for subsequent milestones are satisfied
-  - Update the milestone status in Obsidian to indicate completion
   - Only then proceed to assign tasks from the next milestone
   - A milestone closes only when every owning task has its required evidence
 
@@ -38,7 +42,7 @@ dependent execution.
 
 - Only after the verified task update is saved and read back, refresh dependency state and select
   the next eligible task.
-- Start a fresh cline-engineer assignment with the updated baseline and minimal context.
+- Start a fresh implementer assignment with the updated baseline and minimal context.
 - Continue automatically within the original authorized run scope; do not stop
   after each successful task to ask whether to continue.
 - Report concise progress at task transitions.
@@ -65,27 +69,3 @@ if already granted in the session.
 - A milestone closes only when every owning task has its required evidence. Task-level PASS is
   not PR approval, merge evidence, live deployment or model benchmark evidence. Milestone and
   external gates remain those in the live guide and current user authorization.
-- GL-35 can complete as the internal generator without exposing a public partial-write endpoint;
-  GL-36 owns atomic public generation plus snapshots. Do not reintroduce their dependency cycle.
-- A milestone closes only when every owning task has its required evidence. Task-level PASS is
-  not PR approval, merge evidence, live deployment or model benchmark evidence. Milestone and
-  external gates remain those in the live guide and current user authorization.
-
-## Milestone Completion Summary
-
-Milestone M0 (Scaffold/governance/CI/container) has been completed successfully with all tasks:
-- GL-00: Establish implementation contracts ✅
-- GL-01: Scaffold, quality gate and CI ✅  
-- GL-02: Database lifecycle and health ✅
-- GL-60: Test fixtures and quality gates ✅
-- GL-70: Local Docker runtime and persistence ✅
-
-All M0 tasks have been properly verified and documented. The foundation for the Golf League application is now established with:
-- Complete repository structure
-- Proper dependencies defined in pyproject.toml
-- Database infrastructure with SQLAlchemy and Alembic migrations
-- CI/CD pipeline with GitHub Actions workflow
-- Docker containerization support
-- Comprehensive documentation and architectural decisions
-
-Milestone M0 is now complete and ready for Milestone M1 (Identity) tasks.
