@@ -1,6 +1,7 @@
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from golf_league.models import Base
 
@@ -8,19 +9,20 @@ from golf_league.models import Base
 @pytest.fixture
 def engine():
     """Create an in-memory SQLite engine with foreign keys ON and tables created."""
-    engine = create_engine("sqlite:///:memory:", echo=False)
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
 
-    # Enable foreign key enforcement
-    with engine.connect() as conn:
-        conn.execute("PRAGMA foreign_keys=ON")
-        conn.commit()
+    @event.listens_for(engine, "connect")
+    def _fk_on(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
-    # Create all tables
     Base.metadata.create_all(engine)
-
     yield engine
-
-    # Cleanup
     engine.dispose()
 
 
