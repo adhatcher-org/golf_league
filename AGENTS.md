@@ -4,22 +4,26 @@ Execution, testing and validation run from the separate orchestrator repository 
 agents. The mechanical steps — assignment packets, candidate commits, verbatim records, bounded
 retries and task completion — are performed by its `gl` helper, never by an agent.
 
-1. **gl-coordinator:** selects the next eligible task, delegates exploration, implementation and
+1. **Coordinator (the `/gl-run` skill in the main Claude session):** selects the next eligible task, delegates exploration, implementation and
    validation, and routes the validator's defects back for repair. It does not implement, verify,
    commit or edit task status itself; `gl complete` records completion only after a recorded PASS
    on the committed revision.
 2. **gl-explorer:** reads this repository and writes a short factual brief before implementation.
    It changes nothing.
-3. **Implementers — gl-local-engineer (a local model through Cline CLI) or gl-frontier-engineer
-   (Claude):** implement exactly one assigned GL ID from its packet, run its acceptance commands,
-   and report evidence. They do not commit, edit Obsidian task status, mark themselves done, choose
-   another task or launch another implementer. Include this boundary in every handoff.
+3. **gl-engineer:** implements exactly one assigned GL ID from its packet, runs its acceptance
+   commands, and reports evidence. It does not commit, edit Obsidian task status, mark itself done,
+   choose another task or launch another implementer. Include this boundary in every handoff.
 4. **gl-validator:** independently verifies the committed candidate without changing source, tests,
    task notes or Git state, and returns exactly one verdict — PASS, FAIL or BLOCKED — with specific
    defects. It judges whether the result is correct enough for what depends on it, not style.
 5. **gl-milestone-tester:** once every task in a milestone is complete, writes and runs milestone
    tests under `tests/milestones/<M>/` against that milestone's exit criteria. It does not change
    application code.
+6. **gl-architect and gl-planner:** planning agents. The architect reviews the Plan notes and may
+   edit only those; the planner audits evidence and breaks down the next milestone without
+   changing anything.
+
+All of these run on the Claude subscription. Nothing in this workflow calls a model API.
 
 Use the current runtime's available delegation tools and actual models. A role name is not proof
 that a given model or tool can be launched. Disclose material model/runtime adaptations. Do not
