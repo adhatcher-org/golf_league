@@ -21,7 +21,7 @@ coverage:
 	uv run coverage html
 
 security:
-	uv run pip check
+	uv pip check
 
 dependency-check:
 	uv pip list --outdated

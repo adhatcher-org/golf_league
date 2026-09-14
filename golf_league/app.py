@@ -14,7 +14,10 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    settings = get_settings()
+    # Use provided settings or fall back to get_settings()
+    settings = getattr(app.state, "settings", None)
+    if settings is None:
+        settings = get_settings()
     database_url = settings.database_url
 
     app.state.ready = False
@@ -45,6 +48,10 @@ async def lifespan(app: FastAPI):
 
 def create_app(settings=None) -> FastAPI:
     app = FastAPI(lifespan=lifespan)
+
+    # Store settings on app state if provided
+    if settings is not None:
+        app.state.settings = settings
 
     # Health endpoints
     @app.get("/healthz")
