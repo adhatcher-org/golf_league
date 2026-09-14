@@ -15,32 +15,27 @@ def test_app_readyz_endpoint_when_ready(client):
     assert response.json() == {"status": "ok"}
 
 
-def test_app_readyz_endpoint_with_unusable_database(tmp_path):
-    """Test that /readyz returns 503 when database connection fails."""
+def test_readyz_returns_503_when_the_database_cannot_be_opened(tmp_path):
+    """Test that /readyz returns 503 when the database path cannot be opened."""
     from golf_league.app import create_app
     from golf_league.config import Settings
 
-    # Create settings with an invalid database URL that will cause connection failure
+    # Point the database at a path whose parent is a file, not a directory,
+    # so SQLite genuinely cannot open it. Uses this test's own tmp_path so no
+    # test shares a database with another.
+    blocker = tmp_path / "blocker"
+    blocker.write_text("not a directory\n")
     settings = Settings(
-        database_url="sqlite:///nonexistent/path/that/does/not/exist/app.db",
-        session_secret="test-only-not-a-secret"
+        database_url=f"sqlite:///{blocker}/app.db",
+        session_secret="test-only-not-a-secret",
     )
 
-    # Create app with these settings
     with TestClient(create_app(settings=settings)) as test_client:
-        # /healthz should still work even if database is unavailable
-        health_response = test_client.get("/healthz")
-        assert health_response.status_code == 200
+        # /healthz should still work even if the database is unavailable
+        assert test_client.get("/healthz").status_code == 200
 
-        # /readyz should fail because database connection will fail
-        # Note: This might actually succeed if the directory can be created,
-        # but the test verifies the endpoint exists and returns proper JSON when successful
-        ready_response = test_client.get("/readyz")
-        # If the database can be created, this returns 200; otherwise 503
-        # We just verify the endpoint exists and returns valid JSON
-        assert ready_response.status_code in [200, 503]
-        if ready_response.status_code == 200:
-            assert ready_response.json() == {"status": "ok"}
+        # /readyz must fail because the database cannot be opened
+        assert test_client.get("/readyz").status_code == 503
 
 
 def test_app_without_settings_uses_default():

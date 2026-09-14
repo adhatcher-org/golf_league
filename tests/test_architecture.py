@@ -4,8 +4,42 @@ import pathlib
 import pytest
 
 
+def _banned_for(name: str | None, banned: set[str]) -> str | None:
+    """Return the banned entry matching `name`, or None.
+
+    `name` matches a banned entry `b` when it equals `b` exactly, or starts
+    with `b` followed by a dot (so `sqlalchemy.orm` counts as `sqlalchemy`).
+    """
+    if name is None:
+        return None
+    for b in banned:
+        if name == b or name.startswith(b + "."):
+            return b
+    return None
+
+
+def _found_in_tree(tree: ast.AST, banned: set[str]) -> set[str]:
+    """Walk a parsed module and collect the banned names it imports."""
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                banned_name = _banned_for(alias.name, banned)
+                if banned_name is not None:
+                    found.add(banned_name)
+        elif isinstance(node, ast.ImportFrom):
+            banned_name = _banned_for(node.module, banned)
+            if banned_name is not None:
+                found.add(banned_name)
+    return found
+
+
 def forbidden_imports(module_path: pathlib.Path, banned: set[str]) -> set[str]:
     """Check a Python module for forbidden imports using AST.
+
+    The file is parsed with `ast`; it is never imported. A module is banned
+    when its dotted name equals a banned name or starts with a banned name
+    plus a dot, so `sqlalchemy.orm` counts as `sqlalchemy`.
 
     Args:
         module_path: Path to the Python file to check
@@ -14,36 +48,15 @@ def forbidden_imports(module_path: pathlib.Path, banned: set[str]) -> set[str]:
     Returns:
         Set of forbidden imports found in the module
     """
-    found = set()
-
     try:
-        with open(module_path, encoding='utf-8') as f:
-            source = f.read()
-
+        source = module_path.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(module_path))
-
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    module_name = alias.name
-                    if module_name in banned:
-                        found.add(module_name)
-            elif isinstance(node, ast.ImportFrom):
-                module_name = node.module
-                if module_name in banned:
-                    found.add(module_name)
-                # Also check for relative imports like "from . import models"
-                elif module_name is None and node.level > 0:
-                    # This is a relative import, check if it's a banned module
-                    # We need to resolve the actual module name
-                    pass
-
     except (SyntaxError, OSError):
         # If the file has syntax errors or can't be read, return empty set
         # This ensures the test doesn't fail due to file issues
-        pass
+        return set()
 
-    return found
+    return _found_in_tree(tree, banned)
 
 
 def get_python_files(directory: pathlib.Path) -> list[pathlib.Path]:
@@ -100,3 +113,16 @@ def test_guard_catches_a_real_violation(tmp_module_file):
     banned = {"sqlalchemy"}
     forbidden = forbidden_imports(tmp_module_file, banned)
     assert forbidden == {"sqlalchemy"}, f"Expected to find sqlalchemy import, found: {forbidden}"
+
+
+def test_guard_catches_a_submodule_violation(tmp_path):
+    """Test that the guard catches dotted submodule imports, not just exact matches."""
+    module_file = tmp_path / "submodule_violation.py"
+    module_file.write_text(
+        "import sqlalchemy.orm\nfrom sqlalchemy.orm import Session\n"
+        "from fastapi.responses import JSONResponse\n"
+    )
+    forbidden = forbidden_imports(module_file, {"sqlalchemy", "fastapi"})
+    assert forbidden == {"sqlalchemy", "fastapi"}, (
+        f"Expected submodule imports to resolve to banned prefixes, found: {forbidden}"
+    )
