@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   golf-league:
     build: .
@@ -8,9 +6,13 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      - DATABASE_PATH=sqlite:///data/golf_league.db
+      - DATABASE_URL=sqlite:///./data/golf_league.db
+      # SESSION_SECRET must come from the shell environment or an untracked
+      # .env file next to this compose file. It is never baked into the
+      # image or committed here.
+      - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET must be set in the environment or a local .env file}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/readyz').status == 200 else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3
