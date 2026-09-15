@@ -38,15 +38,15 @@ def test_readyz_returns_503_when_the_database_cannot_be_opened(tmp_path):
         assert test_client.get("/readyz").status_code == 503
 
 
-def test_app_without_settings_uses_default():
-    """Test that create_app without settings uses default configuration."""
+def test_app_without_settings_uses_default(monkeypatch, tmp_path):
+    """create_app() with no Settings reads configuration from the environment."""
     from golf_league.app import create_app
 
-    # This should not raise an error and should create an app
+    monkeypatch.setenv("SESSION_SECRET", "test-only-not-a-secret")
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'app.db'}")
+
     app = create_app()
     assert app is not None
 
-    # Test that healthz works
     with TestClient(app) as client:
-        response = client.get("/healthz")
-        assert response.status_code == 200
+        assert client.get("/healthz").status_code == 200
