@@ -11,7 +11,7 @@ help:
 	@echo "  check         - Run all checks"
 
 lint:
-	ruff check .
+	uv run ruff check .
 
 test:
 	uv run pytest tests/ -v
