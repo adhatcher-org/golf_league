@@ -199,16 +199,37 @@ def test_sixth_login_attempt_in_window_is_blocked_with_same_neutral_page(client)
         wrong_password_response = client.post(
             "/login",
             data={"email": "ratelimited@example.test", "password": "nope", "csrf_token": csrf_token},
+            follow_redirects=False,
         )
         fake_time["now"] += 1
 
-    sixth_response = client.post(
+    # The sixth attempt uses the CORRECT password: only the limiter can refuse it.
+    sixth = client.post(
         "/login",
-        data={"email": "ratelimited@example.test", "password": "nope", "csrf_token": csrf_token},
+        data={
+            "email": "ratelimited@example.test",
+            "password": "the-real-password",
+            "csrf_token": csrf_token,
+        },
+        follow_redirects=False,
     )
+    assert sixth.status_code == wrong_password_response.status_code == 401
+    assert sixth.status_code != 429
+    assert sixth.text == wrong_password_response.text
+    assert "session" not in sixth.cookies
 
-    assert sixth_response.status_code == wrong_password_response.status_code == 401
-    assert sixth_response.text == wrong_password_response.text
+    # Past the window the same correct password succeeds, proving the block was the limiter.
+    fake_time["now"] += 901
+    after_window = client.post(
+        "/login",
+        data={
+            "email": "ratelimited@example.test",
+            "password": "the-real-password",
+            "csrf_token": csrf_token,
+        },
+        follow_redirects=False,
+    )
+    assert after_window.status_code == 303
 
 
 def test_completed_reset_invalidates_a_prior_session(client):
@@ -257,6 +278,79 @@ def test_verify_token_is_idempotent_and_never_500s(client):
     assert first.status_code == 200
     assert second.status_code == 200
     assert first.text == second.text
+
+
+def test_verify_with_a_real_token_sets_email_verified_and_repeats_neutrally(client):
+    from golf_league.services.auth import issue_token
+
+    user_id = _make_user(
+        client, email="toverify@example.test", password="the-real-password", verified=False
+    )
+    session = Session(bind=client.app.state.engine)
+    try:
+        raw_token = issue_token(session, user_id, "verify_email", 3600)
+    finally:
+        session.close()
+
+    first = client.get(f"/verify/{raw_token}")
+    assert first.status_code == 200
+
+    session = Session(bind=client.app.state.engine)
+    try:
+        assert session.get(User, user_id).email_verified_at is not None
+    finally:
+        session.close()
+
+    second = client.get(f"/verify/{raw_token}")
+    assert second.status_code == 200
+    assert second.text == first.text                      # consumed token is neutral, not a 500
+    assert first.text == client.get("/verify/bogus").text  # and indistinguishable from unknown
+    assert raw_token not in first.text                     # the token is never echoed back
+
+
+def test_reset_form_and_submit_reject_an_unknown_token_with_404(client):
+    assert client.get("/reset/unknown-token").status_code == 404
+    client.get("/reset")  # sets the csrf seed cookie
+    seed_page = client.get("/reset")
+    csrf_token = _extract_csrf(seed_page.text)
+    response = client.post(
+        "/reset/unknown-token",
+        data={"password": "a-long-enough-password", "csrf_token": csrf_token},
+        follow_redirects=False,
+    )
+    assert response.status_code == 404
+
+
+def test_short_password_re_renders_the_reset_form_with_422(client):
+    from golf_league.services.auth import issue_token
+
+    user_id = _make_user(
+        client, email="shortpw@example.test", password="the-original-password"
+    )
+    session = Session(bind=client.app.state.engine)
+    try:
+        raw_token = issue_token(session, user_id, "reset_password", 3600)
+        original_hash = session.get(User, user_id).password_hash
+    finally:
+        session.close()
+
+    reset_form_page = client.get(f"/reset/{raw_token}")
+    assert reset_form_page.status_code == 200
+    csrf_token = _extract_csrf(reset_form_page.text)
+
+    response = client.post(
+        f"/reset/{raw_token}",
+        data={"password": "short", "csrf_token": csrf_token},
+        follow_redirects=False,
+    )
+    assert response.status_code == 422
+    assert "csrf_token" in response.text
+
+    session = Session(bind=client.app.state.engine)
+    try:
+        assert session.get(User, user_id).password_hash == original_hash
+    finally:
+        session.close()
 
 
 def test_fake_email_sender_records_only_on_a_matched_reset(client):
