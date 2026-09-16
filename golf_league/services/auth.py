@@ -11,11 +11,12 @@ from datetime import UTC, datetime, timedelta
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerificationError, VerifyMismatchError
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from golf_league.domain.identity import normalize_email
 from golf_league.domain.tokens import digest, generate_token
-from golf_league.models import UserToken
+from golf_league.models import User, UserToken
 
 _hasher = PasswordHasher()
 
@@ -141,6 +142,72 @@ def consume_token(session: Session, raw_token: str, purpose: str) -> int | None:
     return row[0]
 
 
+def peek_token(session: Session, raw_token: str, purpose: str) -> int | None:
+    """Return the `user_id` of a still-valid, unconsumed token, without consuming it.
+
+    Read-only counterpart to `consume_token`, used to decide whether a
+    token-bound form (e.g. "set a new password") should render at all,
+    before the user submits anything. Never mutates the row.
+    """
+    now = datetime.now(UTC).replace(tzinfo=None)
+    token_digest = digest(raw_token)
+    stmt = select(UserToken.user_id).where(
+        UserToken.token_digest == token_digest,
+        UserToken.purpose == purpose,
+        UserToken.consumed_at.is_(None),
+        UserToken.revoked_at.is_(None),
+        UserToken.expires_at > now,
+    )
+    row = session.execute(stmt).first()
+    return row[0] if row is not None else None
+
+
+def get_user_by_email(session: Session, email: str) -> User | None:
+    """Return the `User` matching a normalized email, or None."""
+    normalized = normalize_email(email)
+    return session.execute(
+        select(User).where(User.email == normalized)
+    ).scalar_one_or_none()
+
+
+def authenticate_user(session: Session, email: str, password: str) -> User | None:
+    """Return the `User` matching `email` and `password`, or None.
+
+    An unknown email and a wrong password are indistinguishable to the
+    caller: both simply return None so a route can render one neutral
+    failure without ever learning which case it was.
+    """
+    user = get_user_by_email(session, email)
+    if user is None:
+        return None
+    if not verify_password(password, user.password_hash):
+        return None
+    return user
+
+
+def mark_email_verified(session: Session, user_id: int, now: datetime) -> None:
+    """Set `email_verified_at` on `user_id`, if that user still exists."""
+    user = session.get(User, user_id)
+    if user is None:
+        return
+    user.email_verified_at = now
+    session.commit()
+
+
+def complete_password_reset(session: Session, user_id: int, new_password: str) -> None:
+    """Set a new password on `user_id` and bump `session_version`.
+
+    Bumping `session_version` invalidates every session cookie issued
+    before the reset, which is the entire point of that column.
+    """
+    user = session.get(User, user_id)
+    if user is None:
+        return
+    user.password_hash = hash_password(new_password)
+    user.session_version += 1
+    session.commit()
+
+
 __all__ = [
     "hash_password",
     "verify_password",
@@ -148,4 +215,9 @@ __all__ = [
     "load_session_cookie",
     "issue_token",
     "consume_token",
+    "peek_token",
+    "get_user_by_email",
+    "authenticate_user",
+    "mark_email_verified",
+    "complete_password_reset",
 ]
