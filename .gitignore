@@ -9,9 +9,8 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Secrets and run state
+# Secrets
 .env
-.runs/
 
 # Application data
 logs/

@@ -10,7 +10,7 @@ authors = [
     {name = "Golf League Team"},
 ]
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
@@ -21,10 +21,13 @@ dependencies = [
     "uvicorn>=0.24.0,<1.0.0",
     "sqlalchemy>=2.0.0,<3.0.0",
     "alembic>=1.12.0,<2.0.0",
-    "python-jose>=1.7.0,<2.0.0",
+    "python-jose>=3.3.0,<4.0.0",
     "passlib>=1.7.4,<2.0.0",
     "pydantic>=2.5.0,<3.0.0",
     "python-multipart>=0.0.6,<1.0.0",
+    "pydantic-settings>=2.0.0,<3.0.0",
+    "jinja2>=3.1.0,<4.0.0",
+    "argon2-cffi>=23.1.0,<26.0.0",
 ]
 
 [project.optional-dependencies]
@@ -32,7 +35,8 @@ dev = [
     "pytest>=7.4.0,<8.0.0",
     "ruff>=0.3.0,<1.0.0",
     "coverage>=7.3.0,<8.0.0",
-    "mypy>=1.5.0,<2.0.0",
+    "pytest-cov>=4.0.0,<5.0.0",
+    "httpx2>=2.12.0,<3.0.0",
 ]
 
 [project.scripts]
@@ -44,7 +48,7 @@ include = ["golf_league*"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = [
@@ -61,12 +65,17 @@ ignore = [
 ]
 
 [tool.coverage.run]
+branch = true
 source = ["golf_league"]
 omit = [
     "*/tests/*",
     "*/venv/*",
     "*/__pycache__/*",
 ]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
