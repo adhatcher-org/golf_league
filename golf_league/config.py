@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     session_secret: str
     max_users: int = 150
     debug: bool = False
+    seed_course: bool = True
 
 
 def get_settings() -> Settings:

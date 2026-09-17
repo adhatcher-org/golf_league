@@ -18,15 +18,15 @@ golf_league/
 ├── logging_config.py
 ├── domain/
 ├── services/
-├── routers/
-├── templates/
-│   └── base.html
-├── static/
-│   ├── app.css
-│   └── app.js
-└── tests/
-    ├── conftest.py
-    └── test_architecture.py
+└── routers/
+templates/
+└── base.html
+static/
+├── app.css
+└── app.js
+tests/
+├── conftest.py
+└── test_architecture.py
 ```
 
 ## Key Files

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Courses - Golf League{% endblock %}
+{% block content %}
+<h2>Courses</h2>
+<p><a href="/admin/courses/new">Add a course</a></p>
+<ul>
+{% for course in courses %}
+    <li>
+        <a href="/admin/courses/{{ course.id }}/edit">{{ course.name }}</a>
+        ({{ course.total_holes }} holes)
+        <ul>
+        {% for tee_set in course.tee_sets %}
+            <li>
+                <a href="/admin/courses/{{ course.id }}/tees/{{ tee_set.id }}/edit">
+                    {{ tee_set.name }} ({{ tee_set.color_label }}, {{ tee_set.gender }})
+                </a>
+                - {{ tee_set.total_yards }} yards
+            </li>
+        {% endfor %}
+        </ul>
+        <a href="/admin/courses/{{ course.id }}/tees/new">Add a tee set</a>
+    </li>
+{% else %}
+    <li>No courses yet.</li>
+{% endfor %}
+</ul>
+{% endblock %}

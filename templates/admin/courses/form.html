@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{% if course %}Edit Course{% else %}New Course{% endif %} - Golf League{% endblock %}
+{% block content %}
+<h2>{% if course %}Edit course{% else %}New course{% endif %}</h2>
+{% if errors %}
+<ul class="error">
+    {% for field, message in errors.items() %}
+    <li>{{ field }}: {{ message }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+<form method="post" action="{% if course %}/admin/courses/{{ course.id }}/edit{% else %}/admin/courses/new{% endif %}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>
+        Name
+        <input type="text" name="name" value="{{ course.name if course else '' }}" required>
+    </label>
+    <label>
+        City
+        <input type="text" name="city" value="{{ course.city if course and course.city else '' }}">
+    </label>
+    <label>
+        State
+        <input type="text" name="state" value="{{ course.state if course and course.state else '' }}">
+    </label>
+    <label>
+        Website
+        <input type="text" name="website" value="{{ course.website if course and course.website else '' }}">
+    </label>
+    <label>
+        Total holes
+        <input type="text" name="total_holes" value="{{ course.total_holes if course else 18 }}">
+    </label>
+    <button type="submit">Save</button>
+</form>
+{% if course %}
+<p><a href="/admin/courses/{{ course.id }}/tees/new">Add a tee set</a></p>
+{% for tee_set in course.tee_sets %}
+<p><a href="/admin/courses/{{ course.id }}/tees/{{ tee_set.id }}/edit">Edit {{ tee_set.name }} ({{ tee_set.gender }})</a></p>
+{% endfor %}
+{% endif %}
+{% endblock %}

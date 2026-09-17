@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}{% if tee_set %}Edit Tee Set{% else %}New Tee Set{% endif %} - Golf League{% endblock %}
+{% block content %}
+<h2>{% if tee_set %}Edit tee set{% else %}New tee set{% endif %}</h2>
+{% if errors %}
+<ul class="error">
+    {% for field, message in errors.items() %}
+    <li>{{ field }}: {{ message }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+<form method="post" action="{% if tee_set %}/admin/courses/{{ course_id }}/tees/{{ tee_set.id }}/edit{% else %}/admin/courses/{{ course_id }}/tees/new{% endif %}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>
+        Name
+        <input type="text" name="name" value="{{ tee_set.name if tee_set else '' }}" required>
+    </label>
+    <label>
+        Color label
+        <input type="text" name="color_label" value="{{ tee_set.color_label if tee_set else '' }}" required>
+    </label>
+    <label>
+        Gender
+        <select name="gender">
+            <option value="men" {% if tee_set and tee_set.gender == 'men' %}selected{% endif %}>Men</option>
+            <option value="women" {% if tee_set and tee_set.gender == 'women' %}selected{% endif %}>Women</option>
+        </select>
+    </label>
+    <label>
+        Total yards
+        <input type="text" name="total_yards" value="{{ tee_set.total_yards if tee_set else '' }}">
+    </label>
+    <label>
+        Sort order
+        <input type="text" name="sort_order" value="{{ tee_set.sort_order if tee_set else '' }}">
+    </label>
+
+    <fieldset>
+        <legend>Front nine</legend>
+        <label>Rating <input type="text" name="front_rating" value="{{ ratings.get('front', {}).get('rating', '') }}"></label>
+        <label>Slope <input type="text" name="front_slope" value="{{ ratings.get('front', {}).get('slope', '') }}"></label>
+        <label>Par <input type="text" name="front_par" value="{{ ratings.get('front', {}).get('par', '') }}"></label>
+    </fieldset>
+
+    <fieldset>
+        <legend>Back nine</legend>
+        <label>Rating <input type="text" name="back_rating" value="{{ ratings.get('back', {}).get('rating', '') }}"></label>
+        <label>Slope <input type="text" name="back_slope" value="{{ ratings.get('back', {}).get('slope', '') }}"></label>
+        <label>Par <input type="text" name="back_par" value="{{ ratings.get('back', {}).get('par', '') }}"></label>
+    </fieldset>
+
+    <fieldset>
+        <legend>Full eighteen</legend>
+        <label>Rating <input type="text" name="full_rating" value="{{ ratings.get('full', {}).get('rating', '') }}"></label>
+        <label>Slope <input type="text" name="full_slope" value="{{ ratings.get('full', {}).get('slope', '') }}"></label>
+        <label>Par <input type="text" name="full_par" value="{{ ratings.get('full', {}).get('par', '') }}"></label>
+    </fieldset>
+
+    <button type="submit">Save</button>
+</form>
+{% endblock %}

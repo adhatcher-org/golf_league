@@ -16,7 +16,7 @@ The Golf League application requires a modern, scalable web application that can
 ## Decision
 
 We will implement the application using:
-- Python 3.11+ with FastAPI for the web framework
+- Python 3.12+ with FastAPI for the web framework
 - SQLite for the database (with Alembic for migrations)
 - uv for dependency management
 - Ruff for linting and formatting
