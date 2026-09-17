@@ -1,7 +1,8 @@
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 
@@ -46,6 +47,74 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
     )
+
+
+class Course(Base):
+    """A golf course. GL-20 stores the league's own course only."""
+
+    __tablename__ = "courses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
+    city: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    website: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    total_holes: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=18, server_default="18"
+    )
+
+    tee_sets: Mapped[list["TeeSet"]] = relationship(
+        "TeeSet", back_populates="course", order_by="TeeSet.sort_order"
+    )
+
+
+class TeeSet(Base):
+    """A named, gendered tee (e.g. "Deer" / "White" / men) at a course.
+
+    Both the club's animal `name` and the league's `color_label` are stored
+    because the league speaks in colours and the scorecard speaks in
+    animals. See MVP Build Plan §8: Gold is Snake, White is Deer.
+    """
+
+    __tablename__ = "tee_sets"
+    __table_args__ = (
+        UniqueConstraint("course_id", "name", "gender", name="uq_tee_sets_course_name_gender"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    course_id: Mapped[int] = mapped_column(
+        ForeignKey("courses.id"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(60), nullable=False)
+    color_label: Mapped[str] = mapped_column(String(30), nullable=False)
+    gender: Mapped[str] = mapped_column(String(8), nullable=False)
+    total_yards: Mapped[int] = mapped_column(Integer, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    course: Mapped["Course"] = relationship("Course", back_populates="tee_sets")
+    ratings: Mapped[list["TeeRating"]] = relationship(
+        "TeeRating", back_populates="tee_set"
+    )
+
+
+class TeeRating(Base):
+    """One scope (front/back/full) rating row for a tee set."""
+
+    __tablename__ = "tee_ratings"
+    __table_args__ = (
+        UniqueConstraint("tee_set_id", "scope", name="uq_tee_ratings_tee_set_scope"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tee_set_id: Mapped[int] = mapped_column(
+        ForeignKey("tee_sets.id"), nullable=False
+    )
+    scope: Mapped[str] = mapped_column(String(5), nullable=False)
+    rating: Mapped[Decimal] = mapped_column(Numeric(4, 1), nullable=False)
+    slope: Mapped[int] = mapped_column(Integer, nullable=False)
+    par: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    tee_set: Mapped["TeeSet"] = relationship("TeeSet", back_populates="ratings")
 
 
 class UserToken(Base):

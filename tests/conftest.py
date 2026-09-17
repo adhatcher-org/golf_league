@@ -1,9 +1,9 @@
 import pytest
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from golf_league.models import Base
+from golf_league.models import Base, Course
 
 
 @pytest.fixture
@@ -58,3 +58,46 @@ def client(tmp_path):
     # Use TestClient context manager to handle lifespan
     with TestClient(create_app(settings=settings)) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def empty_client(tmp_path):
+    """Same as `client`, but starts from a genuinely empty database.
+
+    `seed_course=False` disables the Wyandot bootstrap so tests can prove
+    a form-only, seed-free path (e.g. creating a course through the admin
+    forms starting from zero rows).
+    """
+    from fastapi.testclient import TestClient
+
+    from golf_league.app import create_app
+    from golf_league.config import Settings
+
+    db_path = tmp_path / "app.db"
+    settings = Settings(
+        database_url=f"sqlite:///{db_path}",
+        session_secret="test-only-not-a-secret",
+        seed_course=False,
+    )
+
+    with TestClient(create_app(settings=settings)) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def wyandot_course(session):
+    """Factory returning a function that seeds Wyandot into `session`.
+
+    Returns the `Course` row with both tee sets and six ratings persisted,
+    for service-level tests that need real data without going through the
+    HTTP layer.
+    """
+    from golf_league.services.course_seed import seed_wyandot
+
+    def _make():
+        seed_wyandot(session)
+        return session.execute(
+            select(Course).where(Course.name == "Wyandot Golf Club")
+        ).scalar_one()
+
+    return _make
