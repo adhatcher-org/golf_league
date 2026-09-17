@@ -155,6 +155,40 @@ def test_non_finite_rating_is_rejected(session, bad_value):
     assert session.query(TeeSet).count() == 0
 
 
+@pytest.mark.parametrize(
+    "bad_value", ["1E+400", "1E+999999999", "1000", "123456.7", "33.95"]
+)
+def test_rating_that_does_not_fit_numeric_4_1_is_rejected(session, bad_value):
+    course = _make_course(session)
+    bad_ratings = dict(FULL_RATINGS)
+    bad_ratings["front"] = {"rating": bad_value, "slope": 114, "par": 36}
+
+    with pytest.raises(CourseValidationError):
+        create_tee_set_with_ratings(
+            session, course.id, name="Deer", color_label="White", gender="men",
+            total_yards=5707, sort_order=1, ratings=bad_ratings,
+        )
+
+    assert session.query(TeeSet).count() == 0
+
+
+def test_rating_at_the_quantized_boundary_is_accepted(session):
+    course = _make_course(session)
+    good_ratings = dict(FULL_RATINGS)
+    good_ratings["front"] = {"rating": "33.90", "slope": 114, "par": 36}
+
+    tee_set = create_tee_set_with_ratings(
+        session, course.id, name="Deer", color_label="White", gender="men",
+        total_yards=5707, sort_order=1, ratings=good_ratings,
+    )
+    front_rating = (
+        session.query(TeeRating)
+        .filter_by(tee_set_id=tee_set.id, scope="front")
+        .one()
+    )
+    assert front_rating.rating == Decimal("33.9")
+
+
 def test_tee_set_lookup_is_scoped_to_its_course_and_returns_none_for_a_foreign_id(session):
     course_a = _make_course(session, "Course A")
     course_b = _make_course(session, "Course B")

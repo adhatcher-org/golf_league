@@ -509,6 +509,99 @@ def test_admin_updates_a_course_through_the_form(empty_client):
         },
     )
     assert bad_response.status_code == 422
+    assert "<form" in bad_response.text
+    assert "Name is required." in bad_response.text
+
+
+def test_create_course_with_invalid_input_re_renders_422_and_writes_nothing(empty_client):
+    from golf_league.models import Course
+
+    client = _admin_client(empty_client)
+
+    page = client.get("/admin/courses/new")
+    csrf = _extract_csrf(page.text)
+    empty_name_response = client.post(
+        "/admin/courses/new",
+        data={"name": "", "total_holes": "18", "csrf_token": csrf},
+    )
+    assert empty_name_response.status_code == 422
+    assert "<form" in empty_name_response.text
+
+    page2 = client.get("/admin/courses/new")
+    csrf2 = _extract_csrf(page2.text)
+    bad_holes_response = client.post(
+        "/admin/courses/new",
+        data={"name": "X", "total_holes": "abc", "csrf_token": csrf2},
+    )
+    assert bad_holes_response.status_code == 422
+    assert "<form" in bad_holes_response.text
+
+    page3 = client.get("/admin/courses/new")
+    csrf3 = _extract_csrf(page3.text)
+    first_response = client.post(
+        "/admin/courses/new",
+        data={"name": "Dup Club", "total_holes": "18", "csrf_token": csrf3},
+        follow_redirects=False,
+    )
+    assert first_response.status_code == 303
+
+    page4 = client.get("/admin/courses/new")
+    csrf4 = _extract_csrf(page4.text)
+    dup_response = client.post(
+        "/admin/courses/new",
+        data={"name": "Dup Club", "total_holes": "18", "csrf_token": csrf4},
+    )
+    assert dup_response.status_code == 422
+    assert "<form" in dup_response.text
+
+    session = Session(bind=client.app.state.engine)
+    try:
+        courses = session.query(Course).all()
+        assert len(courses) == 1
+        assert courses[0].name == "Dup Club"
+    finally:
+        session.close()
+
+
+def test_update_course_to_a_duplicate_name_re_renders_422(empty_client):
+    from golf_league.models import Course
+
+    client = _admin_client(empty_client)
+
+    def _create_course(name):
+        page = client.get("/admin/courses/new")
+        csrf = _extract_csrf(page.text)
+        resp = client.post(
+            "/admin/courses/new",
+            data={"name": name, "total_holes": "18", "csrf_token": csrf},
+            follow_redirects=False,
+        )
+        return resp.headers["location"].split("/")[3]
+
+    _create_course("Club A")
+    course_b_id = _create_course("Club B")
+
+    edit_page = client.get(f"/admin/courses/{course_b_id}/edit")
+    edit_csrf = _extract_csrf(edit_page.text)
+    response = client.post(
+        f"/admin/courses/{course_b_id}/edit",
+        data={
+            "name": "Club A",
+            "city": "",
+            "state": "",
+            "website": "",
+            "total_holes": "18",
+            "csrf_token": edit_csrf,
+        },
+    )
+    assert response.status_code == 422
+
+    session = Session(bind=client.app.state.engine)
+    try:
+        course_b = session.get(Course, int(course_b_id))
+        assert course_b.name == "Club B"
+    finally:
+        session.close()
 
 
 def test_post_new_tee_with_signaling_nan_rating_is_422_and_writes_nothing(empty_client):
@@ -530,6 +623,39 @@ def test_post_new_tee_with_signaling_nan_rating_is_422_and_writes_nothing(empty_
         "name": "Deer", "color_label": "White", "gender": "men",
         "total_yards": "5707", "sort_order": "1",
         "front_rating": "sNaN", "front_slope": "114", "front_par": "36",
+        "back_rating": "34.0", "back_slope": "111", "back_par": "36",
+        "full_rating": "67.9", "full_slope": "113", "full_par": "72",
+        "csrf_token": tee_csrf,
+    }
+    response = client.post(f"/admin/courses/{course_id}/tees/new", data=data)
+    assert response.status_code == 422
+
+    session = Session(bind=client.app.state.engine)
+    try:
+        assert session.query(TeeSet).filter_by(course_id=int(course_id)).count() == 0
+    finally:
+        session.close()
+
+
+def test_post_new_tee_with_overflowing_rating_is_422_and_writes_nothing(empty_client):
+    from golf_league.models import TeeSet
+
+    client = _admin_client(empty_client)
+    page = client.get("/admin/courses/new")
+    csrf = _extract_csrf(page.text)
+    create_resp = client.post(
+        "/admin/courses/new",
+        data={"name": "Overflow Rating Club", "total_holes": "18", "csrf_token": csrf},
+        follow_redirects=False,
+    )
+    course_id = create_resp.headers["location"].split("/")[3]
+
+    tee_page = client.get(f"/admin/courses/{course_id}/tees/new")
+    tee_csrf = _extract_csrf(tee_page.text)
+    data = {
+        "name": "Deer", "color_label": "White", "gender": "men",
+        "total_yards": "5707", "sort_order": "1",
+        "front_rating": "1E+400", "front_slope": "114", "front_par": "36",
         "back_rating": "34.0", "back_slope": "111", "back_par": "36",
         "full_rating": "67.9", "full_slope": "113", "full_par": "72",
         "csrf_token": tee_csrf,

@@ -107,7 +107,7 @@ async def new_course_form(
 @router.post("/admin/courses/new")
 async def create_course_submit(
     request: Request,
-    name: str = Form(...),
+    name: str = Form(""),
     city: str = Form(""),
     state: str = Form(""),
     website: str = Form(""),
@@ -159,7 +159,7 @@ async def edit_course_form(
 async def update_course_submit(
     course_id: int,
     request: Request,
-    name: str = Form(...),
+    name: str = Form(""),
     city: str = Form(""),
     state: str = Form(""),
     website: str = Form(""),

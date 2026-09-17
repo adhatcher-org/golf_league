@@ -5,7 +5,7 @@ errors (empty when the value is valid) so a route can re-render a form
 with per-field messages instead of raising.
 """
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, DecimalException, InvalidOperation
 
 VALID_GENDERS = ("men", "women")
 VALID_SCOPES = ("front", "back", "full")
@@ -60,6 +60,18 @@ def validate_rating(value: object) -> str | None:
         return "Rating must be a finite number."
     if not parsed.is_finite():
         return "Rating must be a finite number."
+    try:
+        too_large = abs(parsed) >= Decimal("1000")
+    except DecimalException:
+        return "Rating must be less than 1000."
+    if too_large:
+        return "Rating must be less than 1000."
+    try:
+        fits_one_decimal = parsed == parsed.quantize(Decimal("0.1"))
+    except DecimalException:
+        return "Rating may have at most one decimal place."
+    if not fits_one_decimal:
+        return "Rating may have at most one decimal place."
     return None
 
 
