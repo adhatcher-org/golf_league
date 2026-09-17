@@ -54,12 +54,11 @@ def validate_rating(value: object) -> str | None:
     text = str(value).strip()
     if not text:
         return "Rating is required."
-    lowered = text.lower()
-    if lowered in ("nan", "inf", "-inf", "+inf", "infinity", "-infinity", "+infinity"):
-        return "Rating must be a finite number."
     try:
-        Decimal(text)
+        parsed = Decimal(text)
     except InvalidOperation:
+        return "Rating must be a finite number."
+    if not parsed.is_finite():
         return "Rating must be a finite number."
     return None
 

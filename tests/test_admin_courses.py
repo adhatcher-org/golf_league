@@ -284,6 +284,266 @@ def test_duplicate_tee_name_and_gender_re_renders_422_not_500(empty_client):
     assert second.status_code == 422
 
 
+def test_admin_edits_a_tee_and_its_three_ratings_through_the_form(client):
+    from decimal import Decimal
+
+    from golf_league.models import Course, TeeRating, TeeSet
+
+    admin_client = _admin_client(client)
+
+    session = Session(bind=admin_client.app.state.engine)
+    try:
+        course = session.query(Course).filter_by(name="Wyandot Golf Club").one()
+        tee_set = session.query(TeeSet).filter_by(course_id=course.id, name="Deer").one()
+        course_id, tee_id = course.id, tee_set.id
+    finally:
+        session.close()
+
+    get_page = admin_client.get(f"/admin/courses/{course_id}/tees/{tee_id}/edit")
+    assert get_page.status_code == 200
+    assert 'value="67.9"' in get_page.text
+    csrf = _extract_csrf(get_page.text)
+
+    data = {
+        "name": "Deer", "color_label": "White", "gender": "men",
+        "total_yards": "5707", "sort_order": "1",
+        "front_rating": "33.9", "front_slope": "114", "front_par": "36",
+        "back_rating": "34.0", "back_slope": "111", "back_par": "36",
+        "full_rating": "68.2", "full_slope": "113", "full_par": "72",
+        "csrf_token": csrf,
+    }
+    response = admin_client.post(
+        f"/admin/courses/{course_id}/tees/{tee_id}/edit", data=data, follow_redirects=False
+    )
+    assert response.status_code == 303
+
+    session = Session(bind=admin_client.app.state.engine)
+    try:
+        ratings = {
+            r.scope: r
+            for r in session.query(TeeRating).filter_by(tee_set_id=tee_id).all()
+        }
+        assert len(ratings) == 3
+        assert ratings["full"].rating == Decimal("68.2")
+        assert ratings["front"].rating == Decimal("33.9")
+        assert ratings["back"].rating == Decimal("34.0")
+    finally:
+        session.close()
+
+
+def test_edit_tee_with_invalid_rating_re_renders_422_and_changes_nothing(client):
+    from decimal import Decimal
+
+    from golf_league.models import Course, TeeRating, TeeSet
+
+    admin_client = _admin_client(client)
+
+    session = Session(bind=admin_client.app.state.engine)
+    try:
+        course = session.query(Course).filter_by(name="Wyandot Golf Club").one()
+        tee_set = session.query(TeeSet).filter_by(course_id=course.id, name="Deer").one()
+        course_id, tee_id = course.id, tee_set.id
+    finally:
+        session.close()
+
+    get_page = admin_client.get(f"/admin/courses/{course_id}/tees/{tee_id}/edit")
+    csrf = _extract_csrf(get_page.text)
+
+    data = {
+        "name": "Deer", "color_label": "White", "gender": "men",
+        "total_yards": "5707", "sort_order": "1",
+        "front_rating": "abc", "front_slope": "114", "front_par": "36",
+        "back_rating": "34.0", "back_slope": "111", "back_par": "36",
+        "full_rating": "67.9", "full_slope": "113", "full_par": "72",
+        "csrf_token": csrf,
+    }
+    response = admin_client.post(f"/admin/courses/{course_id}/tees/{tee_id}/edit", data=data)
+    assert response.status_code == 422
+
+    session = Session(bind=admin_client.app.state.engine)
+    try:
+        ratings = {
+            r.scope: r
+            for r in session.query(TeeRating).filter_by(tee_set_id=tee_id).all()
+        }
+        assert ratings["front"].rating == Decimal("33.9")
+        assert ratings["back"].rating == Decimal("34.0")
+        assert ratings["full"].rating == Decimal("67.9")
+    finally:
+        session.close()
+
+
+def test_edit_tee_to_a_duplicate_name_and_gender_re_renders_422(client):
+    from golf_league.models import Course, TeeSet
+
+    admin_client = _admin_client(client)
+
+    session = Session(bind=admin_client.app.state.engine)
+    try:
+        course = session.query(Course).filter_by(name="Wyandot Golf Club").one()
+        snake = session.query(TeeSet).filter_by(course_id=course.id, name="Snake").one()
+        course_id, tee_id = course.id, snake.id
+    finally:
+        session.close()
+
+    get_page = admin_client.get(f"/admin/courses/{course_id}/tees/{tee_id}/edit")
+    csrf = _extract_csrf(get_page.text)
+
+    data = {
+        "name": "Deer", "color_label": "Gold", "gender": "men",
+        "total_yards": "4967", "sort_order": "2",
+        "front_rating": "31.9", "front_slope": "107", "front_par": "36",
+        "back_rating": "31.9", "back_slope": "110", "back_par": "36",
+        "full_rating": "63.8", "full_slope": "109", "full_par": "72",
+        "csrf_token": csrf,
+    }
+    response = admin_client.post(f"/admin/courses/{course_id}/tees/{tee_id}/edit", data=data)
+    assert response.status_code == 422
+
+
+def test_post_edit_tee_from_another_course_is_404_and_changes_nothing(empty_client):
+    from golf_league.models import TeeRating, TeeSet
+
+    client = _admin_client(empty_client)
+
+    def _create_course(name):
+        page = client.get("/admin/courses/new")
+        csrf = _extract_csrf(page.text)
+        resp = client.post(
+            "/admin/courses/new",
+            data={"name": name, "total_holes": "18", "csrf_token": csrf},
+            follow_redirects=False,
+        )
+        return resp.headers["location"].split("/")[3]
+
+    course_a = _create_course("Course A")
+    course_b = _create_course("Course B")
+
+    tee_page = client.get(f"/admin/courses/{course_a}/tees/new")
+    csrf = _extract_csrf(tee_page.text)
+    data = {
+        "name": "Deer", "color_label": "White", "gender": "men",
+        "total_yards": "5707", "sort_order": "1",
+        "front_rating": "33.9", "front_slope": "114", "front_par": "36",
+        "back_rating": "34.0", "back_slope": "111", "back_par": "36",
+        "full_rating": "67.9", "full_slope": "113", "full_par": "72",
+        "csrf_token": csrf,
+    }
+    client.post(f"/admin/courses/{course_a}/tees/new", data=data, follow_redirects=False)
+
+    session = Session(bind=client.app.state.engine)
+    try:
+        tee_set = session.query(TeeSet).filter_by(course_id=int(course_a), name="Deer").one()
+        tee_id = tee_set.id
+    finally:
+        session.close()
+
+    edit_page = client.get(f"/admin/courses/{course_a}/tees/{tee_id}/edit")
+    edit_csrf = _extract_csrf(edit_page.text)
+    bad_data = dict(data)
+    bad_data["csrf_token"] = edit_csrf
+    bad_data["total_yards"] = "9999"
+    response = client.post(
+        f"/admin/courses/{course_b}/tees/{tee_id}/edit", data=bad_data, follow_redirects=False
+    )
+    assert response.status_code == 404
+
+    session = Session(bind=client.app.state.engine)
+    try:
+        unchanged = session.get(TeeSet, tee_id)
+        assert unchanged.total_yards == 5707
+        assert unchanged.course_id == int(course_a)
+        ratings = session.query(TeeRating).filter_by(tee_set_id=tee_id).all()
+        assert len(ratings) == 3
+    finally:
+        session.close()
+
+
+def test_admin_updates_a_course_through_the_form(empty_client):
+    client = _admin_client(empty_client)
+    page = client.get("/admin/courses/new")
+    csrf = _extract_csrf(page.text)
+    create_resp = client.post(
+        "/admin/courses/new",
+        data={"name": "Course To Edit", "total_holes": "18", "csrf_token": csrf},
+        follow_redirects=False,
+    )
+    course_id = create_resp.headers["location"].split("/")[3]
+
+    edit_page = client.get(f"/admin/courses/{course_id}/edit")
+    edit_csrf = _extract_csrf(edit_page.text)
+    response = client.post(
+        f"/admin/courses/{course_id}/edit",
+        data={
+            "name": "Course To Edit",
+            "city": "New City",
+            "state": "",
+            "website": "",
+            "total_holes": "18",
+            "csrf_token": edit_csrf,
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    from golf_league.models import Course
+
+    session = Session(bind=client.app.state.engine)
+    try:
+        course = session.get(Course, int(course_id))
+        assert course.city == "New City"
+    finally:
+        session.close()
+
+    edit_page2 = client.get(f"/admin/courses/{course_id}/edit")
+    edit_csrf2 = _extract_csrf(edit_page2.text)
+    bad_response = client.post(
+        f"/admin/courses/{course_id}/edit",
+        data={
+            "name": "",
+            "city": "New City",
+            "state": "",
+            "website": "",
+            "total_holes": "18",
+            "csrf_token": edit_csrf2,
+        },
+    )
+    assert bad_response.status_code == 422
+
+
+def test_post_new_tee_with_signaling_nan_rating_is_422_and_writes_nothing(empty_client):
+    from golf_league.models import TeeSet
+
+    client = _admin_client(empty_client)
+    page = client.get("/admin/courses/new")
+    csrf = _extract_csrf(page.text)
+    create_resp = client.post(
+        "/admin/courses/new",
+        data={"name": "sNaN Club", "total_holes": "18", "csrf_token": csrf},
+        follow_redirects=False,
+    )
+    course_id = create_resp.headers["location"].split("/")[3]
+
+    tee_page = client.get(f"/admin/courses/{course_id}/tees/new")
+    tee_csrf = _extract_csrf(tee_page.text)
+    data = {
+        "name": "Deer", "color_label": "White", "gender": "men",
+        "total_yards": "5707", "sort_order": "1",
+        "front_rating": "sNaN", "front_slope": "114", "front_par": "36",
+        "back_rating": "34.0", "back_slope": "111", "back_par": "36",
+        "full_rating": "67.9", "full_slope": "113", "full_par": "72",
+        "csrf_token": tee_csrf,
+    }
+    response = client.post(f"/admin/courses/{course_id}/tees/new", data=data)
+    assert response.status_code == 422
+
+    session = Session(bind=client.app.state.engine)
+    try:
+        assert session.query(TeeSet).filter_by(course_id=int(course_id)).count() == 0
+    finally:
+        session.close()
+
+
 def test_seeded_client_starts_with_wyandot_present(client):
     admin_client = _admin_client(client)
     response = admin_client.get("/admin/courses")

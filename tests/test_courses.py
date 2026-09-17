@@ -11,6 +11,7 @@ from golf_league.services.courses import (
     create_course,
     create_tee_set_with_ratings,
     get_tee_set_for_course,
+    update_tee_set_with_ratings,
 )
 
 FULL_RATINGS = {
@@ -137,7 +138,9 @@ def test_zero_and_negative_slope_are_rejected(session):
     assert session.query(TeeSet).count() == 0
 
 
-@pytest.mark.parametrize("bad_value", ["", "abc", "NaN", "Infinity"])
+@pytest.mark.parametrize(
+    "bad_value", ["", "abc", "NaN", "Infinity", "-NaN", "sNaN", "-Infinity"]
+)
 def test_non_finite_rating_is_rejected(session, bad_value):
     course = _make_course(session)
     bad_ratings = dict(FULL_RATINGS)
@@ -164,3 +167,24 @@ def test_tee_set_lookup_is_scoped_to_its_course_and_returns_none_for_a_foreign_i
     assert get_tee_set_for_course(session, course_a.id, tee_set.id) is not None
     assert get_tee_set_for_course(session, course_b.id, tee_set.id) is None
     assert get_tee_set_for_course(session, course_a.id, 999999) is None
+
+
+def test_update_tee_set_with_ratings_returns_none_for_a_foreign_course_id(session):
+    course_a = _make_course(session, "Course A")
+    course_b = _make_course(session, "Course B")
+
+    tee_set = create_tee_set_with_ratings(
+        session, course_a.id, name="Deer", color_label="White", gender="men",
+        total_yards=5707, sort_order=1, ratings=FULL_RATINGS,
+    )
+
+    result = update_tee_set_with_ratings(
+        session, course_b.id, tee_set.id,
+        name="Deer", color_label="White", gender="men",
+        total_yards=6000, sort_order=1, ratings=FULL_RATINGS,
+    )
+    assert result is None
+
+    unchanged = session.get(TeeSet, tee_set.id)
+    assert unchanged.total_yards == 5707
+    assert unchanged.course_id == course_a.id
