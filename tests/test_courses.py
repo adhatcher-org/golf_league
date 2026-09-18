@@ -5,6 +5,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.exc import IntegrityError
 
+from golf_league.domain.course import validate_positive_int
 from golf_league.models import TeeRating, TeeSet
 from golf_league.services.courses import (
     CourseValidationError,
@@ -201,6 +202,40 @@ def test_tee_set_lookup_is_scoped_to_its_course_and_returns_none_for_a_foreign_i
     assert get_tee_set_for_course(session, course_a.id, tee_set.id) is not None
     assert get_tee_set_for_course(session, course_b.id, tee_set.id) is None
     assert get_tee_set_for_course(session, course_a.id, 999999) is None
+
+
+@pytest.mark.parametrize("bad_value", ["²", "³", "⁵"])
+def test_unicode_digit_that_int_rejects_is_an_error_not_an_exception(bad_value):
+    result = validate_positive_int(bad_value, "total_yards")
+    assert isinstance(result, str)
+    assert result == "total_yards must be a positive whole number."
+
+
+def test_arabic_indic_digit_is_still_accepted(session):
+    assert validate_positive_int("٣", "total_yards") is None
+
+    course = _make_course(session)
+    tee_set = create_tee_set_with_ratings(
+        session, course.id, name="Deer", color_label="White", gender="men",
+        total_yards="٣", sort_order=1, ratings=FULL_RATINGS,
+    )
+    fetched = session.get(TeeSet, tee_set.id)
+    assert fetched.total_yards == 3
+
+
+def test_tee_set_with_a_superscript_slope_writes_nothing(session):
+    course = _make_course(session)
+    bad_ratings = dict(FULL_RATINGS)
+    bad_ratings["front"] = {"rating": "33.9", "slope": "²", "par": 36}
+
+    with pytest.raises(CourseValidationError):
+        create_tee_set_with_ratings(
+            session, course.id, name="Deer", color_label="White", gender="men",
+            total_yards=5707, sort_order=1, ratings=bad_ratings,
+        )
+
+    assert session.query(TeeSet).count() == 0
+    assert session.query(TeeRating).count() == 0
 
 
 def test_update_tee_set_with_ratings_returns_none_for_a_foreign_course_id(session):

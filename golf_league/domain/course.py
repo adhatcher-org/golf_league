@@ -37,7 +37,7 @@ def validate_positive_int(value: object, field_name: str) -> str | None:
         parsed = value
     else:
         text = str(value).strip()
-        if not text or not (text.isdigit() or (text.startswith("-") and text[1:].isdigit())):
+        if not text or not (text.isdecimal() or (text.startswith("-") and text[1:].isdecimal())):
             return f"{field_name} must be a positive whole number."
         parsed = int(text)
     if parsed <= 0:
