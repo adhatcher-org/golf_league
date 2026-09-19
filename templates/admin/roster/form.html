@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{% if golfer %}Edit Golfer{% else %}New Golfer{% endif %} - Golf League{% endblock %}
+{% block content %}
+<h2>{% if golfer %}Edit golfer{% else %}New golfer{% endif %}</h2>
+{% if errors %}
+<ul class="error">
+    {% for field, message in errors.items() %}
+    <li>{{ field }}: {{ message }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+<form method="post" action="{% if golfer %}/admin/golfers/{{ golfer.id }}/edit{% else %}/admin/golfers/new{% endif %}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% if golfer %}
+    <input type="hidden" name="rendered_tee_set_id" value="{{ rendered_tee_set_id if rendered_tee_set_id is not none else golfer.default_tee_set_id }}">
+    {% endif %}
+    <label>
+        First name
+        <input type="text" name="first_name" value="{{ golfer.first_name if golfer else '' }}" required>
+    </label>
+    <label>
+        Last name
+        <input type="text" name="last_name" value="{{ golfer.last_name if golfer else '' }}" required>
+    </label>
+    <label>
+        Email
+        <input type="text" name="email" value="{{ golfer.email if golfer and golfer.email else '' }}">
+    </label>
+    <label>
+        Phone
+        <input type="text" name="phone" value="{{ golfer.phone if golfer and golfer.phone else '' }}">
+    </label>
+    <label>
+        Tee
+        <select name="default_tee_set_id" required>
+            <option value="">Select a tee</option>
+            {% for course in courses %}
+            {% for tee_set in course.tee_sets %}
+            {% set _selected_tee_id = selected_tee_set_id if selected_tee_set_id is not none else (golfer.default_tee_set_id if golfer else none) %}
+            <option value="{{ tee_set.id }}" {% if _selected_tee_id == tee_set.id %}selected{% endif %}>{{ course.name }} - {{ tee_set.name }} ({{ tee_set.gender }})</option>
+            {% endfor %}
+            {% endfor %}
+        </select>
+    </label>
+    <label>
+        Handicap strokes
+        <input type="text" name="handicap_strokes" value="{{ handicap_display if handicap_display is not none else (golfer.handicap_strokes if golfer and golfer.handicap_strokes is not none else '') }}">
+    </label>
+    <label>
+        Notes
+        <textarea name="notes">{{ golfer.notes if golfer and golfer.notes else '' }}</textarea>
+    </label>
+    <button type="submit">Save</button>
+</form>
+{% if golfer %}
+<p>Status: {{ golfer.handicap_status }}</p>
+{% endif %}
+{% endblock %}

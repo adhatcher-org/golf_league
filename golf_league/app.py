@@ -16,6 +16,7 @@ from golf_league.database import make_engine
 from golf_league.domain.rate_limit import RateLimiter
 from golf_league.migrations import upgrade_to_head
 from golf_league.routers.admin_courses import router as admin_courses_router
+from golf_league.routers.admin_roster import router as admin_roster_router
 from golf_league.routers.identity import router as identity_router
 from golf_league.services.course_seed import seed_wyandot
 from golf_league.services.email import FakeEmailSender
@@ -99,6 +100,7 @@ def create_app(settings=None) -> FastAPI:
 
     app.include_router(identity_router)
     app.include_router(admin_courses_router)
+    app.include_router(admin_roster_router)
 
     # Health endpoints
     @app.get("/healthz")
