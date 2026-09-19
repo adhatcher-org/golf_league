@@ -5,7 +5,12 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from golf_league.domain.course import validate_positive_int
+import golf_league.domain.course as course_domain
+from golf_league.domain.course import (
+    VALID_SCOPES,
+    validate_positive_int,
+    validate_rating,
+)
 from golf_league.models import TeeRating, TeeSet
 from golf_league.services.courses import (
     CourseValidationError,
@@ -257,3 +262,54 @@ def test_update_tee_set_with_ratings_returns_none_for_a_foreign_course_id(sessio
     unchanged = session.get(TeeSet, tee_set.id)
     assert unchanged.total_yards == 5707
     assert unchanged.course_id == course_a.id
+
+
+@pytest.mark.parametrize("bad_value", ["0", "0.0", "-0"])
+def test_zero_rating_is_rejected(bad_value):
+    assert validate_rating(bad_value) == "Rating must be greater than zero."
+
+
+@pytest.mark.parametrize("bad_value", ["-33.9", "-0.1", "-70"])
+def test_negative_rating_is_rejected(bad_value):
+    assert validate_rating(bad_value) == "Rating must be greater than zero."
+
+
+@pytest.mark.parametrize("good_value", ["0.1", "70.4"])
+def test_smallest_positive_rating_is_still_accepted(good_value):
+    assert validate_rating(good_value) is None
+
+
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [
+        ("", "Rating is required."),
+        ("abc", "Rating must be a finite number."),
+        ("NaN", "Rating must be a finite number."),
+        ("Infinity", "Rating must be a finite number."),
+        ("1000", "Rating must be less than 1000."),
+        ("70.44", "Rating may have at most one decimal place."),
+    ],
+)
+def test_existing_rating_messages_are_unchanged(value, message):
+    assert validate_rating(value) == message
+
+
+def test_tee_set_with_a_zero_rating_writes_nothing(session):
+    course = _make_course(session)
+    bad_ratings = dict(FULL_RATINGS)
+    bad_ratings["front"] = {"rating": "0", "slope": 114, "par": 36}
+
+    with pytest.raises(CourseValidationError) as excinfo:
+        create_tee_set_with_ratings(
+            session, course.id, name="Deer", color_label="White", gender="men",
+            total_yards=5707, sort_order=1, ratings=bad_ratings,
+        )
+
+    assert excinfo.value.errors["front_rating"] == "Rating must be greater than zero."
+    assert session.query(TeeSet).count() == 0
+    assert session.query(TeeRating).count() == 0
+
+
+def test_validate_scope_is_not_importable():
+    assert not hasattr(course_domain, "validate_scope")
+    assert VALID_SCOPES == ("front", "back", "full")

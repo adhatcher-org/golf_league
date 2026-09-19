@@ -893,3 +893,114 @@ def test_post_with_an_absent_csrf_token_is_403(client, kind):
 
     response = admin_client.post(path, data=data, follow_redirects=False)
     assert response.status_code == 403
+
+
+def _course_with_one_tee(client, course_name):
+    """Create a course and a valid tee set through the forms; return both ids."""
+    page = client.get("/admin/courses/new")
+    csrf = _extract_csrf(page.text)
+    create_resp = client.post(
+        "/admin/courses/new",
+        data={"name": course_name, "total_holes": "18", "csrf_token": csrf},
+        follow_redirects=False,
+    )
+    course_id = int(create_resp.headers["location"].split("/")[3])
+
+    tee_page = client.get(f"/admin/courses/{course_id}/tees/new")
+    tee_csrf = _extract_csrf(tee_page.text)
+    tee_resp = client.post(
+        f"/admin/courses/{course_id}/tees/new",
+        data={
+            "name": "Deer", "color_label": "White", "gender": "men",
+            "total_yards": "5707", "sort_order": "1",
+            "front_rating": "33.9", "front_slope": "114", "front_par": "36",
+            "back_rating": "34.0", "back_slope": "111", "back_par": "36",
+            "full_rating": "67.9", "full_slope": "113", "full_par": "72",
+            "csrf_token": tee_csrf,
+        },
+        follow_redirects=False,
+    )
+    assert tee_resp.status_code == 303
+
+    session = Session(bind=client.app.state.engine)
+    try:
+        from golf_league.models import TeeSet
+
+        tee_set_id = session.query(TeeSet).filter_by(course_id=course_id).one().id
+    finally:
+        session.close()
+    return course_id, tee_set_id
+
+
+@pytest.mark.parametrize(
+    ("field", "bad_value"),
+    [("front_rating", "0"), ("back_rating", "-33.9")],
+)
+def test_post_new_tee_with_a_non_positive_rating_re_renders_422(empty_client, field, bad_value):
+    from golf_league.models import TeeSet
+
+    client = _admin_client(empty_client)
+    page = client.get("/admin/courses/new")
+    csrf = _extract_csrf(page.text)
+    create_resp = client.post(
+        "/admin/courses/new",
+        data={"name": f"Rating Bound Club {field}", "total_holes": "18", "csrf_token": csrf},
+        follow_redirects=False,
+    )
+    course_id = int(create_resp.headers["location"].split("/")[3])
+
+    tee_page = client.get(f"/admin/courses/{course_id}/tees/new")
+    tee_csrf = _extract_csrf(tee_page.text)
+    data = {
+        "name": "Deer", "color_label": "White", "gender": "men",
+        "total_yards": "5707", "sort_order": "1",
+        "front_rating": "33.9", "front_slope": "114", "front_par": "36",
+        "back_rating": "34.0", "back_slope": "111", "back_par": "36",
+        "full_rating": "67.9", "full_slope": "113", "full_par": "72",
+        "csrf_token": tee_csrf,
+    }
+    data[field] = bad_value
+
+    response = client.post(f"/admin/courses/{course_id}/tees/new", data=data)
+    assert response.status_code == 422
+    assert "<form" in response.text
+    assert "Rating must be greater than zero." in response.text
+
+    session = Session(bind=client.app.state.engine)
+    try:
+        assert session.query(TeeSet).filter_by(course_id=course_id).count() == 0
+    finally:
+        session.close()
+
+
+def test_post_edit_tee_with_a_non_positive_rating_re_renders_422(empty_client):
+    from decimal import Decimal
+
+    from golf_league.models import TeeRating
+
+    client = _admin_client(empty_client)
+    course_id, tee_set_id = _course_with_one_tee(client, "Rating Bound Edit Club")
+
+    edit_page = client.get(f"/admin/courses/{course_id}/tees/{tee_set_id}/edit")
+    edit_csrf = _extract_csrf(edit_page.text)
+    response = client.post(
+        f"/admin/courses/{course_id}/tees/{tee_set_id}/edit",
+        data={
+            "name": "Deer", "color_label": "White", "gender": "men",
+            "total_yards": "5707", "sort_order": "1",
+            "front_rating": "0", "front_slope": "114", "front_par": "36",
+            "back_rating": "34.0", "back_slope": "111", "back_par": "36",
+            "full_rating": "67.9", "full_slope": "113", "full_par": "72",
+            "csrf_token": edit_csrf,
+        },
+    )
+    assert response.status_code == 422
+    assert "<form" in response.text
+    assert "Rating must be greater than zero." in response.text
+
+    session = Session(bind=client.app.state.engine)
+    try:
+        stored = session.query(TeeRating).filter_by(tee_set_id=tee_set_id, scope="front").one()
+        assert stored.rating == Decimal("33.9")
+    finally:
+        session.close()

@@ -18,13 +18,6 @@ def validate_gender(value: str) -> str | None:
     return None
 
 
-def validate_scope(value: str) -> str | None:
-    """Return an error message, or None when `value` is a valid scope."""
-    if value not in VALID_SCOPES:
-        return "Scope must be 'front', 'back' or 'full'."
-    return None
-
-
 def validate_positive_int(value: object, field_name: str) -> str | None:
     """Return an error message, or None when `value` is a positive integer.
 
@@ -48,8 +41,9 @@ def validate_positive_int(value: object, field_name: str) -> str | None:
 def validate_rating(value: object) -> str | None:
     """Return an error message, or None when `value` is a finite rating number.
 
-    Rejects empty strings, non-numeric text (`abc`), and non-finite values
-    (`NaN`, `Infinity`) — none of these are silently clamped to 0.
+    Rejects empty strings, non-numeric text (`abc`), non-finite values
+    (`NaN`, `Infinity`), and anything at or below zero — none of these are
+    silently clamped to 0.
     """
     text = str(value).strip()
     if not text:
@@ -60,6 +54,8 @@ def validate_rating(value: object) -> str | None:
         return "Rating must be a finite number."
     if not parsed.is_finite():
         return "Rating must be a finite number."
+    if parsed <= 0:
+        return "Rating must be greater than zero."
     try:
         too_large = abs(parsed) >= Decimal("1000")
     except DecimalException:
