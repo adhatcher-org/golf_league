@@ -1,7 +1,16 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -39,7 +48,7 @@ class User(Base):
         Integer, nullable=False, default=1, server_default="1"
     )
     golfer_id: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, unique=True
+        Integer, ForeignKey("golfers.id"), nullable=True, unique=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
@@ -115,6 +124,48 @@ class TeeRating(Base):
     par: Mapped[int] = mapped_column(Integer, nullable=False)
 
     tee_set: Mapped["TeeSet"] = relationship("TeeSet", back_populates="ratings")
+
+
+class Golfer(Base):
+    """A person in the league's roster.
+
+    `handicap_strokes` is a signed Integer, not Numeric: NULL means no
+    handicap on file, 0 is a scratch golfer, and a negative value is a
+    legitimate plus handicap. Neither may be coerced into the other, and
+    the column has no minimum and no maximum.
+
+    `handicap_status` is derived (never a direct input) and persisted by
+    `golf_league.domain.roster.derive_handicap_status`.
+
+    `handicap_index` exists for a future release; this task never writes
+    it, and no form field offers it.
+    """
+
+    __tablename__ = "golfers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    first_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    email: Mapped[str | None] = mapped_column(String(254), nullable=True, unique=True)
+    phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    default_tee_set_id: Mapped[int] = mapped_column(
+        ForeignKey("tee_sets.id"), nullable=False
+    )
+    handicap_strokes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    handicap_source: Mapped[str] = mapped_column(String(16), nullable=False)
+    handicap_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    handicap_index: Mapped[Decimal | None] = mapped_column(
+        Numeric(4, 1), nullable=True
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+    default_tee_set: Mapped["TeeSet"] = relationship("TeeSet")
 
 
 class UserToken(Base):

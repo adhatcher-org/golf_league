@@ -3,7 +3,7 @@ from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from golf_league.models import Base, Course
+from golf_league.models import Base, Course, Golfer
 
 
 @pytest.fixture
@@ -101,3 +101,30 @@ def wyandot_course(session):
         ).scalar_one()
 
     return _make
+
+
+@pytest.fixture
+def golfer(session, wyandot_course):
+    """A saved `Golfer` attached to a seeded tee set.
+
+    Builds on `wyandot_course`: seeds Wyandot, then creates a golfer on
+    its "Deer" tee set with a real handicap on file, for service-level
+    tests that need a persisted starting row.
+    """
+    course = wyandot_course()
+    tee_set = next(t for t in course.tee_sets if t.name == "Deer")
+    golfer_row = Golfer(
+        first_name="Pat",
+        last_name="Example",
+        email="pat.example@example.test",
+        phone=None,
+        default_tee_set_id=tee_set.id,
+        handicap_strokes=12,
+        handicap_source="self_reported",
+        handicap_status="ok",
+        notes=None,
+    )
+    session.add(golfer_row)
+    session.commit()
+    session.refresh(golfer_row)
+    return golfer_row

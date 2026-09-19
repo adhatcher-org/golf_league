@@ -112,7 +112,7 @@ async def create_course_submit(
     state: str = Form(""),
     website: str = Form(""),
     total_holes: str = Form("18"),
-    csrf_token: str = Form(...),
+    csrf_token: str = Form(""),
     session: Session = Depends(get_session),  # noqa: B008
     admin=Depends(require_admin),  # noqa: B008
 ) -> Response:
@@ -164,7 +164,7 @@ async def update_course_submit(
     state: str = Form(""),
     website: str = Form(""),
     total_holes: str = Form("18"),
-    csrf_token: str = Form(...),
+    csrf_token: str = Form(""),
     session: Session = Depends(get_session),  # noqa: B008
     admin=Depends(require_admin),  # noqa: B008
 ) -> Response:
@@ -218,11 +218,11 @@ async def new_tee_form(
 async def create_tee_submit(
     course_id: int,
     request: Request,
-    name: str = Form(...),
-    color_label: str = Form(...),
-    gender: str = Form(...),
-    total_yards: str = Form(...),
-    sort_order: str = Form(...),
+    name: str = Form(""),
+    color_label: str = Form(""),
+    gender: str = Form(""),
+    total_yards: str = Form(""),
+    sort_order: str = Form(""),
     front_rating: str = Form(""),
     front_slope: str = Form(""),
     front_par: str = Form(""),
@@ -232,7 +232,7 @@ async def create_tee_submit(
     full_rating: str = Form(""),
     full_slope: str = Form(""),
     full_par: str = Form(""),
-    csrf_token: str = Form(...),
+    csrf_token: str = Form(""),
     session: Session = Depends(get_session),  # noqa: B008
     admin=Depends(require_admin),  # noqa: B008
 ) -> Response:
@@ -300,11 +300,11 @@ async def update_tee_submit(
     course_id: int,
     tee_set_id: int,
     request: Request,
-    name: str = Form(...),
-    color_label: str = Form(...),
-    gender: str = Form(...),
-    total_yards: str = Form(...),
-    sort_order: str = Form(...),
+    name: str = Form(""),
+    color_label: str = Form(""),
+    gender: str = Form(""),
+    total_yards: str = Form(""),
+    sort_order: str = Form(""),
     front_rating: str = Form(""),
     front_slope: str = Form(""),
     front_par: str = Form(""),
@@ -314,7 +314,7 @@ async def update_tee_submit(
     full_rating: str = Form(""),
     full_slope: str = Form(""),
     full_par: str = Form(""),
-    csrf_token: str = Form(...),
+    csrf_token: str = Form(""),
     session: Session = Depends(get_session),  # noqa: B008
     admin=Depends(require_admin),  # noqa: B008
 ) -> Response:
