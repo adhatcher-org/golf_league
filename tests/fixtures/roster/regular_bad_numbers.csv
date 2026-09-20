@@ -1,0 +1,5 @@
+Name,Status,Gold HC,White HC,Email,Phone #
+"Point, Deci",Gold,3.5,6,point.deci@example.test,555-0107
+"Notation, Exp",Gold,1e3,6,notation.exp@example.test,555-0108
+"Value, Nan",Gold,NaN,6,value.nan@example.test,555-0109
+"Plus, Sign",Gold,+2,6,plus.sign@example.test,555-0110

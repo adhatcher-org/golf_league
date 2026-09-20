@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Import Roster - Golf League{% endblock %}
+{% block content %}
+<h2>Import roster CSV</h2>
+{% if errors %}
+<ul class="error">
+    {% for field, message in errors.items() %}
+    <li>{{ field }}: {{ message }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+<form method="post" action="/admin/roster/imports/new" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>
+        Course
+        <select name="course_id" required>
+            <option value="">Select a course</option>
+            {% for course in courses %}
+            <option value="{{ course.id }}" {% if preselected_course_id == course.id %}selected{% endif %}>{{ course.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>
+        CSV files (one or two: regular roster, sub list)
+        <input type="file" name="files" multiple accept=".csv">
+    </label>
+    <button type="submit">Upload</button>
+</form>
+
+<h2>Purge expired imports</h2>
+<p>Deletes every staged, applied or discarded batch (and its rows) whose retention period has passed.</p>
+<form method="post" action="/admin/roster/imports/purge">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit">Purge expired batches</button>
+</form>
+{% endblock %}

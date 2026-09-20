@@ -1,9 +1,54 @@
+import re
+from collections.abc import Iterator
+from datetime import UTC, datetime
+
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from golf_league.models import Base, Course, Golfer
+from golf_league.models import Base, Course, Golfer, User
+from golf_league.services.auth import hash_password
+
+_CSRF_RE = re.compile(r'name="csrf_token" value="([^"]*)"')
+
+
+def _extract_csrf(html: str) -> str:
+    """Return the value of the hidden `csrf_token` input in a rendered form."""
+    match = _CSRF_RE.search(html)
+    assert match, f"no csrf_token field found in: {html!r}"
+    return match.group(1)
+
+
+def _make_admin_client(client: TestClient) -> TestClient:
+    """Insert a verified admin `User` and log in through the real `/login` form."""
+    email = "admin@example.test"
+    password = "s3cret-pw!"
+    session = Session(bind=client.app.state.engine)
+    try:
+        user = User(
+            username=email,
+            email=email,
+            display_name="Admin",
+            password_hash=hash_password(password),
+            email_verified_at=datetime.now(UTC).replace(tzinfo=None),
+            is_admin=True,
+        )
+        session.add(user)
+        session.commit()
+    finally:
+        session.close()
+
+    login_page = client.get("/login")
+    csrf_token = _extract_csrf(login_page.text)
+    response = client.post(
+        "/login",
+        data={"email": email, "password": password, "csrf_token": csrf_token},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    return client
 
 
 @pytest.fixture
@@ -128,3 +173,20 @@ def golfer(session, wyandot_course):
     session.commit()
     session.refresh(golfer_row)
     return golfer_row
+
+
+@pytest.fixture()
+def admin_client(client: TestClient) -> Iterator[TestClient]:
+    """A logged-in admin `TestClient`, built on the Wyandot-seeded `client`.
+
+    Inserts a verified admin `User` through
+    `Session(bind=client.app.state.engine)`, logs in through the real
+    `/login` form with a real CSRF token, and yields the logged-in client.
+    """
+    yield _make_admin_client(client)
+
+
+@pytest.fixture()
+def empty_admin_client(empty_client: TestClient) -> Iterator[TestClient]:
+    """Same as `admin_client`, built on the `empty_client` fixture (no seeded course)."""
+    yield _make_admin_client(empty_client)

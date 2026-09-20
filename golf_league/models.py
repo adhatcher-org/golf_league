@@ -168,6 +168,102 @@ class Golfer(Base):
     default_tee_set: Mapped["TeeSet"] = relationship("TeeSet")
 
 
+class RosterImportBatch(Base):
+    """One staged CSV roster upload, pending admin review (GL-11/GL-12).
+
+    GL-11 stages only: `state` stays `"staged"`, `applied_at` stays NULL
+    and the four result counters stay `0` until GL-12 applies or discards
+    the batch. `is_initial` is decided once, when the batch is staged.
+    """
+
+    __tablename__ = "roster_import_batches"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_by_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False
+    )
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), nullable=False)
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    state: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="staged", server_default="staged"
+    )
+    is_initial: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    source_display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    row_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    created_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    updated_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    unchanged_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    skipped_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class RosterImportRow(Base):
+    """One parsed, validated row of a `RosterImportBatch`, pending review.
+
+    `raw_line` is the row's original text, immutable. `first_name`,
+    `last_name`, `email`, `phone` and `tee_label` are the editable
+    normalized values GL-12's review page edits; GL-11 writes them once.
+    `update_opt_in` is written `false` here and only GL-12's review form
+    ever sets it true.
+    """
+
+    __tablename__ = "roster_import_rows"
+    __table_args__ = (
+        UniqueConstraint(
+            "batch_id", "position", name="uq_roster_import_rows_batch_position"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("roster_import_batches.id"), nullable=False, index=True
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    first_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(254), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    tee_label: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    handicap_gold: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    handicap_white: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    handicap_single: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_role: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_file: Mapped[str] = mapped_column(String(255), nullable=False)
+    source_row: Mapped[int] = mapped_column(Integer, nullable=False)
+    raw_line: Mapped[str] = mapped_column(Text, nullable=False)
+    included: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    update_opt_in: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    validation_error: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    warnings: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+
+
 class UserToken(Base):
     """A single-use, purpose-scoped token issued to a user.
 

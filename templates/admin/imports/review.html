@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Review Import - Golf League{% endblock %}
+{% block content %}
+<h2>Import batch #{{ batch.id }}</h2>
+<p>Course: {{ course.name if course else batch.course_id }}</p>
+<p>State: {{ batch.state }}</p>
+<p>Initial import: {{ "yes" if batch.is_initial else "no" }}</p>
+<p>Created: {{ batch.created_at }}</p>
+<p>Expires: {{ batch.expires_at }}</p>
+<p>Row count: {{ batch.row_count }}</p>
+
+<p>This page is read-only: it shows what was staged. Review controls (edit,
+opt in to overwrite, include/exclude, discard, apply) are added by a later
+task.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Position</th>
+            <th>Source file</th>
+            <th>Source row</th>
+            <th>Role</th>
+            <th>First name</th>
+            <th>Last name</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Tee</th>
+            <th>Gold HC</th>
+            <th>White HC</th>
+            <th>2025 HC</th>
+            <th>Included</th>
+            <th>Opted in</th>
+            <th>Error</th>
+            <th>Warnings</th>
+            <th>Raw line</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr>
+            <td>{{ row.position }}</td>
+            <td>{{ row.source_file }}</td>
+            <td>{{ row.source_row }}</td>
+            <td>{{ row.source_role }}</td>
+            <td>{{ row.first_name }}</td>
+            <td>{{ row.last_name }}</td>
+            <td>{{ row.email }}</td>
+            <td>{{ row.phone }}</td>
+            <td>{{ row.tee_label }}</td>
+            <td>{{ row.handicap_gold }}</td>
+            <td>{{ row.handicap_white }}</td>
+            <td>{{ row.handicap_single }}</td>
+            <td>{{ row.included }}</td>
+            <td>{{ row.update_opt_in }}</td>
+            <td>{{ row.validation_error }}</td>
+            <td>
+                {% for code in row.warning_codes %}{% if not loop.first %}, {% endif %}{{ code }}{% if code == "email_domain_near_miss" and row.near_miss_suggestion %} ({{ row.near_miss_suggestion }}){% endif %}{% endfor %}
+            </td>
+            <td>{{ row.raw_line }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
