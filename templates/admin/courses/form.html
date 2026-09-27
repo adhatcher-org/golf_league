@@ -35,6 +35,7 @@
 </form>
 {% if course %}
 <p><a href="/admin/courses/{{ course.id }}/tees/new">Add a tee set</a></p>
+<p><a href="/admin/courses/{{ course.id }}/holes">Edit holes and yardages</a></p>
 {% for tee_set in course.tee_sets %}
 <p><a href="/admin/courses/{{ course.id }}/tees/{{ tee_set.id }}/edit">Edit {{ tee_set.name }} ({{ tee_set.gender }})</a></p>
 {% endfor %}

@@ -75,6 +75,7 @@ class Course(Base):
     tee_sets: Mapped[list["TeeSet"]] = relationship(
         "TeeSet", back_populates="course", order_by="TeeSet.sort_order"
     )
+    holes: Mapped[list["Hole"]] = relationship("Hole", back_populates="course", order_by="Hole.number")
 
 
 class TeeSet(Base):
@@ -104,6 +105,7 @@ class TeeSet(Base):
     ratings: Mapped[list["TeeRating"]] = relationship(
         "TeeRating", back_populates="tee_set"
     )
+    hole_yardages: Mapped[list["HoleYardage"]] = relationship("HoleYardage", back_populates="tee_set")
 
 
 class TeeRating(Base):
@@ -124,6 +126,39 @@ class TeeRating(Base):
     par: Mapped[int] = mapped_column(Integer, nullable=False)
 
     tee_set: Mapped["TeeSet"] = relationship("TeeSet", back_populates="ratings")
+
+
+class Hole(Base):
+    """One stored hole on a course; `nine` is deliberately not derived."""
+
+    __tablename__ = "holes"
+    __table_args__ = (UniqueConstraint("course_id", "number", name="uq_holes_course_number"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), nullable=False)
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    nine: Mapped[str] = mapped_column(String(5), nullable=False)
+    par: Mapped[int] = mapped_column(Integer, nullable=False)
+    stroke_index_18: Mapped[int] = mapped_column(Integer, nullable=False)
+    stroke_index_9: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    course: Mapped["Course"] = relationship("Course", back_populates="holes")
+    yardages: Mapped[list["HoleYardage"]] = relationship("HoleYardage", back_populates="hole")
+
+
+class HoleYardage(Base):
+    """The required yardage for one hole at one tee set."""
+
+    __tablename__ = "hole_yardages"
+    __table_args__ = (UniqueConstraint("hole_id", "tee_set_id", name="uq_hole_yardages_hole_tee_set"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    hole_id: Mapped[int] = mapped_column(ForeignKey("holes.id"), nullable=False)
+    tee_set_id: Mapped[int] = mapped_column(ForeignKey("tee_sets.id"), nullable=False)
+    yards: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    hole: Mapped["Hole"] = relationship("Hole", back_populates="yardages")
+    tee_set: Mapped["TeeSet"] = relationship("TeeSet", back_populates="hole_yardages")
 
 
 class Golfer(Base):

@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from golf_league.models import Course, TeeRating, TeeSet
+from golf_league.models import Course, HoleYardage, TeeRating, TeeSet
 from golf_league.services.course_seed import seed_wyandot
 
 
@@ -98,6 +98,7 @@ def test_seed_restores_only_the_missing_tee_set(session):
     deer = session.query(TeeSet).filter_by(course_id=course.id, name="Deer").one()
     deer_id = deer.id
 
+    session.query(HoleYardage).filter_by(tee_set_id=snake.id).delete()
     session.query(TeeRating).filter_by(tee_set_id=snake.id).delete()
     session.query(TeeSet).filter_by(id=snake.id).delete()
     session.commit()
@@ -109,3 +110,21 @@ def test_seed_restores_only_the_missing_tee_set(session):
     # Deer was untouched: same row id as before.
     untouched_deer = session.query(TeeSet).filter_by(course_id=course.id, name="Deer").one()
     assert untouched_deer.id == deer_id
+
+
+def test_seed_is_a_no_op_before_hole_tables_exist(tmp_path):
+    from alembic import command
+    from sqlalchemy import create_engine, inspect
+    from sqlalchemy.orm import Session
+
+    from golf_league.migrations import _make_config
+
+    database_url = f"sqlite:///{tmp_path / 'gl20.db'}"
+    command.upgrade(_make_config(database_url), "d24f7b6c1a9e")
+    engine = create_engine(database_url)
+    try:
+        with Session(engine) as old_session:
+            seed_wyandot(old_session)
+        assert "holes" not in inspect(engine).get_table_names()
+    finally:
+        engine.dispose()

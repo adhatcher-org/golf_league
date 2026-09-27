@@ -1,9 +1,11 @@
-"""Admin routes for courses, tee sets and tee ratings.
+"""Admin routes for courses, tee sets, ratings, and the complete hole grid.
 
 Routes only: every database access goes through
 `golf_league.services.courses`. `golf_league.models` is never imported
 here.
 """
+
+import json
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import RedirectResponse, Response
@@ -15,9 +17,13 @@ from golf_league.services.courses import (
     CourseValidationError,
     create_course,
     create_tee_set_with_ratings,
+    delete_tee_set,
     get_course,
+    get_course_grid,
     get_tee_set_for_course,
     list_courses_with_tee_sets,
+    new_hole_grid_defaults,
+    save_hole_grid,
     update_course,
     update_tee_set_with_ratings,
 )
@@ -62,6 +68,23 @@ def _tee_form_context(request: Request, *, course_id: int, tee_set=None, ratings
         "errors": errors,
         "csrf_token": generate_csrf_token(seed) if seed else "",
     }
+
+
+def _grid_context(request: Request, *, course, holes, tee_sets, errors=None) -> dict:
+    seed = _csrf_seed(request)
+    by_hole = {hole.id: {yardage.tee_set_id: yardage.yards for yardage in hole.yardages} for hole in holes}
+    if holes:
+        grid_rows = [
+            {"number": hole.number, "nine": hole.nine, "par": hole.par,
+             "stroke_index_18": hole.stroke_index_18, "stroke_index_9": hole.stroke_index_9,
+             "yardages": {str(tee.id): by_hole.get(hole.id, {}).get(tee.id, "") for tee in tee_sets}}
+            for hole in holes
+        ]
+    else:
+        grid_rows = new_hole_grid_defaults([tee.id for tee in tee_sets])
+    return {"course": course, "holes": holes, "tee_sets": tee_sets, "yardages": by_hole,
+            "grid_rows": grid_rows, "errors": errors,
+            "csrf_token": generate_csrf_token(seed) if seed else ""}
 
 
 def _ratings_from_form(
@@ -355,3 +378,54 @@ async def update_tee_submit(
     return RedirectResponse(
         url=f"/admin/courses/{course_id}/edit", status_code=status.HTTP_303_SEE_OTHER
     )
+
+
+@router.get("/admin/courses/{course_id}/holes")
+async def hole_grid_form(
+    course_id: int, request: Request, session: Session = Depends(get_session), admin=Depends(require_admin)  # noqa: B008
+) -> Response:
+    grid = get_course_grid(session, course_id)
+    if grid is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    course, holes, tee_sets = grid
+    return _templates(request).TemplateResponse(request, "admin/courses/holes.html", _grid_context(request, course=course, holes=holes, tee_sets=tee_sets))
+
+
+@router.post("/admin/courses/{course_id}/holes")
+async def save_hole_grid_submit(
+    course_id: int, request: Request, session: Session = Depends(get_session), admin=Depends(require_admin)  # noqa: B008
+) -> Response:
+    form = await request.form()
+    _require_csrf(request, str(form.get("csrf_token", "")))
+    grid = get_course_grid(session, course_id)
+    if grid is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    course, current_holes, tee_sets = grid
+    try:
+        submitted = json.loads(str(form.get("grid", "")))
+        if not isinstance(submitted, list):
+            raise ValueError
+        for row in submitted:
+            if not isinstance(row, dict) or not isinstance(row.get("yardages"), dict):
+                raise ValueError
+            row["yardages"] = {int(tee_id): value for tee_id, value in row["yardages"].items()}
+        save_hole_grid(session, course_id, submitted)
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return _templates(request).TemplateResponse(request, "admin/courses/holes.html", _grid_context(request, course=course, holes=current_holes, tee_sets=tee_sets, errors={"grid": "Enter a complete valid grid."}), status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
+    except CourseValidationError as exc:
+        return _templates(request).TemplateResponse(request, "admin/courses/holes.html", _grid_context(request, course=course, holes=current_holes, tee_sets=tee_sets, errors=exc.errors), status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
+    return RedirectResponse(url=f"/admin/courses/{course_id}/holes", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/admin/courses/{course_id}/tees/{tee_set_id}/delete")
+async def delete_tee_submit(
+    course_id: int, tee_set_id: int, request: Request, csrf_token: str = Form(""), session: Session = Depends(get_session), admin=Depends(require_admin)  # noqa: B008
+) -> Response:
+    _require_csrf(request, csrf_token)
+    try:
+        deleted = delete_tee_set(session, course_id, tee_set_id)
+    except CourseValidationError as exc:
+        return Response(content=exc.errors["delete"], status_code=status.HTTP_409_CONFLICT)
+    if deleted is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return RedirectResponse(url=f"/admin/courses/{course_id}/edit", status_code=status.HTTP_303_SEE_OTHER)

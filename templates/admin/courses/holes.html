@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Holes and yardages - Golf League{% endblock %}
+{% block content %}
+<h2>Holes and yardages: {{ course.name }}</h2>
+{% if errors %}<ul class="error">{% for field, message in errors.items() %}<li>{{ field }}: {{ message }}</li>{% endfor %}</ul>{% endif %}
+<p>Paste a complete JSON grid below. Preview it before saving; the server validates every hole, index, par total, and tee yardage.</p>
+<form method="post" action="/admin/courses/{{ course.id }}/holes">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label>Grid JSON <textarea id="grid" name="grid" rows="18" cols="100" required>{{ grid_rows | tojson }}</textarea></label>
+  <button type="button" id="preview-grid">Preview pasted grid</button>
+  <p id="grid-preview" aria-live="polite"></p>
+  <button type="submit">Validate and save complete grid</button>
+</form>
+<script>
+document.getElementById("preview-grid")?.addEventListener("click", () => {
+  const output = document.getElementById("grid-preview");
+  try {
+    const rows = JSON.parse(document.getElementById("grid").value);
+    output.textContent = Array.isArray(rows) ? `Preview: ${rows.length} rows. Server validation is required before saving.` : "Preview failed: grid must be an array.";
+  } catch { output.textContent = "Preview failed: enter valid JSON."; }
+});
+</script>
+{% if holes %}
+<table><thead><tr><th>Hole</th><th>Nine</th><th>Par</th><th>SI 18</th><th>SI 9</th>{% for tee in tee_sets %}<th>{{ tee.name }} yards</th>{% endfor %}</tr></thead><tbody>
+{% for hole in holes %}<tr><td>{{ hole.number }}</td><td>{{ hole.nine }}</td><td>{{ hole.par }}</td><td>{{ hole.stroke_index_18 }}</td><td>{{ hole.stroke_index_9 }}</td>{% for tee in tee_sets %}<td>{{ yardages.get(hole.id, {}).get(tee.id, '') }}</td>{% endfor %}</tr>{% endfor %}
+</tbody></table>{% endif %}
+{% endblock %}
