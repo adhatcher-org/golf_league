@@ -6,6 +6,8 @@ themselves. Pure validation and normalization live in
 written.
 """
 
+from dataclasses import dataclass
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -227,10 +229,38 @@ def list_golfers(session: Session) -> list[Golfer]:
     )
 
 
+@dataclass(frozen=True)
+class RosterPlayer:
+    """The privacy-safe projection used by the verified player roster."""
+
+    first_name: str
+    last_name: str
+    tee_color: str
+    handicap_strokes: int | None
+
+
+def list_active_roster_players(session: Session) -> list[RosterPlayer]:
+    """Load only columns permitted in the verified player-roster view."""
+    rows = session.execute(
+        select(
+            Golfer.first_name,
+            Golfer.last_name,
+            TeeSet.color_label,
+            Golfer.handicap_strokes,
+        )
+        .join(TeeSet, Golfer.default_tee_set_id == TeeSet.id)
+        .where(Golfer.is_active.is_(True))
+        .order_by(Golfer.last_name, Golfer.first_name)
+    ).all()
+    return [RosterPlayer(*row) for row in rows]
+
+
 __all__ = [
     "RosterValidationError",
     "create_golfer",
     "update_golfer",
     "get_golfer",
     "list_golfers",
+    "RosterPlayer",
+    "list_active_roster_players",
 ]

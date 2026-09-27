@@ -1,11 +1,10 @@
-"""Identity routes: login, logout, email verification, password reset.
+"""Identity routes: login, registration, logout, email verification, password reset.
 
 Routes only. No `golf_league.models` import here — every database access
 goes through `golf_league.services.auth`, which owns the ORM queries.
-Registration is out of scope for this task (see GL-13/GL-42): there is no
-`/register` route.
 """
 
+import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
@@ -23,10 +22,12 @@ from golf_league.services.auth import (
     consume_token,
     create_session_cookie,
     get_user_by_email,
+    hash_password,
     issue_token,
     mark_email_verified,
     peek_token,
 )
+from golf_league.services.identity import register_roster_user
 
 router = APIRouter()
 
@@ -37,6 +38,10 @@ MIN_PASSWORD_LENGTH = 8
 
 _NEUTRAL_LOGIN_MESSAGE = "That email or password is not correct."
 _NEUTRAL_RESET_MESSAGE = "If that address has an account, we've sent a link."
+_NEUTRAL_REGISTRATION_MESSAGE = (
+    "If that address is on the league roster, we've sent it a link to finish "
+    "creating your account."
+)
 
 
 def _settings(request: Request):
@@ -80,9 +85,9 @@ async def login_form(request: Request) -> Response:
 @router.post("/login")
 async def login_submit(
     request: Request,
-    email: str = Form(...),
-    password: str = Form(...),
-    csrf_token: str = Form(...),
+    email: str = Form(""),
+    password: str = Form(""),
+    csrf_token: str = Form(""),
     session: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
     seed = _csrf_seed(request)
@@ -115,7 +120,7 @@ async def login_submit(
 @router.post("/logout")
 async def logout(
     request: Request,
-    csrf_token: str = Form(...),
+    csrf_token: str = Form(""),
 ) -> Response:
     session_cookie = request.cookies.get(SESSION_COOKIE_NAME, "")
     _require_csrf(session_cookie, csrf_token)
@@ -160,8 +165,8 @@ async def reset_request_form(request: Request) -> Response:
 @router.post("/reset")
 async def reset_request_submit(
     request: Request,
-    email: str = Form(...),
-    csrf_token: str = Form(...),
+    email: str = Form(""),
+    csrf_token: str = Form(""),
     session: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
     seed = _csrf_seed(request)
@@ -208,8 +213,8 @@ async def reset_form(
 async def reset_submit(
     token: str,
     request: Request,
-    password: str = Form(...),
-    csrf_token: str = Form(...),
+    password: str = Form(""),
+    csrf_token: str = Form(""),
     session: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
     seed = _csrf_seed(request)
@@ -236,3 +241,79 @@ async def reset_submit(
     redirect = RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     redirect.delete_cookie(SESSION_COOKIE_NAME)
     return redirect
+
+
+def _registration_form(
+    request: Request, *, errors: dict[str, str] | None = None, message: str | None = None
+) -> Response:
+    seed = _csrf_seed(request)
+    return _templates(request).TemplateResponse(
+        request,
+        "identity/register.html",
+        {
+            "errors": errors,
+            "message": message,
+            "csrf_token": generate_csrf_token(seed),
+        },
+    )
+
+
+@router.get("/register")
+async def register_form(request: Request) -> Response:
+    seed = request.cookies.get(CSRF_COOKIE_NAME) or generate_token()
+    response = _templates(request).TemplateResponse(
+        request,
+        "identity/register.html",
+        {"errors": None, "message": None, "csrf_token": generate_csrf_token(seed)},
+    )
+    response.set_cookie(CSRF_COOKIE_NAME, seed, httponly=True, samesite="lax")
+    return response
+
+
+@router.post("/register")
+async def register_submit(
+    request: Request,
+    email: str = Form(""),
+    password: str = Form(""),
+    csrf_token: str = Form(""),
+    session: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    seed = _csrf_seed(request)
+    _require_csrf(seed, csrf_token)
+
+    errors: dict[str, str] = {}
+    normalized_email = normalize_email(email)
+    if not normalized_email:
+        errors["email"] = "Email is required."
+    if len(password) < MIN_PASSWORD_LENGTH:
+        errors["password"] = f"Password must be at least {MIN_PASSWORD_LENGTH} characters."
+    if errors:
+        response = _registration_form(request, errors=errors)
+        response.status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+        return response
+
+    # Do the expensive work before any eligibility or limiter decision, so
+    # account existence and roster membership cannot skip it.
+    password_hash = hash_password(password)
+    limiter = request.app.state.registration_rate_limiter
+    result = None
+    if limiter.check(normalized_email):
+        result = register_roster_user(
+            session,
+            email=normalized_email,
+            password_hash=password_hash,
+            max_users=_settings(request).max_users,
+        )
+
+    if result is not None and result.token is not None and result.email is not None:
+        try:
+            request.app.state.email_sender.send(
+                to=result.email,
+                subject="Verify your Golf League account",
+                body=f"Use this link to verify your email: /verify/{result.token}",
+            )
+        except Exception:
+            # Delivery is deliberately post-commit; do not log an address or token.
+            logging.getLogger(__name__).warning("registration verification email failed")
+
+    return _registration_form(request, message=_NEUTRAL_REGISTRATION_MESSAGE)

@@ -212,20 +212,32 @@ def test_password_reset_end_to_end_then_old_password_fails(admin_app) -> None:
         assert authenticate_user(session, email, new_password) is not None
 
 
-def test_register_is_closed_no_open_self_registration_route(admin_app) -> None:
-    """There is no open self-registration route at this milestone: GL-13 owns
-    roster-restricted registration and GL-42/43 own invite/join, neither of
-    which exists yet (criterion 5)."""
+def test_register_is_roster_restricted_and_no_invite_or_join_route_exists(admin_app) -> None:
+    """Registration is roster-restricted; invitation and join routes remain absent."""
     client, _db_path = admin_app
 
-    assert client.get("/register").status_code == 404
-    assert client.post("/register", data={}).status_code == 404
+    page = client.get("/register")
+    assert page.status_code == 200
+    csrf_token = _extract_csrf(page.text)
+    response = client.post(
+        "/register",
+        data={
+            "email": "not-on-roster@example.test",
+            "password": "a-real-password-1",
+            "csrf_token": csrf_token,
+        },
+    )
+    assert response.status_code == 200
+    assert "If that address is on the league roster" in response.text
+    with Session(bind=client.app.state.engine) as session:
+        assert session.query(User).filter_by(email="not-on-roster@example.test").count() == 0
+    assert client.app.state.email_sender.sent == []
 
     # Also assert it structurally: no route path anywhere in the app mentions
     # registration, invites, or joining -- this is not just the specific
     # `/register` guess failing to match, there is genuinely no such route.
     route_paths = [route.path for route in client.app.routes if hasattr(route, "path")]
-    forbidden_markers = ("register", "invite", "join")
+    forbidden_markers = ("invite", "join")
     offending = [
         path
         for path in route_paths

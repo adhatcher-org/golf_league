@@ -19,6 +19,7 @@ from golf_league.routers.admin_courses import router as admin_courses_router
 from golf_league.routers.admin_imports import router as admin_imports_router
 from golf_league.routers.admin_roster import router as admin_roster_router
 from golf_league.routers.identity import router as identity_router
+from golf_league.routers.roster import router as roster_router
 from golf_league.services.course_seed import seed_wyandot
 from golf_league.services.email import FakeEmailSender
 
@@ -30,6 +31,8 @@ _STATIC_DIR = _BASE_DIR / "static"
 
 LOGIN_RATE_LIMIT = 5
 LOGIN_RATE_WINDOW_SECONDS = 15 * 60
+REGISTRATION_RATE_LIMIT = 3
+REGISTRATION_RATE_WINDOW_SECONDS = 15 * 60
 
 
 @asynccontextmanager
@@ -94,12 +97,18 @@ def create_app(settings=None) -> FastAPI:
         window_seconds=LOGIN_RATE_WINDOW_SECONDS,
         clock=time.time,
     )
+    app.state.registration_rate_limiter = RateLimiter(
+        limit=REGISTRATION_RATE_LIMIT,
+        window_seconds=REGISTRATION_RATE_WINDOW_SECONDS,
+        clock=time.time,
+    )
 
     # No SMTP exists until M7 (see golf_league/services/email.py); this is
     # a safe in-memory placeholder so /reset always has something to call.
     app.state.email_sender = FakeEmailSender()
 
     app.include_router(identity_router)
+    app.include_router(roster_router)
     app.include_router(admin_courses_router)
     app.include_router(admin_roster_router)
     app.include_router(admin_imports_router)

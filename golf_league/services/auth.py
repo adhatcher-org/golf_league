@@ -75,7 +75,14 @@ def load_session_cookie(value: str, secret: str) -> tuple[int, int] | None:
         return None
 
 
-def issue_token(session: Session, user_id: int, purpose: str, ttl_seconds: int) -> str:
+def issue_token(
+    session: Session,
+    user_id: int,
+    purpose: str,
+    ttl_seconds: int,
+    *,
+    commit: bool = True,
+) -> str:
     """Issue a new single-use token for `user_id` and `purpose`.
 
     Any prior outstanding (unconsumed, unrevoked) token of the same purpose
@@ -106,7 +113,8 @@ def issue_token(session: Session, user_id: int, purpose: str, ttl_seconds: int) 
         expires_at=expires_at,
     )
     session.add(token_row)
-    session.commit()
+    if commit:
+        session.commit()
     return raw_token
 
 
