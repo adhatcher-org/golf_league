@@ -171,9 +171,9 @@ class Golfer(Base):
 class RosterImportBatch(Base):
     """One staged CSV roster upload, pending admin review (GL-11/GL-12).
 
-    GL-11 stages only: `state` stays `"staged"`, `applied_at` stays NULL
-    and the four result counters stay `0` until GL-12 applies or discards
-    the batch. `is_initial` is decided once, when the batch is staged.
+    GL-11 stages with state `"staged"`; GL-12 can transition it once to
+    `"applied"` (with result counters and `applied_at`) or `"discarded"`.
+    `is_initial` is decided once, when the batch is staged.
     """
 
     __tablename__ = "roster_import_batches"
@@ -218,9 +218,9 @@ class RosterImportBatch(Base):
 class RosterImportRow(Base):
     """One parsed, validated row of a `RosterImportBatch`, pending review.
 
-    `raw_line` is the row's original text, immutable. `first_name`,
-    `last_name`, `email`, `phone` and `tee_label` are the editable
-    normalized values GL-12's review page edits; GL-11 writes them once.
+    `raw_line`, source metadata, position and batch provenance are immutable.
+    The normalized review fields, including the source-role-appropriate
+    staged handicap, are editable only while GL-12 keeps the batch staged.
     `update_opt_in` is written `false` here and only GL-12's review form
     ever sets it true.
     """

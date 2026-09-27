@@ -11,10 +11,16 @@ import io
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from golf_league.domain.roster import normalize_name, normalize_phone
+from golf_league.domain.roster import (
+    derive_handicap_status,
+    normalize_email,
+    normalize_name,
+    normalize_phone,
+)
 from golf_league.domain.roster_import import (
     MAX_DATA_ROWS,
     MAX_PHONE_LENGTH,
@@ -52,6 +58,18 @@ class ImportValidationError(Exception):
     def __init__(self, errors: dict[str, str]):
         self.errors = errors
         super().__init__(str(errors))
+
+
+class ImportConflictError(Exception):
+    """Raised when an optimistic staged-batch mutation lost its race."""
+
+
+class ImportNotFoundError(Exception):
+    """Raised when a requested batch or row is absent from its URL scope."""
+
+
+class ImportApplyError(Exception):
+    """Raised when included rows still have hard errors at apply time."""
 
 
 def _reject(field: str, message: str) -> None:
@@ -620,6 +638,260 @@ def _compute_validation_code(
     return None
 
 
+def _edit_handicap(value: str) -> int | None:
+    parsed, valid = parse_handicap_cell(value)
+    if not valid:
+        raise ImportValidationError({"handicap": "Handicap must be a whole number."})
+    return parsed
+
+
+def _require_row_in_batch(
+    batch: RosterImportBatch | None, row: RosterImportRow | None, batch_id: int
+) -> tuple[RosterImportBatch, RosterImportRow]:
+    """Return matching persisted rows, or hide absent/cross-batch rows as 404."""
+    if batch is None or row is None or row.batch_id != batch_id:
+        raise ImportNotFoundError()
+    return batch, row
+
+
+def edit_staged_row(
+    session: Session,
+    *,
+    batch_id: int,
+    batch_version: int,
+    row_id: int,
+    row_version: int,
+    action: str,
+    first_name: str,
+    last_name: str,
+    email: str,
+    phone: str,
+    tee_label: str,
+    handicap_gold: str,
+    handicap_white: str,
+    handicap_single: str,
+    included: bool,
+    update_opt_in: bool,
+) -> None:
+    """Optimistically edit one normalized staged row and revalidate its batch."""
+    batch = session.get(RosterImportBatch, batch_id)
+    row = session.get(RosterImportRow, row_id)
+    batch, row = _require_row_in_batch(batch, row, batch_id)
+    if (
+        batch.state != "staged"
+        or batch.version != batch_version
+        or row.version != row_version
+    ):
+        raise ImportConflictError()
+
+    if action == "swap_names":
+        first_name, last_name = row.last_name or "", row.first_name or ""
+        email, phone, tee_label = row.email or "", row.phone or "", row.tee_label or ""
+        handicap_gold = "" if row.handicap_gold is None else str(row.handicap_gold)
+        handicap_white = "" if row.handicap_white is None else str(row.handicap_white)
+        handicap_single = "" if row.handicap_single is None else str(row.handicap_single)
+        included, update_opt_in = row.included, row.update_opt_in
+    elif action == "accept_domain_suggestion":
+        if not row.email or "@" not in row.email:
+            raise ImportValidationError({"email": "No domain suggestion is available."})
+        suggestion = near_miss_domain(row.email.rsplit("@", 1)[-1])
+        if suggestion is None:
+            raise ImportValidationError({"email": "No domain suggestion is available."})
+        email = f"{row.email.rsplit('@', 1)[0]}@{suggestion}"
+        first_name, last_name, phone = row.first_name or "", row.last_name or "", row.phone or ""
+        tee_label = row.tee_label or ""
+        handicap_gold = "" if row.handicap_gold is None else str(row.handicap_gold)
+        handicap_white = "" if row.handicap_white is None else str(row.handicap_white)
+        handicap_single = "" if row.handicap_single is None else str(row.handicap_single)
+        included, update_opt_in = row.included, row.update_opt_in
+    elif action != "edit":
+        raise ImportValidationError({"action": "Unknown row action."})
+
+    values: dict[str, object] = {
+        "first_name": normalize_name(first_name) or None,
+        "last_name": normalize_name(last_name) or None,
+        "email": normalize_email(email),
+        "phone": normalize_phone(phone),
+        "included": included,
+        "update_opt_in": update_opt_in,
+        "version": row.version + 1,
+    }
+    if row.source_role == "summer_regular":
+        label = tee_label.strip()
+        if label not in ("", "Gold", "White"):
+            raise ImportValidationError({"tee_label": "Choose Gold or White."})
+        values.update(
+            tee_label=label or None,
+            handicap_gold=_edit_handicap(handicap_gold),
+            handicap_white=_edit_handicap(handicap_white),
+            validation_error=None if action == "edit" else row.validation_error,
+        )
+    else:
+        values.update(
+            handicap_single=_edit_handicap(handicap_single),
+            validation_error=None if action == "edit" else row.validation_error,
+        )
+
+    claimed_batch = session.execute(
+        update(RosterImportBatch)
+        .where(
+            RosterImportBatch.id == batch_id,
+            RosterImportBatch.state == "staged",
+            RosterImportBatch.version == batch_version,
+        )
+        .values(version=batch_version + 1)
+    )
+    claimed_row = session.execute(
+        update(RosterImportRow)
+        .where(
+            RosterImportRow.id == row_id,
+            RosterImportRow.batch_id == batch_id,
+            RosterImportRow.version == row_version,
+        )
+        .values(**values)
+    )
+    if claimed_batch.rowcount != 1 or claimed_row.rowcount != 1:
+        session.rollback()
+        raise ImportConflictError()
+    session.expire_all()
+    revalidate_batch(session, batch_id)
+    session.commit()
+
+
+def discard_batch(
+    session: Session, *, batch_id: int, batch_version: int
+) -> None:
+    """Transition a still-current staged batch to discarded, retaining its rows."""
+    result = session.execute(
+        update(RosterImportBatch)
+        .where(
+            RosterImportBatch.id == batch_id,
+            RosterImportBatch.state == "staged",
+            RosterImportBatch.version == batch_version,
+        )
+        .values(state="discarded", version=batch_version + 1)
+    )
+    if result.rowcount != 1:
+        session.rollback()
+        raise ImportConflictError()
+    session.commit()
+
+
+def _persisted_handicap(row: RosterImportRow, batch: RosterImportBatch) -> int | None:
+    selected = selected_handicap(
+        source_role=row.source_role,
+        tee_label=row.tee_label,
+        handicap_gold=row.handicap_gold,
+        handicap_white=row.handicap_white,
+        handicap_single=row.handicap_single,
+    )
+    return 0 if selected is None and batch.is_initial else selected
+
+
+def _apply_row(
+    session: Session,
+    row: RosterImportRow,
+    batch: RosterImportBatch,
+    tee_ids: dict[str, int],
+    counters: dict[str, int],
+) -> None:
+    """Apply one already-revalidated included row, or count it as skipped."""
+    if not row.included:
+        counters["skipped"] += 1
+        return
+    golfer = session.execute(
+        select(Golfer).where(Golfer.email == row.email)
+    ).scalar_one_or_none()
+    tee_id = tee_ids.get(row.tee_label or "")
+    if tee_id is None and batch.is_initial:
+        tee_id = tee_ids["White"]
+    handicap = _persisted_handicap(row, batch)
+    if golfer is None:
+        if tee_id is None:
+            raise ImportApplyError()
+        session.add(Golfer(
+            first_name=row.first_name or "", last_name=row.last_name or "",
+            email=row.email, phone=row.phone, default_tee_set_id=tee_id,
+            handicap_strokes=handicap, handicap_source="imported",
+            handicap_status=derive_handicap_status(
+                email=row.email, handicap_strokes=handicap
+            ),
+        ))
+        counters["created"] += 1
+        return
+    changes = _existing_golfer_changes(row, golfer, tee_id, handicap)
+    if changes:
+        for key, value in changes.items():
+            setattr(golfer, key, value)
+        counters["updated"] += 1
+    else:
+        counters["unchanged"] += 1
+
+
+def _existing_golfer_changes(
+    row: RosterImportRow, golfer: Golfer, tee_id: int | None, handicap: int | None
+) -> dict[str, object]:
+    """Return the nonblank import values that differ from an existing golfer."""
+    changes: dict[str, object] = {}
+    if row.first_name != golfer.first_name:
+        changes["first_name"] = row.first_name
+    if row.last_name != golfer.last_name:
+        changes["last_name"] = row.last_name
+    if row.phone is not None and not phones_equal(row.phone, golfer.phone):
+        changes["phone"] = row.phone
+    if tee_id is not None and tee_id != golfer.default_tee_set_id:
+        changes["default_tee_set_id"] = tee_id
+    if handicap is not None and handicap != golfer.handicap_strokes:
+        changes.update(
+            handicap_strokes=handicap,
+            handicap_source="imported",
+            handicap_status=derive_handicap_status(
+                email=row.email, handicap_strokes=handicap
+            ),
+        )
+    return changes
+
+
+def apply_batch(
+    session: Session, *, batch_id: int, batch_version: int, now: datetime
+) -> dict[str, int]:
+    """Atomically revalidate and apply a staged batch by normalized email."""
+    batch = session.get(RosterImportBatch, batch_id)
+    if batch is None or batch.state != "staged" or batch.version != batch_version:
+        raise ImportConflictError()
+    try:
+        revalidate_batch(session, batch_id)
+        rows = list(session.execute(select(RosterImportRow).where(
+            RosterImportRow.batch_id == batch_id).order_by(RosterImportRow.position)
+        ).scalars())
+        errors = [row for row in rows if row.included and row.validation_error]
+        if errors:
+            session.rollback()
+            raise ImportApplyError()
+        tee_ids = _resolved_tee_ids(session, batch.course_id)
+        counters = {"created": 0, "updated": 0, "unchanged": 0, "skipped": 0}
+        for row in rows:
+            _apply_row(session, row, batch, tee_ids, counters)
+        claimed = session.execute(
+            update(RosterImportBatch)
+            .where(RosterImportBatch.id == batch_id, RosterImportBatch.state == "staged", RosterImportBatch.version == batch_version)
+            .values(state="applied", version=batch_version + 1, applied_at=now,
+                    created_count=counters["created"], updated_count=counters["updated"],
+                    unchanged_count=counters["unchanged"], skipped_count=counters["skipped"])
+        )
+        if claimed.rowcount != 1:
+            session.rollback()
+            raise ImportConflictError()
+        session.commit()
+        return counters
+    except ImportApplyError:
+        session.rollback()
+        raise
+    except IntegrityError:
+        session.rollback()
+        raise ImportConflictError() from None
+
+
 def _compute_row_warnings(
     row: RosterImportRow,
     batch: RosterImportBatch,
@@ -688,5 +960,11 @@ __all__ = [
     "get_batch",
     "review_rows",
     "revalidate_batch",
+    "edit_staged_row",
+    "discard_batch",
+    "apply_batch",
+    "ImportConflictError",
+    "ImportNotFoundError",
+    "ImportApplyError",
     "purge_expired",
 ]
