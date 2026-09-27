@@ -25,7 +25,13 @@ from golf_league.database import get_session
 from golf_league.security import generate_csrf_token, require_admin, validate_csrf
 from golf_league.services.courses import get_course, list_courses_with_tee_sets
 from golf_league.services.roster_imports import (
+    ImportApplyError,
+    ImportConflictError,
+    ImportNotFoundError,
     ImportValidationError,
+    apply_batch,
+    discard_batch,
+    edit_staged_row,
     get_batch,
     purge_expired,
     review_rows,
@@ -61,6 +67,19 @@ def _new_form_context(request: Request, session: Session, *, errors=None) -> dic
         "preselected_course_id": courses[0].id if len(courses) == 1 else None,
         "errors": errors,
         "csrf_token": generate_csrf_token(seed) if seed else "",
+    }
+
+
+def _review_context(request: Request, session: Session, batch_id: int, *, errors=None) -> dict:
+    batch = get_batch(session, batch_id)
+    if batch is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return {
+        "batch": batch,
+        "course": get_course(session, batch.course_id),
+        "rows": review_rows(session, batch_id),
+        "errors": errors or {},
+        "csrf_token": generate_csrf_token(_csrf_seed(request)),
     }
 
 
@@ -121,17 +140,71 @@ async def review_import(
     session: Session = Depends(get_session),  # noqa: B008
     admin=Depends(require_admin),  # noqa: B008
 ) -> Response:
-    batch = get_batch(session, batch_id)
-    if batch is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-
-    course = get_course(session, batch.course_id)
-    rows = review_rows(session, batch_id)
     return _templates(request).TemplateResponse(
-        request,
-        "admin/imports/review.html",
-        {"batch": batch, "course": course, "rows": rows},
+        request, "admin/imports/review.html", _review_context(request, session, batch_id)
     )
+
+
+@router.post("/admin/roster/imports/{batch_id}/rows/{row_id}/edit")
+async def edit_import_row(
+    batch_id: int, row_id: int, request: Request,
+    csrf_token: str = Form(""), batch_version: int = Form(...), row_version: int = Form(...),
+    action: str = Form("edit"), first_name: str = Form(""), last_name: str = Form(""),
+    email: str = Form(""), phone: str = Form(""), tee_label: str = Form(""),
+    handicap_gold: str = Form(""), handicap_white: str = Form(""), handicap_single: str = Form(""),
+    included: bool = Form(False), update_opt_in: bool = Form(False),
+    session: Session = Depends(get_session), admin=Depends(require_admin),  # noqa: B008
+) -> Response:
+    _require_csrf(request, csrf_token)
+    try:
+        edit_staged_row(session, batch_id=batch_id, batch_version=batch_version,
+            row_id=row_id, row_version=row_version, action=action, first_name=first_name,
+            last_name=last_name, email=email, phone=phone, tee_label=tee_label,
+            handicap_gold=handicap_gold, handicap_white=handicap_white,
+            handicap_single=handicap_single, included=included, update_opt_in=update_opt_in)
+    except ImportNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Not found"
+        ) from None
+    except ImportConflictError:
+        return _templates(request).TemplateResponse(request, "admin/imports/review.html",
+            _review_context(request, session, batch_id, errors={"conflict": "This review changed; use the refreshed version."}), status_code=409)
+    except ImportValidationError as exc:
+        return _templates(request).TemplateResponse(request, "admin/imports/review.html",
+            _review_context(request, session, batch_id, errors=exc.errors), status_code=422)
+    return RedirectResponse(url=f"/admin/roster/imports/{batch_id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/admin/roster/imports/{batch_id}/discard")
+async def discard_import(
+    batch_id: int, request: Request, csrf_token: str = Form(""), batch_version: int = Form(...),
+    session: Session = Depends(get_session), admin=Depends(require_admin),  # noqa: B008
+) -> Response:
+    _require_csrf(request, csrf_token)
+    try:
+        discard_batch(session, batch_id=batch_id, batch_version=batch_version)
+    except ImportConflictError:
+        return _templates(request).TemplateResponse(request, "admin/imports/review.html",
+            _review_context(request, session, batch_id, errors={"conflict": "This review changed; use the refreshed version."}), status_code=409)
+    return RedirectResponse(url=f"/admin/roster/imports/{batch_id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/admin/roster/imports/{batch_id}/apply")
+async def apply_import(
+    batch_id: int, request: Request, csrf_token: str = Form(""), batch_version: int = Form(...),
+    session: Session = Depends(get_session), admin=Depends(require_admin),  # noqa: B008
+) -> Response:
+    _require_csrf(request, csrf_token)
+    try:
+        apply_batch(session, batch_id=batch_id, batch_version=batch_version,
+            now=datetime.now(UTC).replace(tzinfo=None))
+    except ImportConflictError:
+        return _templates(request).TemplateResponse(request, "admin/imports/review.html",
+            _review_context(request, session, batch_id, errors={"conflict": "This review changed; use the refreshed version."}), status_code=409)
+    except ImportApplyError:
+        return _templates(request).TemplateResponse(request, "admin/imports/review.html",
+            _review_context(request, session, batch_id, errors={"apply": "Included rows must have no errors before applying."}), status_code=422)
+    return RedirectResponse(url=f"/admin/roster/imports/{batch_id}", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post("/admin/roster/imports/purge")

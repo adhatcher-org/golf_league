@@ -978,7 +978,7 @@ def test_the_review_page_shows_raw_line_and_escapes_markup_in_a_name(admin_clien
     assert "script.name@example.test" in review.text
 
 
-def test_the_review_page_has_no_form_or_button(admin_client):
+def test_the_review_page_has_staged_review_controls(admin_client):
     _, csrf_token = _new_page_csrf(admin_client)
     response = _upload(
         admin_client,
@@ -989,9 +989,10 @@ def test_the_review_page_has_no_form_or_button(admin_client):
     assert response.status_code == 303
     review = admin_client.get(response.headers["location"])
     assert review.status_code == 200
-    assert "<form" not in review.text
-    assert "<button" not in review.text
-    assert "<input" not in review.text
+    assert "/rows/" in review.text
+    assert "/apply" in review.text
+    assert "/discard" in review.text
+    assert 'name="csrf_token"' in review.text
 
 
 def test_purge_deletes_expired_batches_and_their_rows_and_keeps_the_rest(admin_client):

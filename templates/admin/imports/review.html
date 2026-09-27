@@ -5,60 +5,22 @@
 <p>Course: {{ course.name if course else batch.course_id }}</p>
 <p>State: {{ batch.state }}</p>
 <p>Initial import: {{ "yes" if batch.is_initial else "no" }}</p>
-<p>Created: {{ batch.created_at }}</p>
-<p>Expires: {{ batch.expires_at }}</p>
-<p>Row count: {{ batch.row_count }}</p>
-
-<p>This page is read-only: it shows what was staged. Review controls (edit,
-opt in to overwrite, include/exclude, discard, apply) are added by a later
-task.</p>
-
-<table>
-    <thead>
-        <tr>
-            <th>Position</th>
-            <th>Source file</th>
-            <th>Source row</th>
-            <th>Role</th>
-            <th>First name</th>
-            <th>Last name</th>
-            <th>Email</th>
-            <th>Phone</th>
-            <th>Tee</th>
-            <th>Gold HC</th>
-            <th>White HC</th>
-            <th>2025 HC</th>
-            <th>Included</th>
-            <th>Opted in</th>
-            <th>Error</th>
-            <th>Warnings</th>
-            <th>Raw line</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for row in rows %}
-        <tr>
-            <td>{{ row.position }}</td>
-            <td>{{ row.source_file }}</td>
-            <td>{{ row.source_row }}</td>
-            <td>{{ row.source_role }}</td>
-            <td>{{ row.first_name }}</td>
-            <td>{{ row.last_name }}</td>
-            <td>{{ row.email }}</td>
-            <td>{{ row.phone }}</td>
-            <td>{{ row.tee_label }}</td>
-            <td>{{ row.handicap_gold }}</td>
-            <td>{{ row.handicap_white }}</td>
-            <td>{{ row.handicap_single }}</td>
-            <td>{{ row.included }}</td>
-            <td>{{ row.update_opt_in }}</td>
-            <td>{{ row.validation_error }}</td>
-            <td>
-                {% for code in row.warning_codes %}{% if not loop.first %}, {% endif %}{{ code }}{% if code == "email_domain_near_miss" and row.near_miss_suggestion %} ({{ row.near_miss_suggestion }}){% endif %}{% endfor %}
-            </td>
-            <td>{{ row.raw_line }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<p>Created: {{ batch.created_at }} · Expires: {{ batch.expires_at }} · Rows: {{ batch.row_count }}</p>
+{% for message in errors.values() %}<p class="error">{{ message }}</p>{% endfor %}
+{% if batch.state != "staged" %}<p>Results: created {{ batch.created_count }}, updated {{ batch.updated_count }}, unchanged {{ batch.unchanged_count }}, skipped {{ batch.skipped_count }}.</p>{% endif %}
+<table><thead><tr><th>Position</th><th>Source</th><th>Role</th><th>Review</th><th>Error / warnings</th><th>Raw line</th></tr></thead><tbody>
+{% for row in rows %}<tr>
+<td>{{ row.position }}</td><td>{{ row.source_file }}:{{ row.source_row }}</td><td>{{ row.source_role }}</td>
+<td>{% if batch.state == "staged" %}
+<form method="post" action="/admin/roster/imports/{{ batch.id }}/rows/{{ row.id }}/edit">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="batch_version" value="{{ batch.version }}"><input type="hidden" name="row_version" value="{{ row.version }}">
+<label>First <input name="first_name" value="{{ row.first_name or '' }}"></label><label>Last <input name="last_name" value="{{ row.last_name or '' }}"></label><label>Email <input name="email" value="{{ row.email or '' }}"></label><label>Phone <input name="phone" value="{{ row.phone or '' }}"></label>
+{% if row.source_role == "summer_regular" %}<label>Tee <select name="tee_label"><option value="" {% if not row.tee_label %}selected{% endif %}></option><option value="Gold" {% if row.tee_label == "Gold" %}selected{% endif %}>Gold</option><option value="White" {% if row.tee_label == "White" %}selected{% endif %}>White</option></select></label><label>Gold HC <input name="handicap_gold" value="{{ row.handicap_gold if row.handicap_gold is not none else '' }}"></label><label>White HC <input name="handicap_white" value="{{ row.handicap_white if row.handicap_white is not none else '' }}"></label><input type="hidden" name="handicap_single" value="">{% else %}<input type="hidden" name="tee_label" value=""><input type="hidden" name="handicap_gold" value=""><input type="hidden" name="handicap_white" value=""><label>HC <input name="handicap_single" value="{{ row.handicap_single if row.handicap_single is not none else '' }}"></label>{% endif %}
+<label><input type="checkbox" name="included" value="true" {% if row.included %}checked{% endif %}> Include</label><label><input type="checkbox" name="update_opt_in" value="true" {% if row.update_opt_in %}checked{% endif %}> Allow protected update</label>
+<button name="action" value="edit">Save</button><button name="action" value="swap_names">Swap names</button>{% if row.near_miss_suggestion %}<button name="action" value="accept_domain_suggestion">Use {{ row.near_miss_suggestion }}</button>{% endif %}
+</form>
+{% else %}{{ row.first_name }} {{ row.last_name }} · {{ row.email }}{% endif %}</td>
+<td>{{ row.validation_error }}{% for code in row.warning_codes %}{% if loop.first and not row.validation_error %}{% else %}, {% endif %}{{ code }}{% endfor %}</td><td>{{ row.raw_line }}</td>
+</tr>{% endfor %}</tbody></table>
+{% if batch.state == "staged" %}<form method="post" action="/admin/roster/imports/{{ batch.id }}/apply"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="batch_version" value="{{ batch.version }}"><button>Apply included rows</button></form><form method="post" action="/admin/roster/imports/{{ batch.id }}/discard"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="batch_version" value="{{ batch.version }}"><button>Discard batch</button></form>{% endif %}
 {% endblock %}
