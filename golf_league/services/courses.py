@@ -14,12 +14,14 @@ from sqlalchemy.orm import Session
 
 from golf_league.domain.course import (
     VALID_SCOPES,
+    derive_stroke_index_9,
     to_rating_decimal,
     validate_gender,
+    validate_hole_grid,
     validate_positive_int,
     validate_rating,
 )
-from golf_league.models import Course, TeeRating, TeeSet
+from golf_league.models import Course, Golfer, Hole, HoleYardage, TeeRating, TeeSet
 
 
 class CourseValidationError(Exception):
@@ -28,6 +30,19 @@ class CourseValidationError(Exception):
     def __init__(self, errors: dict[str, str]):
         self.errors = errors
         super().__init__(str(errors))
+
+
+def new_hole_grid_defaults(tee_set_ids: list[int]) -> list[dict[str, object]]:
+    """Return the editable, unconfirmed 18-hole grid shape for a new course."""
+    si18 = {number: number for number in range(1, 19)}
+    nines = {number: "front" if number <= 9 else "back" for number in range(1, 19)}
+    si9 = derive_stroke_index_9(si18, nines)
+    return [
+        {"number": number, "nine": nines[number], "par": 4,
+         "stroke_index_18": si18[number], "stroke_index_9": si9[number],
+         "yardages": {str(tee_id): "" for tee_id in tee_set_ids}}
+        for number in range(1, 19)
+    ]
 
 
 def _validate_course_fields(name: str, total_holes: object) -> dict[str, str]:
@@ -297,6 +312,80 @@ def update_tee_set_with_ratings(
     return tee_set
 
 
+def get_course_grid(session: Session, course_id: int) -> tuple[Course, list[Hole], list[TeeSet]] | None:
+    """Return the course grid inputs, or None for an absent course."""
+    course = get_course(session, course_id)
+    if course is None:
+        return None
+    holes = list(session.execute(select(Hole).where(Hole.course_id == course_id).order_by(Hole.number)).scalars())
+    tees = list(session.execute(select(TeeSet).where(TeeSet.course_id == course_id).order_by(TeeSet.sort_order)).scalars())
+    return course, holes, tees
+
+
+def save_hole_grid(session: Session, course_id: int, holes: list[dict[str, object]]) -> list[Hole] | None:
+    """Validate and atomically replace the complete logical hole grid.
+
+    Existing rows are updated in place so a confirmed manual nine-index stays
+    exactly what the submitted form says; no value is re-derived on save.
+    """
+    course = get_course(session, course_id)
+    if course is None:
+        return None
+    tees = list(session.execute(select(TeeSet).where(TeeSet.course_id == course_id)).scalars())
+    errors = validate_hole_grid(holes, {tee.id for tee in tees})
+    if errors:
+        raise CourseValidationError(errors)
+    par_by_nine = {"front": sum(row["par"] for row in holes if row["nine"] == "front"), "back": sum(row["par"] for row in holes if row["nine"] == "back")}
+    ratings = list(session.execute(select(TeeRating).join(TeeSet).where(TeeSet.course_id == course_id)).scalars())
+    for scope, expected in (("front", par_by_nine["front"]), ("back", par_by_nine["back"]), ("full", par_by_nine["front"] + par_by_nine["back"])):
+        if any(rating.par != expected for rating in ratings if rating.scope == scope):
+            raise CourseValidationError({"par": f"Hole par total must match every {scope} tee rating."})
+    existing = {hole.number: hole for hole in session.execute(select(Hole).where(Hole.course_id == course_id)).scalars()}
+    try:
+        for row in holes:
+            hole = existing.get(row["number"])
+            if hole is None:
+                hole = Hole(course_id=course_id, number=row["number"], nine=row["nine"], par=row["par"], stroke_index_18=row["stroke_index_18"], stroke_index_9=row["stroke_index_9"])
+                session.add(hole)
+                session.flush()
+            else:
+                hole.nine = row["nine"]
+                hole.par = row["par"]
+                hole.stroke_index_18 = row["stroke_index_18"]
+                hole.stroke_index_9 = row["stroke_index_9"]
+            existing_yardages = {yardage.tee_set_id: yardage for yardage in session.execute(select(HoleYardage).where(HoleYardage.hole_id == hole.id)).scalars()}
+            for tee_id, yards in row["yardages"].items():
+                yardage = existing_yardages.get(tee_id)
+                if yardage is None:
+                    session.add(HoleYardage(hole_id=hole.id, tee_set_id=tee_id, yards=yards))
+                else:
+                    yardage.yards = yards
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise CourseValidationError({"holes": "The hole grid could not be saved."}) from None
+    return list(session.execute(select(Hole).where(Hole.course_id == course_id).order_by(Hole.number)).scalars())
+
+
+def delete_tee_set(session: Session, course_id: int, tee_set_id: int) -> bool | None:
+    """Delete an unreferenced tee set; None means absent or foreign."""
+    tee_set = get_tee_set_for_course(session, course_id, tee_set_id)
+    if tee_set is None:
+        return None
+    yardage_count = session.query(HoleYardage).filter_by(tee_set_id=tee_set_id).count()
+    golfer_count = session.query(Golfer).filter_by(default_tee_set_id=tee_set_id).count()
+    if yardage_count or golfer_count:
+        parts = []
+        if yardage_count:
+            parts.append(f"{yardage_count} hole yardages")
+        if golfer_count:
+            parts.append(f"{golfer_count} golfer default-tee references")
+        raise CourseValidationError({"delete": "Cannot delete tee set: " + ", ".join(parts) + "."})
+    session.delete(tee_set)
+    session.commit()
+    return True
+
+
 __all__ = [
     "CourseValidationError",
     "create_course",
@@ -306,4 +395,8 @@ __all__ = [
     "get_tee_set_for_course",
     "create_tee_set_with_ratings",
     "update_tee_set_with_ratings",
+    "get_course_grid",
+    "save_hole_grid",
+    "delete_tee_set",
+    "new_hole_grid_defaults",
 ]
