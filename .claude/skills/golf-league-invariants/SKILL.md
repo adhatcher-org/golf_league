@@ -16,7 +16,7 @@ This document defines the core invariants and constraints that must be maintaine
 5. **Data Consistency**: 
    - All IDs are server-resolved and cross-checked for ownership
    - UTC-aware timestamps for events
-   - Decimal storage/rounding follows D3 standard
+   - Stroke columns are signed integers; the pure helper rounds to the nearest whole number with ties going to the higher number
 6. **Privacy**: 
    - Synthetic fixtures only; no real roster/contact data in source, test output, logs, metrics, screenshots or git
    - Imports/raw_line remain admin-only private data with retention
