@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{% if season %}Edit Season{% else %}New Season{% endif %} - Golf League{% endblock %}
+{% block content %}
+<h2>{% if season %}Edit season{% else %}New season{% endif %}</h2>
+{% if season %}
+<p>{{ display_name }} — {{ week_count }} weekly date{% if week_count != 1 %}s{% endif %}</p>
+{% endif %}
+{% if errors %}
+<ul class="error">
+    {% for field, message in errors.items() %}
+    <li>{{ field }}: {{ message }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+<form method="post" action="{% if season %}/admin/seasons/{{ season.id }}/edit{% else %}/admin/seasons/new{% endif %}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Year <input type="text" name="year" value="{{ values.year }}" required></label>
+    <label>Name override <input type="text" name="name_override" value="{{ values.name_override }}"></label>
+    <label>Course
+        <select name="course_id" required>
+            <option value="">Choose a course</option>
+            {% for course in courses %}
+            <option value="{{ course.id }}" {% if values.course_id|string == course.id|string %}selected{% endif %}>{{ course.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>Start date <input type="date" name="start_date" value="{{ values.start_date }}" required></label>
+    <label>End date <input type="date" name="end_date" value="{{ values.end_date }}" required></label>
+    <label>Play weekday
+        <select name="play_weekday">
+            {% for number, name in ((0, 'Monday'), (1, 'Tuesday'), (2, 'Wednesday'), (3, 'Thursday'), (4, 'Friday'), (5, 'Saturday'), (6, 'Sunday')) %}
+            <option value="{{ number }}" {% if values.play_weekday|string == number|string %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>Status
+        <select name="status">
+            {% for value in ('draft', 'active', 'complete') %}
+            <option value="{{ value }}" {% if values.status == value %}selected{% endif %}>{{ value }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>First-week nine
+        <select name="first_week_nine">
+            {% for value in ('front', 'back') %}
+            <option value="{{ value }}" {% if values.first_week_nine == value %}selected{% endif %}>{{ value }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <button type="submit">Save</button>
+</form>
+{% endblock %}

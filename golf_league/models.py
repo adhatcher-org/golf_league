@@ -1,8 +1,9 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Integer,
@@ -76,6 +77,7 @@ class Course(Base):
         "TeeSet", back_populates="course", order_by="TeeSet.sort_order"
     )
     holes: Mapped[list["Hole"]] = relationship("Hole", back_populates="course", order_by="Hole.number")
+    seasons: Mapped[list["Season"]] = relationship("Season", back_populates="course")
 
 
 class TeeSet(Base):
@@ -159,6 +161,47 @@ class HoleYardage(Base):
 
     hole: Mapped["Hole"] = relationship("Hole", back_populates="yardages")
     tee_set: Mapped["TeeSet"] = relationship("TeeSet", back_populates="hole_yardages")
+
+
+class Season(Base):
+    """One configured league season; schedule rows are deliberately absent."""
+
+    __tablename__ = "seasons"
+    __table_args__ = (
+        CheckConstraint("year >= 1 AND year <= 9999", name="ck_seasons_year_range"),
+        CheckConstraint(
+            "play_weekday >= 0 AND play_weekday <= 6",
+            name="ck_seasons_play_weekday_range",
+        ),
+        CheckConstraint(
+            "status IN ('draft', 'active', 'complete')", name="ck_seasons_status"
+        ),
+        CheckConstraint(
+            "first_week_nine IN ('front', 'back')",
+            name="ck_seasons_first_week_nine",
+        ),
+        CheckConstraint("start_date <= end_date", name="ck_seasons_dates"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    name_override: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    course_id: Mapped[int] = mapped_column(
+        ForeignKey("courses.id", name="fk_seasons_course_id_courses"),
+        nullable=False,
+        index=True,
+    )
+    start_date: Mapped[date] = mapped_column(nullable=False)
+    end_date: Mapped[date] = mapped_column(nullable=False)
+    play_weekday: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=3, server_default="3"
+    )
+    status: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="draft", server_default="draft"
+    )
+    first_week_nine: Mapped[str] = mapped_column(String(5), nullable=False)
+
+    course: Mapped["Course"] = relationship("Course", back_populates="seasons")
 
 
 class Golfer(Base):
