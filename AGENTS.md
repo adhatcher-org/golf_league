@@ -10,7 +10,8 @@ orchestrator repo next door.
 - FastAPI/Starlette, SQLAlchemy 2.x, Alembic, Jinja2, SQLite.
 - Domain layer (`golf_league/domain/`) must stay pure -- no SQLAlchemy/FastAPI/model imports.
   `services/` is session-taking; `routers/` is HTTP-only. `tests/test_architecture.py` enforces
-  this by AST scan, including dotted submodules (`sqlalchemy.orm` counts as `sqlalchemy`).
+  domain purity, and that `services/` never imports FastAPI, by AST scan, including dotted
+  submodules (`sqlalchemy.orm` counts as `sqlalchemy`). Nothing checks `routers/` automatically.
 - Entry point is `golf_league/app.py:create_app(settings=None)`; module-level `app` is what uvicorn
   serves. The `golf_league` console script in `pyproject.toml` points at a `main` that does not
   exist -- run uvicorn directly.
@@ -21,7 +22,7 @@ orchestrator repo next door.
 - Full gate: `make check` = `lint test test-with-cov security dependency-check`; requires >=80%
   branch coverage on `golf_league`. This is exactly what CI runs on `main` and `reset/**`.
 - Run locally: `SESSION_SECRET=dev uv run uvicorn golf_league.app:app --reload`
-- Only `ruff check` is wired in. Do not run `ruff format` -- it would rewrite ~39 files.
+- Only `ruff check` is wired in. Do not run `ruff format` -- it would rewrite ~63 files.
   Formatting repairs are explicit edits, never a hidden side effect of `make check`.
 - `Settings.session_secret` has no default; constructing `Settings()` without `SESSION_SECRET`
   raises. Tests pass it explicitly -- do not add a fallback.
@@ -37,8 +38,7 @@ orchestrator repo next door.
   - Background: `01 Projects/Golf League/Plan/Planning.md`
 - Self-contained: this repository and `Plan/Rulings.md` are the only authorities. A spec or review
   that points at another repository is a defect -- the contract gets written out inline instead.
-- Stale, ignore: `.clinerules` and `AGENTS.md.backup` describe the Cline/CrewAI workflow removed
-  on 2026-09-14.
+- Stale, ignore: `.clinerules` describes the Cline/CrewAI workflow removed on 2026-09-14.
 
 ## Invariants
 - Server-side validation of IDs and season/course relationships; SQLite FKs, uniqueness
