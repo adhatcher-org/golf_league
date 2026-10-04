@@ -1,75 +1,117 @@
-## Roles, authority and capabilities
+# Repo context: Golf League
 
-Execution, testing and validation run from the separate orchestrator repository as Claude Code
-agents. The mechanical steps — assignment packets, candidate commits, verbatim records, bounded
-retries and task completion — are performed by its `gl` helper, never by an agent.
+This file is what the global agents (architect, architect-critic, engineer, tester, pr-reviewer)
+read to get this repo's facts. The workspace-level `../AGENTS.md` covers the boundary with the
+orchestrator repo next door.
 
-1. **Coordinator (the `/gl-run` skill in the main Claude session):** selects the next eligible task, delegates exploration, implementation and
-   validation, and routes the validator's defects back for repair. It does not implement, verify,
-   commit or edit task status itself; `gl complete` records completion only after a recorded PASS
-   on the committed revision.
-2. **gl-explorer:** reads this repository and writes a short factual brief before implementation.
-   It changes nothing.
-3. **gl-engineer:** implements exactly one assigned GL ID from its packet, runs its acceptance
-   commands, and reports evidence. It does not commit, edit Obsidian task status, mark itself done,
-   choose another task or launch another implementer. Include this boundary in every handoff.
-4. **gl-validator:** independently verifies the committed candidate without changing source, tests,
-   task notes or Git state, and returns exactly one verdict — PASS, FAIL or BLOCKED — with specific
-   defects. It judges whether the result is correct enough for what depends on it, not style.
-5. **gl-milestone-tester:** once every task in a milestone is complete, writes and runs milestone
-   tests under `tests/milestones/<M>/` against that milestone's exit criteria. It does not change
-   application code.
-6. **gl-architect and gl-planner:** planning agents. The architect reviews the Plan notes and may
-   edit only those; the planner audits evidence and breaks down the next milestone without
-   changing anything.
+## Stack
+- Python 3.12+ (local venv is 3.13), uv + make for dependency/task management (never
+  `pip install`; never hand-edit `uv.lock`).
+- FastAPI/Starlette, SQLAlchemy 2.x, Alembic, Jinja2, SQLite.
+- Domain layer (`golf_league/domain/`) must stay pure -- no SQLAlchemy/FastAPI/model imports.
+  `services/` is session-taking; `routers/` is HTTP-only. `tests/test_architecture.py` enforces
+  domain purity, and that `services/` never imports FastAPI, by AST scan, including dotted
+  submodules (`sqlalchemy.orm` counts as `sqlalchemy`). Nothing checks `routers/` automatically.
+- Entry point is `golf_league/app.py:create_app(settings=None)`; module-level `app` is what uvicorn
+  serves. The `golf_league` console script in `pyproject.toml` points at a `main` that does not
+  exist -- run uvicorn directly.
 
-All of these run on the Claude subscription. Nothing in this workflow calls a model API.
+## Commands
+- Install: `uv sync --frozen --extra dev`
+- Test: `uv run pytest <paths> -q` (full suite ~20s, 434 tests)
+- Full gate: `make check` = `lint test test-with-cov security dependency-check`; requires >=80%
+  branch coverage on `golf_league`. This is exactly what CI runs on `main` and `reset/**`.
+- Run locally: `SESSION_SECRET=dev uv run uvicorn golf_league.app:app --reload`
+- Only `ruff check` is wired in. Do not run `ruff format` -- it would rewrite ~63 files.
+  Formatting repairs are explicit edits, never a hidden side effect of `make check`.
+- `Settings.session_secret` has no default; constructing `Settings()` without `SESSION_SECRET`
+  raises. Tests pass it explicitly -- do not add a fallback.
+- The test client needs `httpx2` (not `httpx`); it is a `dev` extra and must stay in `uv.lock`.
 
-Use the current runtime's available delegation tools and actual models. A role name is not proof
-that a given model or tool can be launched. Disclose material model/runtime adaptations. Do not
-silently change provider settings or claim an execution that did not happen. If the caller requires
-an exact unavailable model/runtime, report that blocker before dependent execution.
+## Paths
+- Repository: `/Users/aaron/Development/apps/golf/golf_league`
+- Task/plan tracking: Obsidian vault `/Users/aaron/Obsidian`, project folder
+  `01 Projects/Golf League/`
+  - Execution guide: `01 Projects/Golf League/Tasks/00-Execution-Guide.md`
+  - Rulings (the current answer to every decision, versioned): `Plan/Rulings.md`
+  - MVP plan: `01 Projects/Golf League/Plan/MVP Build Plan.md`
+  - Background: `01 Projects/Golf League/Plan/Planning.md`
+- Self-contained: this repository and `Plan/Rulings.md` are the only authorities. A spec or review
+  that points at another repository is a defect -- the contract gets written out inline instead.
+- Stale, ignore: `.clinerules` describes the Cline/CrewAI workflow removed on 2026-09-14.
 
-Completion state lives only in the Obsidian task files and their records. Nothing in this
-repository — including this file — is evidence that a task or milestone is complete.
+## Invariants
+- Server-side validation of IDs and season/course relationships; SQLite FKs, uniqueness
+  constraints, atomic transactions for multi-record changes.
+- Migrations: forward-only, data-preserving, tested against a fresh DB and prior-version upgrades.
+  Single chain in `migrations/versions/` (`496c039e7ac0` -> ... -> `b8d4c0e2f671`); check
+  `down_revision` before adding one.
+- `lifespan` in `app.py` deliberately swallows engine/migration failures so the process stays up
+  and `/readyz` can honestly answer 503. `/healthz` is process-only. Do not turn this into a crash.
+  Startup order: `upgrade_to_head` -> `bootstrap_admin` (no-op unless `users` is empty) ->
+  `seed_wyandot` unless `seed_course=False`.
+- Calendar dates as `Date`; event timestamps UTC-aware. Preserve signed handicaps and zero; blank
+  means missing, not zero.
+- Match generation: the internal generator (no public partial-write endpoint) is separate from the
+  atomic public generate-and-snapshot action -- never expose a mutation that can succeed with only
+  half the operation complete.
+- Identity: Argon2 password hashing, signed cookies, `session_version`, hashed single-use tokens,
+  `MAX_USERS=150`, an authorization ladder. Every POST (including anonymous forms) requires CSRF.
+  GETs never mutate state.
+- Admin-only: contacts, import staging, raw imported rows. Use synthetic fixtures in tests -- never
+  real roster data, secrets, tokens, or complete token URLs in code, logs, or evidence. Never open
+  or modify real `.env` files.
+- Runtime: single non-root container, SQLite persistence under `/data`, startup migrations,
+  redacted stdout/stderr logs.
+- Out of scope unless a work item explicitly adds it: scoring, rounds, results, standings, scoring
+  rulesets, automatic team formation/pairings, handicap recomputation, AI/provider modules. Do not
+  restore PDF parsing, statistics, public roster, export, undo/redo, or load balancing.
+- Product decisions (tee mapping, handicap units, and the rest) live in exactly one place:
+  `Plan/Rulings.md` in the vault, one versioned ruling per topic. The guide's older Q1-Q9/D1-D9
+  table and the frozen Decision Register are history, not answers. Treat a "suggested default"
+  anywhere else as unconfirmed.
 
-## 7. Verify milestone completion
+## PR facts
+- Hosting: `git@github.com:adhatcher-org/golf_league.git`. Work lands on `main` through a GitHub
+  PR from a task branch (`codex/gl-12-import-apply`, `reset/m0-rebuild`); CI runs `make check` on
+  both `main` and `reset/**`.
+- Orchestrator-produced commits are titled `GL-NN candidate: attempt N` and are made by
+  `gl commit`, never by hand.
 
-- After completing all tasks in a milestone:
-  - Check that every task in the milestone has its required evidence
-  - Run the milestone test gate; `gl milestone-status` records its result in Obsidian
-  - Confirm that all dependencies for subsequent milestones are satisfied
-  - Only then proceed to assign tasks from the next milestone
-  - A milestone closes only when every owning task has its required evidence
+## Pre-PR review is mandatory -- before anything reaches GitHub
+This applies to every agent and runtime (Claude Code, Codex, opencode, or any other). A request to
+"push", "open a PR", or "create a pull request" means: review first, then push and open the PR.
+- Before `git push` of a branch meant for a PR, and before `gh pr create`, run the pre-PR review
+  defined in `/Users/aaron/.agents/agents/pr-reviewer.md` against the committed HEAD. Read that
+  file in full first; it is the review contract.
+- Run the review as a separate reviewer, not as the agent that wrote the code: opencode's
+  `pr-reviewer` subagent, a Codex subagent, or a Claude Code subagent told to read
+  `pr-reviewer.md` first. Only if the runtime cannot launch a subagent may the primary agent do the
+  review itself, and it must say so in its report and in the PR body.
+- The review includes `make check` on the reviewed commit. Any actionable finding means nothing is
+  pushed and no PR is opened: report the findings, fix them, and review again.
+- A review is bound to one commit SHA. If HEAD changes after the review (a fix, an amend, a
+  rebase), the review is void; review the new HEAD before pushing.
+- The PR body must include a "Pre-PR review" section with the reviewed SHA, who reviewed it
+  (which subagent/model), the commands run, and the findings summary.
+- This is enforced, not just asked for: Claude Code, Codex and opencode all block direct
+  `git push` and `gh pr create`. The only way through is `~/.agents/bin/pr-gate` -- the reviewer
+  runs `pr-gate record` after a clean review, then `pr-gate push` and `pr-gate pr-create`, which
+  refuse any commit without a recorded PASS. Do not try to route around it.
+- Agents cannot skip the review. If the user wants to push without one, they push from their own
+  terminal.
 
-## 8. Assign the next task
-
-- Only after the verified task update is saved and read back, refresh dependency state and select
-  the next eligible task.
-- Start a fresh implementer assignment with the updated baseline and minimal context.
-- Continue automatically within the original authorized run scope; do not stop
-  after each successful task to ask whether to continue.
-- Report concise progress at task transitions.
-
-Stop when the authorized scope is complete, the user stops the run, no eligible work remains,
-or a required external action lacks authorization. Summarize verified/recorded tasks, unfinished
-work, exact blockers and the next eligible task. Do not infer that an MVP implementation run also
-authorizes PR publication, production deployment, DNS changes or real email. Honor such permissions
-if already granted in the session.
-
-## Bootstrap and milestone exceptions
-
-- GL-00 can receive a documentation-only verification PASS before test tooling exists; explicitly
-  record the guide's exception, not a fake make check result. M0 aggregate evidence follows.
-- GL-01/02/60/70 are coordinated scaffold units. If a required check awaits a prerequisite
-  interface within that group, record the partial result as unchecked/in progress, independently
-  verify the completed portion, and assign only the documented next scaffold prerequisite.
-  This is the guide's narrow bootstrap exception to ordinary completed-dependency progression,
-  not permission to mark a partial task done. Once tooling exists, revisit partial units for
-  full verification and task closure before leaving M0. Do not require future milestone tests
-  to exist for M0 foundation checks.
-- GL-35 can complete as the internal generator without exposing a public partial-write endpoint;
-  GL-36 owns atomic public generation plus snapshots. Do not reintroduce their dependency cycle.
-- A milestone closes only when every owning task has its required evidence. Task-level PASS is
-  not PR approval, merge evidence, live deployment or model benchmark evidence. Milestone and
-  external gates remain those in the live guide and current user authorization.
+## Verification methods available
+- Unit/integration tests via pytest -- always available.
+- Fixtures in `tests/conftest.py`: `session` (in-memory, FK pragma on, rolled back per test),
+  `client` (temp-file DB with Wyandot seeded), `empty_client` (`seed_course=False`),
+  `admin_client`/`empty_admin_client` (insert a verified admin, then log in through the real
+  `/login` form). CSRF is real in tests -- every POST needs a token scraped from the rendered
+  form; there is no bypass.
+- `tests/milestones/<M>/` holds milestone exit-criteria tests, not ordinary unit tests.
+- `tests/milestones/M0/docker_health_demo.sh` is deliberately excluded from pytest collection.
+  Run it by hand with a local untracked `.env`; it does a real compose build/up/restart cycle.
+- Browser automation -- not yet wired up for this repo; `tester` should report browser-journey
+  items as "not run -- no browser automation capability configured" until this changes.
+- Bootstrap exception: the earliest scaffold-and-tooling work items can close on a documentation-only
+  check before test tooling exists; once tooling exists, revisit for full verification.
