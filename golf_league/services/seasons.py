@@ -11,7 +11,15 @@ from sqlalchemy.orm import Session
 
 from golf_league.config import Settings
 from golf_league.domain.course import validate_hole_grid
-from golf_league.models import Course, Hole, HoleYardage, Season, TeeRating, TeeSet
+from golf_league.models import (
+    Course,
+    Hole,
+    HoleYardage,
+    Season,
+    SeasonParticipant,
+    TeeRating,
+    TeeSet,
+)
 
 VALID_STATUSES = ("draft", "active", "complete")
 VALID_FIRST_WEEK_NINES = ("front", "back")
@@ -253,6 +261,20 @@ def update_season(
         status=status,
         first_week_nine=first_week_nine,
     )
+    parsed_course_id = parsed.get("course_id")
+    if (
+        parsed_course_id is not None
+        and int(parsed_course_id) != season.course_id
+        and session.execute(
+            select(SeasonParticipant.id)
+            .where(SeasonParticipant.season_id == season_id)
+            .limit(1)
+        ).first()
+        is not None
+    ):
+        errors["course_id"] = (
+            "Cannot change the season course while participant overrides exist."
+        )
     if errors:
         raise SeasonValidationError(errors)
     season.year = int(parsed["year"])
