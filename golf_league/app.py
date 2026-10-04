@@ -20,6 +20,7 @@ from golf_league.routers.admin_imports import router as admin_imports_router
 from golf_league.routers.admin_participants import router as admin_participants_router
 from golf_league.routers.admin_roster import router as admin_roster_router
 from golf_league.routers.admin_seasons import router as admin_seasons_router
+from golf_league.routers.admin_teams import router as admin_teams_router
 from golf_league.routers.identity import router as identity_router
 from golf_league.routers.roster import router as roster_router
 from golf_league.services.course_seed import seed_wyandot
@@ -116,6 +117,7 @@ def create_app(settings=None) -> FastAPI:
     app.include_router(admin_imports_router)
     app.include_router(admin_seasons_router)
     app.include_router(admin_participants_router)
+    app.include_router(admin_teams_router)
 
     # Health endpoints
     @app.get("/healthz")

@@ -19,7 +19,15 @@ from golf_league.domain.roster import (
     normalize_phone,
     validate_handicap_strokes,
 )
-from golf_league.models import Golfer, SeasonParticipant, TeeSet, User
+from golf_league.models import (
+    Golfer,
+    Season,
+    SeasonParticipant,
+    Team,
+    TeamMember,
+    TeeSet,
+    User,
+)
 
 # Sentinel distinguishing "the caller did not pass `handicap_strokes` at
 # all" from "the caller passed an explicit blank meaning NULL" (`""`) or a
@@ -34,7 +42,16 @@ class RosterValidationError(Exception):
 
     def __init__(self, errors: dict[str, str]):
         self.errors = errors
+        self.status_code = 422
         super().__init__(str(errors))
+
+
+class RosterConflictError(RosterValidationError):
+    """A valid golfer edit refused because it conflicts with active membership."""
+
+    def __init__(self, errors: dict[str, str]):
+        super().__init__(errors)
+        self.status_code = 409
 
 
 def _parse_handicap_strokes(value: object) -> int | None:
@@ -85,6 +102,28 @@ def _validate_golfer_fields(
         errors["handicap_strokes"] = handicap_error
 
     return errors
+
+
+def _parse_active_value(value: object, current: bool) -> bool:
+    text = str(value).strip().lower()
+    if not text:
+        return current
+    if text in {"true", "1", "on"}:
+        return True
+    if text in {"false", "0", "off"}:
+        return False
+    raise RosterValidationError({"is_active": "Choose active or inactive."})
+
+
+def _active_team_name(session: Session, golfer_id: int) -> str | None:
+    return session.execute(
+        select(Team.name)
+        .join(TeamMember, TeamMember.team_id == Team.id)
+        .join(Season, Season.id == TeamMember.season_id)
+        .where(TeamMember.golfer_id == golfer_id, Season.status == "active")
+        .order_by(Team.name, Team.id)
+        .limit(1)
+    ).scalar_one_or_none()
 
 
 def create_golfer(
@@ -148,6 +187,7 @@ def update_golfer(
     phone: str | None = None,
     handicap_strokes: object = _UNSET,
     notes: str | None = None,
+    is_active: object = None,
 ) -> Golfer | None:
     """Update a golfer; returns None when `golfer_id` does not exist.
 
@@ -184,6 +224,14 @@ def update_golfer(
     if errors:
         raise RosterValidationError(errors)
 
+    active_value = _parse_active_value(is_active, golfer.is_active) if is_active is not None else golfer.is_active
+    if golfer.is_active and not active_value:
+        active_membership = _active_team_name(session, golfer_id)
+        if active_membership is not None:
+            raise RosterConflictError(
+                {"is_active": f"Cannot deactivate a member of active-season team {active_membership}."}
+            )
+
     normalized_email = normalize_email(email)
     strokes = (
         _parse_handicap_strokes(handicap_strokes)
@@ -201,6 +249,7 @@ def update_golfer(
         email=normalized_email, handicap_strokes=strokes
     )
     golfer.notes = notes.strip() if notes and notes.strip() else None
+    golfer.is_active = active_value
 
     try:
         session.commit()
@@ -236,12 +285,15 @@ def delete_golfer(session: Session, golfer_id: int) -> bool | None:
         return None
     user_count = session.query(User).filter_by(golfer_id=golfer_id).count()
     participant_count = session.query(SeasonParticipant).filter_by(golfer_id=golfer_id).count()
-    if user_count or participant_count:
+    team_membership_count = session.query(TeamMember).filter_by(golfer_id=golfer_id).count()
+    if user_count or participant_count or team_membership_count:
         references = []
         if user_count:
             references.append(f"linked to {user_count} user account{'s' if user_count != 1 else ''}")
         if participant_count:
             references.append(f"on {participant_count} season participant row{'s' if participant_count != 1 else ''}")
+        if team_membership_count:
+            references.append(f"on {team_membership_count} team membership row{'s' if team_membership_count != 1 else ''}")
         raise RosterValidationError({"delete": "Cannot delete golfer: " + ", ".join(references) + "."})
     session.delete(golfer)
     session.commit()
@@ -276,6 +328,7 @@ def list_active_roster_players(session: Session) -> list[RosterPlayer]:
 
 __all__ = [
     "RosterValidationError",
+    "RosterConflictError",
     "create_golfer",
     "update_golfer",
     "get_golfer",

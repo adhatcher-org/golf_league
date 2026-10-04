@@ -6,6 +6,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Integer,
     Numeric,
     String,
@@ -264,6 +265,55 @@ class Golfer(Base):
     )
 
     default_tee_set: Mapped["TeeSet"] = relationship("TeeSet")
+
+
+class Team(Base):
+    """One manually configured team in a season."""
+
+    __tablename__ = "teams"
+    __table_args__ = (
+        UniqueConstraint("season_id", "number", name="uq_teams_season_number"),
+        UniqueConstraint("id", "season_id", name="uq_teams_id_season"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    season_id: Mapped[int] = mapped_column(ForeignKey("seasons.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    season: Mapped["Season"] = relationship()
+    members: Mapped[list["TeamMember"]] = relationship(
+        back_populates="team", order_by="TeamMember.position", cascade="all, delete-orphan"
+    )
+
+
+class TeamMember(Base):
+    """A golfer's explicit position on one team in one season."""
+
+    __tablename__ = "team_members"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["team_id", "season_id"], ["teams.id", "teams.season_id"],
+            name="fk_team_members_team_season",
+        ),
+        ForeignKeyConstraint(["season_id"], ["seasons.id"], name="fk_team_members_season"),
+        ForeignKeyConstraint(["golfer_id"], ["golfers.id"], name="fk_team_members_golfer"),
+        CheckConstraint("position >= 1 AND position <= 4", name="ck_team_members_position"),
+        UniqueConstraint("team_id", "position", name="uq_team_members_team_position"),
+        UniqueConstraint("team_id", "golfer_id", name="uq_team_members_team_golfer"),
+        UniqueConstraint("season_id", "golfer_id", name="uq_team_members_season_golfer"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    team_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    season_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    golfer_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    team: Mapped["Team"] = relationship(back_populates="members")
+    season: Mapped["Season"] = relationship(overlaps="members,team")
+    golfer: Mapped["Golfer"] = relationship()
 
 
 class RosterImportBatch(Base):

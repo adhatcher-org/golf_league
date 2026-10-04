@@ -178,6 +178,7 @@ async def update_golfer_submit(
     default_tee_set_id: str = Form(""),
     handicap_strokes: str = Form(""),
     notes: str = Form(""),
+    is_active: str = Form(""),
     rendered_tee_set_id: str = Form(""),
     csrf_token: str = Form(""),
     session: Session = Depends(get_session),  # noqa: B008
@@ -231,6 +232,7 @@ async def update_golfer_submit(
             phone=phone or None,
             handicap_strokes=handicap_strokes,
             notes=notes or None,
+            is_active=is_active,
         )
     except RosterValidationError as exc:
         return _templates(request).TemplateResponse(
@@ -239,7 +241,7 @@ async def update_golfer_submit(
             _golfer_form_context(
                 request, session, golfer=existing, errors=exc.errors
             ),
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=exc.status_code,
         )
 
     return RedirectResponse(
