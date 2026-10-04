@@ -21,7 +21,15 @@ from golf_league.domain.course import (
     validate_positive_int,
     validate_rating,
 )
-from golf_league.models import Course, Golfer, Hole, HoleYardage, TeeRating, TeeSet
+from golf_league.models import (
+    Course,
+    Golfer,
+    Hole,
+    HoleYardage,
+    SeasonParticipant,
+    TeeRating,
+    TeeSet,
+)
 
 
 class CourseValidationError(Exception):
@@ -374,12 +382,15 @@ def delete_tee_set(session: Session, course_id: int, tee_set_id: int) -> bool | 
         return None
     yardage_count = session.query(HoleYardage).filter_by(tee_set_id=tee_set_id).count()
     golfer_count = session.query(Golfer).filter_by(default_tee_set_id=tee_set_id).count()
-    if yardage_count or golfer_count:
+    participant_count = session.query(SeasonParticipant).filter_by(tee_set_id=tee_set_id).count()
+    if yardage_count or golfer_count or participant_count:
         parts = []
         if yardage_count:
             parts.append(f"{yardage_count} hole yardages")
         if golfer_count:
             parts.append(f"{golfer_count} golfer default-tee references")
+        if participant_count:
+            parts.append(f"{participant_count} season participant overrides")
         raise CourseValidationError({"delete": "Cannot delete tee set: " + ", ".join(parts) + "."})
     session.delete(tee_set)
     session.commit()

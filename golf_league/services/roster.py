@@ -19,7 +19,7 @@ from golf_league.domain.roster import (
     normalize_phone,
     validate_handicap_strokes,
 )
-from golf_league.models import Golfer, TeeSet
+from golf_league.models import Golfer, SeasonParticipant, TeeSet, User
 
 # Sentinel distinguishing "the caller did not pass `handicap_strokes` at
 # all" from "the caller passed an explicit blank meaning NULL" (`""`) or a
@@ -229,6 +229,25 @@ def list_golfers(session: Session) -> list[Golfer]:
     )
 
 
+def delete_golfer(session: Session, golfer_id: int) -> bool | None:
+    """Delete an unreferenced golfer; return None when the id is absent."""
+    golfer = session.get(Golfer, golfer_id)
+    if golfer is None:
+        return None
+    user_count = session.query(User).filter_by(golfer_id=golfer_id).count()
+    participant_count = session.query(SeasonParticipant).filter_by(golfer_id=golfer_id).count()
+    if user_count or participant_count:
+        references = []
+        if user_count:
+            references.append(f"linked to {user_count} user account{'s' if user_count != 1 else ''}")
+        if participant_count:
+            references.append(f"on {participant_count} season participant row{'s' if participant_count != 1 else ''}")
+        raise RosterValidationError({"delete": "Cannot delete golfer: " + ", ".join(references) + "."})
+    session.delete(golfer)
+    session.commit()
+    return True
+
+
 @dataclass(frozen=True)
 class RosterPlayer:
     """The privacy-safe projection used by the verified player roster."""
@@ -261,6 +280,7 @@ __all__ = [
     "update_golfer",
     "get_golfer",
     "list_golfers",
+    "delete_golfer",
     "RosterPlayer",
     "list_active_roster_players",
 ]

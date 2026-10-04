@@ -89,6 +89,23 @@ def derive_handicap_status(*, email: str | None, handicap_strokes: int | None) -
     return "ok"
 
 
+def role_from_membership(has_team_slot: bool) -> str:
+    """Derive a golfer's season role from membership, never stored role data."""
+    return "active" if has_team_slot else "sub"
+
+
+def filter_sub_pool(golfers, member_facts):
+    """Filter supplied golfer/member facts to active golfers without a team slot."""
+    def value(fact, key):
+        return fact.get(key) if isinstance(fact, dict) else getattr(fact, key, None)
+
+    member_ids = {value(member, "golfer_id") for member in member_facts}
+    return [
+        golfer for golfer in golfers
+        if bool(value(golfer, "is_active")) and value(golfer, "id") not in member_ids
+    ]
+
+
 __all__ = [
     "HANDICAP_SOURCES",
     "HANDICAP_STATUSES",
@@ -97,4 +114,6 @@ __all__ = [
     "normalize_name",
     "validate_handicap_strokes",
     "derive_handicap_status",
+    "role_from_membership",
+    "filter_sub_pool",
 ]
