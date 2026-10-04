@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ season.year }} Teams - Golf League{% endblock %}
+{% block content %}
+<h2>Teams — {{ season.name_override or season.year }}</h2>
+<p>Teams are entered manually. A team needs four members before matchup generation can proceed.</p>
+<p><a href="/admin/seasons/{{ season.id }}/teams/new">Add team</a> · <a href="/admin/seasons/{{ season.id }}/edit">Season settings</a></p>
+{% for view in teams %}
+<section>
+    <h3>Team {{ view.team.number }}: {{ view.team.name }}</h3>
+    {% if view.complete %}<p>Complete — four members</p>{% else %}<p class="error">Incomplete — {{ view.members|length }} of 4 members</p>{% endif %}
+    <ol>
+    {% for member in view.members %}
+        <li>P{{ member.position }} — {{ member.golfer.last_name }}, {{ member.golfer.first_name }}</li>
+    {% endfor %}
+    </ol>
+    <p><a href="/admin/teams/{{ view.team.id }}/edit">Edit team</a></p>
+</section>
+{% else %}
+<p>No teams have been entered for this season.</p>
+{% endfor %}
+{% endblock %}

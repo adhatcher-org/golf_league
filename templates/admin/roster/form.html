@@ -50,6 +50,15 @@
         Notes
         <textarea name="notes">{{ golfer.notes if golfer and golfer.notes else '' }}</textarea>
     </label>
+    {% if golfer %}
+    <label>
+        League status
+        <select name="is_active">
+            <option value="true" {% if golfer.is_active %}selected{% endif %}>Active</option>
+            <option value="false" {% if not golfer.is_active %}selected{% endif %}>Inactive</option>
+        </select>
+    </label>
+    {% endif %}
     <button type="submit">Save</button>
 </form>
 {% if golfer %}

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}{% if team %}Edit {{ team.name }}{% else %}New team{% endif %} - Golf League{% endblock %}
+{% block content %}
+<h2>{% if team %}Edit team {{ team.number }}{% else %}New team{% endif %} — {{ season.name_override or season.year }}</h2>
+{% if errors %}<ul class="error">{% for field, message in errors.items() %}<li>{{ field }}: {{ message }}</li>{% endfor %}</ul>{% endif %}
+<form method="post" action="{% if team %}/admin/teams/{{ team.id }}/edit{% else %}/admin/seasons/{{ season.id }}/teams/new{% endif %}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Team name <input name="name" value="{{ team.name if team else '' }}" required></label>
+    <label>Team number <input name="number" value="{{ team.number if team else '' }}" inputmode="numeric" required></label>
+    <label>Sort order <input name="sort_order" value="{{ team.sort_order if team else '0' }}" inputmode="numeric" required></label>
+    <p>Choose up to four active golfers with a valid season tee and effective seed. The slot sets the position. Blank slots keep the team incomplete.</p>
+    {% for position in range(1, 5) %}
+    <label>P{{ position }}
+        <select name="member_{{ position }}">
+            <option value="">Empty</option>
+            {% for golfer, tee, seed in golfers %}
+            <option value="{{ golfer.id }}" {% if selected.get(position) == golfer.id %}selected{% endif %}>{{ golfer.last_name }}, {{ golfer.first_name }} — {{ tee.color_label }} {{ tee.name }}, seed {{ seed }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    {% endfor %}
+    <button type="submit">Save team</button>
+</form>
+{% if team %}
+<form method="post" action="/admin/teams/{{ team.id }}/assign-positions">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit">Assign positions by handicap</button>
+</form>
+<p><a href="/admin/seasons/{{ season.id }}/teams">Back to teams</a></p>
+{% endif %}
+{% endblock %}
