@@ -4,6 +4,7 @@
 <h2>{% if season %}Edit season{% else %}New season{% endif %}</h2>
 {% if season %}
 <p>{{ display_name }} — {{ week_count }} weekly date{% if week_count != 1 %}s{% endif %}</p>
+<p><a href="/admin/seasons/{{ season.id }}/participants">Manage participant overrides</a></p>
 {% endif %}
 {% if errors %}
 <ul class="error">

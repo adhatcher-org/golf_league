@@ -204,6 +204,26 @@ class Season(Base):
     course: Mapped["Course"] = relationship("Course", back_populates="seasons")
 
 
+class SeasonParticipant(Base):
+    """Optional season-specific tee and seed overrides for one golfer."""
+
+    __tablename__ = "season_participants"
+    __table_args__ = (
+        UniqueConstraint("season_id", "golfer_id", name="uq_season_participants_season_golfer"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    season_id: Mapped[int] = mapped_column(ForeignKey("seasons.id"), nullable=False, index=True)
+    golfer_id: Mapped[int] = mapped_column(ForeignKey("golfers.id"), nullable=False, index=True)
+    tee_set_id: Mapped[int | None] = mapped_column(ForeignKey("tee_sets.id"), nullable=True, index=True)
+    seed_handicap_strokes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    seed_source: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+    season: Mapped["Season"] = relationship()
+    golfer: Mapped["Golfer"] = relationship()
+    tee_set: Mapped["TeeSet | None"] = relationship()
+
+
 class Golfer(Base):
     """A person in the league's roster.
 

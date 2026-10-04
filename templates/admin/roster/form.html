@@ -54,5 +54,9 @@
 </form>
 {% if golfer %}
 <p>Status: {{ golfer.handicap_status }}</p>
+<form method="post" action="/admin/golfers/{{ golfer.id }}/delete">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit">Delete golfer</button>
+</form>
 {% endif %}
 {% endblock %}

@@ -16,6 +16,7 @@ from golf_league.services.courses import list_courses_with_tee_sets
 from golf_league.services.roster import (
     RosterValidationError,
     create_golfer,
+    delete_golfer,
     get_golfer,
     list_golfers,
     update_golfer,
@@ -244,3 +245,27 @@ async def update_golfer_submit(
     return RedirectResponse(
         url=f"/admin/golfers/{golfer_id}/edit", status_code=status.HTTP_303_SEE_OTHER
     )
+
+
+@router.post("/admin/golfers/{golfer_id}/delete")
+async def delete_golfer_submit(
+    golfer_id: int,
+    request: Request,
+    csrf_token: str = Form(""),
+    session: Session = Depends(get_session),  # noqa: B008
+    admin=Depends(require_admin),  # noqa: B008
+) -> Response:
+    _require_csrf(request, csrf_token)
+    try:
+        deleted = delete_golfer(session, golfer_id)
+    except RosterValidationError as exc:
+        golfer = get_golfer(session, golfer_id)
+        return _templates(request).TemplateResponse(
+            request,
+            "admin/roster/form.html",
+            _golfer_form_context(request, session, golfer=golfer, errors=exc.errors),
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    if deleted is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return RedirectResponse("/admin/golfers", status_code=status.HTTP_303_SEE_OTHER)

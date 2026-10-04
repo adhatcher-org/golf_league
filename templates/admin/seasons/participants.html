@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ season.year }} Participants - Golf League{% endblock %}
+{% block content %}
+<h2>Season participants — {{ season.name_override or season.year }}</h2>
+<p>Rows on this page store tee or seed overrides only. Active and sub status comes from team membership.</p>
+<p><a href="/admin/seasons/{{ season.id }}/edit">Season settings</a></p>
+{% if errors %}<ul class="error">{% for field, message in errors.items() %}<li>{{ field }}: {{ message }}</li>{% endfor %}</ul>{% endif %}
+<h3>Add an override</h3>
+<form method="post" action="/admin/seasons/{{ season.id }}/participants/add">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Golfer
+        <select name="golfer_id"><option value="">Choose an active golfer</option>{% for golfer in available_golfers %}<option value="{{ golfer.id }}">{{ golfer.last_name }}, {{ golfer.first_name }} — roster {{ golfer.handicap_strokes if golfer.handicap_strokes is not none else 'no handicap' }}</option>{% endfor %}</select>
+    </label>
+    <label>Tee override <select name="tee_set_id"><option value="">Use golfer default</option>{% for tee in tees %}<option value="{{ tee.id }}">{{ tee.color_label }} — {{ tee.name }}</option>{% endfor %}</select></label>
+    <label>Seed handicap override <input name="seed_handicap_strokes" value="" aria-describedby="seed-help"></label>
+    <small id="seed-help">Blank means no seed override. Signed whole numbers, including 0, are accepted.</small>
+    <label>Seed source <input name="seed_source" value=""></label>
+    <button type="submit">Add override</button>
+</form>
+<h3>Current overrides</h3>
+{% for view in participants %}
+<section>
+    <h4>{{ view.golfer.last_name }}, {{ view.golfer.first_name }}</h4>
+    <p>Effective tee: {{ view.effective_tee.color_label }} — {{ view.effective_tee.name }}. Effective seed: {% if view.effective_handicap is none %}No handicap at this tee{% else %}{{ view.effective_handicap }}{% endif %}{% if view.participant.seed_source %} ({{ view.participant.seed_source }}){% endif %}</p>
+    <form method="post" action="/admin/seasons/{{ season.id }}/participants/{{ view.participant.id }}/edit">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label>Tee action <select name="tee_action"><option value="keep">Keep current</option><option value="set">Set override</option><option value="clear">Clear to golfer default</option></select></label>
+        <label>New tee <select name="tee_set_id"><option value="">Choose a tee</option>{% for tee in tees %}<option value="{{ tee.id }}">{{ tee.color_label }} — {{ tee.name }}</option>{% endfor %}</select></label>
+        <label>Seed action <select name="seed_action"><option value="keep">Keep current</option><option value="set">Set override</option><option value="clear">Clear to fallback</option></select></label>
+        <label>New seed handicap <input name="seed_handicap_strokes" value=""></label>
+        <label>Seed source <input name="seed_source" value="{{ view.participant.seed_source or '' }}"></label>
+        <button type="submit">Save overrides</button>
+    </form>
+</section>
+{% else %}<p>No participant override rows. Golfers with no row remain eligible for their season role through membership and can use their roster handicap where the tee matches.</p>{% endfor %}
+{% endblock %}

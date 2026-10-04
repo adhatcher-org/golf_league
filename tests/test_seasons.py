@@ -8,7 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from golf_league.config import Settings
-from golf_league.models import Course, HoleYardage, Season, TeeRating
+from golf_league.models import Course, HoleYardage, Season, SeasonParticipant, TeeRating
+from golf_league.services.participants import add_participant_override
 from golf_league.services.seasons import (
     SeasonValidationError,
     create_season,
@@ -165,6 +166,28 @@ def test_update_is_atomic_and_only_changes_structural_fields(session, wyandot_co
     assert updated is not None
     assert updated.name_override == "Fall 2026"
     assert updated.first_week_nine == "back"
+
+
+def test_update_season_rejects_course_change_after_participants_without_mutation(
+    session, wyandot_course, golfer
+):
+    course_a = wyandot_course()
+    season = create_season(session, **_payload(course_a.id))
+    snake = next(tee for tee in course_a.tee_sets if tee.name == "Snake")
+    participant = add_participant_override(
+        session, season.id, golfer_id=golfer.id, tee_set_id=snake.id
+    )
+    course_b = Course(name="Other Course", total_holes=18)
+    session.add(course_b)
+    session.commit()
+
+    with pytest.raises(SeasonValidationError) as exc_info:
+        update_season(session, season.id, **_payload(course_b.id))
+
+    assert "participant overrides" in exc_info.value.errors["course_id"]
+    session.refresh(season)
+    assert season.course_id == course_a.id
+    assert session.get(SeasonParticipant, participant.id) is not None
 
 
 def test_admin_create_edit_and_authentication_boundaries(admin_client, empty_client):
