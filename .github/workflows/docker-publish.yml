@@ -24,7 +24,7 @@ jobs:
       cancel-in-progress: false
     uses: adhatcher-org/shared-workflows/.github/workflows/docker-publish.yml@456f186a9c21632af188bde4ebf7ce6e11953831 # v1.0.2
     with:
-      package-name: college_planner
+      package-name: golf_league
       checkout-ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       create-git-tag: true
       # amd64 only. The arm64 leg builds the Node frontend stage under QEMU
