@@ -13,8 +13,16 @@
         <h1>Season roster</h1>
         <p>{{ season.name_override or season.year }} · choose the golfers included this season</p>
     </div>
-    <a class="button-link button-link--secondary" href="/admin/seasons/{{ season.id }}/edit">Season settings</a>
+    <a class="button-link" href="/admin/seasons/{{ season.id }}/teams">Teams</a>
 </header>
+<nav aria-label="Season navigation">
+    <p>
+        <a href="/admin/seasons">Seasons</a>
+        · <span aria-current="page">Season roster</span>
+        · <a href="/admin/seasons/{{ season.id }}/teams">Teams</a>
+        · <a href="/admin/seasons/{{ season.id }}/edit">Season settings</a>
+    </p>
+</nav>
 
 {% if errors %}
 <div class="season-roster-alert" role="alert">

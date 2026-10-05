@@ -985,6 +985,11 @@ button:disabled:hover {
 .season-roster__table td { vertical-align: middle; }
 .season-roster__table tbody tr { transition: background-color 130ms ease; }
 .season-roster__table tbody tr:hover { background: #f1f5ef; }
+.season-roster__table tbody tr.is-selected { background: var(--fairway-wash); }
+.season-roster__table tbody tr.is-selected:hover { background: #e4eddf; }
+.season-roster__table tr.is-selected .season-roster__select-column {
+    box-shadow: inset 3px 0 0 var(--evergreen);
+}
 .season-roster__table tr.is-inactive { color: #7b847f; }
 .season-roster__table tr.is-inactive .season-roster__name { color: #66736b; }
 
@@ -1044,8 +1049,8 @@ button:disabled:hover {
 .season-override-row > p { margin: 0.35rem 0 1rem; }
 
 @media (max-width: 680px) {
-    .season-roster-heading { align-items: flex-start; }
-    .season-roster-heading .button-link { width: 100%; }
+    .admin-page-heading { align-items: stretch; flex-direction: column; gap: 1rem; }
+    .admin-page-heading .button-link { width: 100%; }
     .season-roster__toolbar { align-items: flex-start; flex-direction: column; }
     .season-roster__footer { align-items: stretch; flex-direction: column; }
     .season-roster__footer button { width: 100%; }

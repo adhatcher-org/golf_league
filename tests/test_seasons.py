@@ -13,6 +13,7 @@ from golf_league.services.participants import add_participant_override
 from golf_league.services.seasons import (
     SeasonValidationError,
     create_season,
+    list_seasons,
     season_display_name,
     season_week_count,
     update_season,
@@ -245,3 +246,47 @@ def test_config_template_must_include_a_season_field():
         Settings(session_secret="test", league_name_template="{missing}")
     with pytest.raises(ValueError):
         Settings(session_secret="test", league_name_template="{season.missing}")
+
+
+def test_season_index_empty_state_and_global_navigation(admin_client):
+    response = admin_client.get("/admin/seasons")
+    assert response.status_code == 200
+    assert "No seasons yet" in response.text
+    assert 'href="/admin/seasons/new"' in response.text
+    assert 'href="/admin/seasons"' in admin_client.get("/").text
+
+
+def test_season_index_lists_every_season_in_recent_order(admin_client):
+    with Session(bind=admin_client.app.state.engine) as session:
+        course_id = session.execute(select(Course.id)).scalar_one()
+        earlier = create_season(
+            session, **_payload(course_id, name_override="Synthetic Autumn 2026")
+        )
+        later = create_season(
+            session,
+            **_payload(
+                course_id, year="2027", name_override="Synthetic Autumn 2027",
+                start_date="2027-08-26", end_date="2027-10-28",
+            ),
+        )
+        ids = [later.id, earlier.id]
+        assert [season.id for season in list_seasons(session)] == ids
+
+    response = admin_client.get("/admin/seasons")
+    assert response.status_code == 200
+    assert response.text.index("Synthetic Autumn 2027") < response.text.index("Synthetic Autumn 2026")
+    for season_id in ids:
+        for destination in ("participants", "teams", "edit"):
+            assert f'href="/admin/seasons/{season_id}/{destination}"' in response.text
+
+
+def test_season_index_rejects_anonymous_and_non_admin(admin_client, empty_client):
+    assert empty_client.get("/admin/seasons").status_code == 401
+    # Retain a real verified login while removing its admin privilege.
+    from golf_league.models import User
+
+    with Session(bind=admin_client.app.state.engine) as session:
+        user = session.execute(select(User)).scalar_one()
+        user.is_admin = False
+        session.commit()
+    assert admin_client.get("/admin/seasons").status_code == 403

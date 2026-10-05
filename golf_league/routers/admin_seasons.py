@@ -12,6 +12,7 @@ from golf_league.services.seasons import (
     create_season,
     get_season,
     list_courses_for_season_form,
+    list_seasons,
     season_display_name,
     season_week_count,
     update_season,
@@ -93,6 +94,26 @@ def _submitted_values(
         "status": status_value,
         "first_week_nine": first_week_nine,
     }
+
+
+@router.get("/admin/seasons")
+async def season_list(
+    request: Request,
+    session: Session = Depends(get_session),  # noqa: B008
+    admin=Depends(require_admin),  # noqa: B008
+) -> Response:
+    settings = getattr(request.app.state, "settings", None) or get_settings()
+    seasons = list_seasons(session)
+    return _templates(request).TemplateResponse(
+        request,
+        "admin/seasons/list.html",
+        {
+            "seasons": seasons,
+            "display_names": {
+                season.id: season_display_name(season, settings) for season in seasons
+            },
+        },
+    )
 
 
 @router.get("/admin/seasons/new")

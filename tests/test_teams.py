@@ -99,6 +99,49 @@ def _csrf(html):
     return match.group(1)
 
 
+@pytest.mark.parametrize("page", ["participants", "edit", "teams"])
+def test_season_navigation_preserves_current_season(admin_client, page):
+    season_id, _, _ = _ids_for_client(admin_client)
+    with Session(bind=admin_client.app.state.engine) as session:
+        course_id = session.get(Season, season_id).course_id
+        other_season_id = _season(session, course_id).id
+
+    for current_id in (season_id, other_season_id):
+        response = admin_client.get(f"/admin/seasons/{current_id}/{page}")
+        assert response.status_code == 200
+        navigation = re.search(
+            r'<nav aria-label="Season navigation">(.*?)</nav>', response.text, re.S
+        )
+        assert navigation
+        destinations = {
+            "Seasons": "/admin/seasons",
+            "Season roster": f"/admin/seasons/{current_id}/participants",
+            "Teams": f"/admin/seasons/{current_id}/teams",
+            "Season settings": f"/admin/seasons/{current_id}/edit",
+        }
+        current_label = {"participants": "Season roster", "edit": "Season settings",
+                         "teams": "Teams"}[page]
+        for label, destination in destinations.items():
+            if label == current_label:
+                assert f'<span aria-current="page">{label}</span>' in navigation.group(1)
+            else:
+                assert f'<a href="{destination}">{label}</a>' in navigation.group(1)
+
+
+def test_empty_season_teams_provides_create_team_journey(admin_client):
+    season_id, _, _ = _ids_for_client(admin_client)
+    teams = admin_client.get(f"/admin/seasons/{season_id}/teams")
+    assert teams.status_code == 200
+    assert "No teams have been entered for this season." in teams.text
+    create_link = re.search(r'<a[^>]*href="([^"]+)"[^>]*>Create team</a>', teams.text)
+    assert create_link
+    assert create_link.group(1) == f"/admin/seasons/{season_id}/teams/new"
+    form = admin_client.get(create_link.group(1))
+    assert form.status_code == 200
+    assert f'action="/admin/seasons/{season_id}/teams/new"' in form.text
+    assert 'name="csrf_token"' in form.text
+
+
 def test_team_member_role_is_derived_from_membership(session, wyandot_course):
     course = wyandot_course()
     tee = course.tee_sets[0]
@@ -459,3 +502,61 @@ def test_empty_string_is_active_form_value_keeps_existing_status(session, wyando
         is_active="",
     )
     assert updated.is_active is True
+
+
+def test_assignment_link_reaches_form_and_saves_players_for_its_season(admin_client):
+    season_id, golfer_id, _ = _ids_for_client(admin_client)
+    with Session(bind=admin_client.app.state.engine) as session:
+        season = session.get(Season, season_id)
+        team = _team(session, season, [session.get(Golfer, golfer_id)], name="Assignment Team")
+        team_id = team.id
+
+    teams_page = admin_client.get(f"/admin/seasons/{season_id}/teams")
+    assignment_link = re.search(
+        r'<a href="([^"]+)">Assign players / edit team</a>', teams_page.text
+    )
+    assert assignment_link
+    assert assignment_link.group(1) == f"/admin/teams/{team_id}/edit"
+    form = admin_client.get(assignment_link.group(1))
+    assert form.status_code == 200
+    assert "<h2>Assign players</h2>" in form.text
+    assert f'<option value="{golfer_id}"' in form.text
+    saved = admin_client.post(
+        assignment_link.group(1),
+        data={"name": "Assignment Team", "number": "1", "sort_order": "1",
+              "member_1": str(golfer_id), "csrf_token": _csrf(form.text)},
+        follow_redirects=False,
+    )
+    assert saved.status_code == 303
+    assert saved.headers["location"] == f"/admin/seasons/{season_id}/teams"
+    with Session(bind=admin_client.app.state.engine) as session:
+        member = session.scalar(select(TeamMember).where(TeamMember.team_id == team_id))
+        assert member.golfer_id == golfer_id
+        assert member.season_id == season_id
+
+
+@pytest.mark.parametrize("editing", [False, True])
+def test_assignment_forms_offer_season_navigation_and_empty_eligibility(admin_client, editing):
+    first_season_id, golfer_id, _ = _ids_for_client(admin_client)
+    with Session(bind=admin_client.app.state.engine) as session:
+        course_id = session.get(Season, first_season_id).course_id
+        season = _season(session, course_id)
+        season_id = season.id
+        team_id = None
+        if editing:
+            golfer = session.get(Golfer, golfer_id)
+            team_id = _team(session, season, [golfer]).id
+            golfer.handicap_strokes = None
+            session.commit()
+
+    destination = (f"/admin/teams/{team_id}/edit" if editing
+                   else f"/admin/seasons/{season_id}/teams/new")
+    response = admin_client.get(destination)
+    assert response.status_code == 200
+    assert f'<a href="/admin/seasons/{season_id}/teams">Back to teams</a>' in response.text
+    assert f'<a href="/admin/seasons/{season_id}/participants">Season roster</a>' in response.text
+    assert "No eligible golfers are available." in response.text
+    assert (f'<a href="/admin/seasons/{season_id}/participants">'
+            "Select golfers in the season roster</a>") in response.text
+    assert "valid tee for this season's course and a handicap" in response.text
+    assert "<h2>Assign players</h2>" in response.text
