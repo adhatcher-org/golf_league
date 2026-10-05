@@ -1,0 +1,33 @@
+name: Docker Publish
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  publish:
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == github.event.repository.default_branch) ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.ref_name == github.event.repository.default_branch)
+    permissions:
+      contents: write
+      packages: write
+    concurrency:
+      group: docker-publish
+      cancel-in-progress: false
+    uses: adhatcher-org/shared-workflows/.github/workflows/docker-publish.yml@456f186a9c21632af188bde4ebf7ce6e11953831 # v1.0.2
+    with:
+      package-name: golf_league
+      checkout-ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+      create-git-tag: true
+      # amd64 only. The arm64 leg builds the Node frontend stage under QEMU
+      # emulation, which ran past two hours without finishing. Re-add
+      # linux/arm64 only alongside a native ARM runner.
+      platforms: linux/amd64
