@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Edit Week {{ week.index }} - Golf League{% endblock %}
+{% block content %}
+<header class="admin-page-heading"><div>
+    <p class="eyebrow"><a href="/admin/seasons/{{ season.id }}/weeks">Weeks</a> · {{ season.year }}</p>
+    <h1>Edit Week {{ week.index }}</h1>
+    <p>{{ week.play_date.strftime('%A, %B %-d, %Y') }} · {{ week.nine|title if week.nine else 'Nine reserved' }}</p>
+</div></header>
+{% if errors %}<div class="error" role="alert">{% for message in errors.values() %}<p>{{ message }}</p>{% endfor %}</div>{% endif %}
+<form method="post" action="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/edit">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="fingerprint" value="{{ fingerprint }}">
+    <label for="week-type">Week type</label>
+    <select id="week-type" name="week_type">
+        {% for value in ['match', 'play_with_team', 'rain_date'] %}<option value="{{ value }}" {% if week.week_type == value %}selected{% endif %}>{{ value|replace('_', ' ')|title }}</option>{% endfor %}
+    </select>
+    <label for="week-status">Status</label>
+    <select id="week-status" name="status">
+        {% for value in ['scheduled', 'cancelled'] %}<option value="{{ value }}" {% if week.status == value %}selected{% endif %}>{{ value|title }}</option>{% endfor %}
+        {% if week.status == 'played' %}<option value="played" selected>Played (locked)</option>{% endif %}
+    </select>
+    <label for="makeup">Makes up for</label>
+    <select id="makeup" name="makeup_for_index"><option value="">None</option>
+        {% for target in weeks %}{% if target.id != week.id %}<option value="{{ target.index }}" {% if week.makeup_for_week_id == target.id %}selected{% endif %}>Week {{ target.index }} — {{ target.play_date.strftime('%b %-d') }}</option>{% endif %}{% endfor %}
+    </select>
+    <label for="notes">Notes</label><textarea id="notes" name="notes" maxlength="2000">{{ week.notes or '' }}</textarea>
+    <p><button type="submit">Save week</button> <a href="/admin/seasons/{{ season.id }}/weeks">Cancel</a></p>
+</form>
+{% endblock %}

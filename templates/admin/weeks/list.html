@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}{{ season.year }} Weeks - Golf League{% endblock %}
+{% block content %}
+<header class="admin-page-heading">
+    <div>
+        <p class="eyebrow">Manage · {{ season.year }}</p>
+        <h1>Weeks — {{ season.name_override or season.year }}</h1>
+        <p>Dates follow the season schedule. Printed week numbers and alternating nines remain fixed.</p>
+    </div>
+</header>
+<nav aria-label="Season navigation"><p>
+    <a href="/admin/seasons">Seasons</a> ·
+    <a href="/admin/seasons/{{ season.id }}/participants">Season roster</a> ·
+    <a href="/admin/seasons/{{ season.id }}/teams">Teams</a> ·
+    <span aria-current="page">Weeks</span> ·
+    <a href="/admin/seasons/{{ season.id }}/edit">Season settings</a>
+</p></nav>
+{% if errors %}<div class="error" role="alert">{% for message in errors.values() %}<p>{{ message }}</p>{% endfor %}</div>{% endif %}
+{% if proposal is not none %}
+<section aria-labelledby="preview-title">
+    <h2 id="preview-title">Review schedule preview</h2>
+    <p>Preview does not save rows. Confirm to create the complete schedule.</p>
+    <form class="week-preview-form" method="post" action="/admin/seasons/{{ season.id }}/weeks/generate">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="season_fingerprint" value="{{ season_fingerprint }}">
+        <input type="hidden" name="count" value="{{ proposal|length }}">
+        <div class="table-wrap week-preview"><table class="week-preview__table">
+            <thead><tr><th>Week</th><th>Date</th><th>Nine</th><th>Type</th><th>Status</th><th>Makeup for</th><th>Notes</th></tr></thead>
+            <tbody>{% for row in proposal %}{% set number = loop.index %}
+            <tr>
+                <th scope="row" data-label="Week">{{ number }}</th>
+                <td data-label="Date" class="week-preview__date">{{ row.play_date.strftime('%b %-d, %Y') }}</td>
+                <td data-label="Nine">{% if row.week_type == 'rain_date' %}Reserved{% else %}{{ row.nine|title }}{% endif %}</td>
+                <td data-label="Type"><label class="visually-hidden" for="type-{{ number }}">Week {{ number }} type</label>
+                    <select id="type-{{ number }}" name="week_type_{{ number }}">
+                        {% for value in ['match', 'play_with_team', 'rain_date'] %}<option value="{{ value }}" {% if row.week_type == value %}selected{% endif %}>{{ value|replace('_', ' ')|title }}</option>{% endfor %}
+                    </select></td>
+                <td data-label="Status"><label class="visually-hidden" for="status-{{ number }}">Week {{ number }} status</label>
+                    <select id="status-{{ number }}" name="status_{{ number }}">
+                        {% for value in ['scheduled', 'cancelled'] %}<option value="{{ value }}" {% if row.status == value %}selected{% endif %}>{{ value|title }}</option>{% endfor %}
+                    </select></td>
+                <td data-label="Makeup for"><label class="visually-hidden" for="makeup-{{ number }}">Week {{ number }} makes up for</label>
+                    <select id="makeup-{{ number }}" name="makeup_{{ number }}"><option value="">None</option>
+                        {% for target in proposal %}{% if loop.index != number %}<option value="{{ loop.index }}" {% if row.makeup_for_index == loop.index %}selected{% endif %}>Week {{ loop.index }}</option>{% endif %}{% endfor %}
+                    </select></td>
+                <td data-label="Notes"><label class="visually-hidden" for="notes-{{ number }}">Week {{ number }} notes</label>
+                    <input id="notes-{{ number }}" name="notes_{{ number }}" value="{{ row.notes or '' }}" maxlength="2000"></td>
+            </tr>{% endfor %}</tbody>
+        </table></div>
+        <p class="week-preview__actions"><button type="submit" name="action" value="preview">Refresh preview</button>
+        <button type="submit" name="action" value="commit">Create weeks</button></p>
+    </form>
+</section>
+{% elif not weeks %}
+<section class="empty-state">
+    <h2>No weeks generated</h2>
+    <p>This season has {{ ((season.end_date - season.start_date).days // 7) + 1 }} weekly dates.</p>
+    <form method="post" action="/admin/seasons/{{ season.id }}/weeks/generate">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="season_fingerprint" value="{{ season_fingerprint }}">
+        <input type="hidden" name="count" value="{{ ((season.end_date - season.start_date).days // 7) + 1 }}">
+        <button type="submit" name="action" value="preview">Preview weeks</button>
+    </form>
+</section>
+{% else %}
+<div class="table-wrap"><table>
+    <caption class="visually-hidden">Printed season weeks</caption>
+    <thead><tr><th>Week</th><th>Date</th><th>Nine</th><th>Type</th><th>Status</th><th>Makeup for</th><th>Notes</th><th>Manage</th></tr></thead>
+    <tbody>{% for week in weeks %}<tr>
+        <th scope="row">{{ week.index }}</th>
+        <td>{{ week.play_date.strftime('%b %-d, %Y') }}</td>
+        <td>{{ week.nine|title if week.nine else 'Reserved' }}</td>
+        <td>{{ week.week_type|replace('_', ' ')|title }}</td>
+        <td>{{ week.status|title }}</td>
+        <td>{% if week.makeup_for %}Week {{ week.makeup_for.index }}{% else %}—{% endif %}</td>
+        <td>{{ week.notes or '—' }}</td>
+        <td><a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/edit">Edit</a>
+            <form method="post" action="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/delete" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Delete</button>
+            </form></td>
+    </tr>{% endfor %}</tbody>
+</table></div>
+{% endif %}
+{% endblock %}

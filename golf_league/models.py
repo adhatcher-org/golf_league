@@ -333,6 +333,38 @@ class TeamMember(Base):
     golfer: Mapped["Golfer"] = relationship()
 
 
+class Week(Base):
+    """One printed, season-scoped schedule row."""
+
+    __tablename__ = "weeks"
+    __table_args__ = (
+        CheckConstraint('"index" >= 1', name="ck_weeks_index_positive"),
+        CheckConstraint("week_type IN ('match', 'play_with_team', 'rain_date')", name="ck_weeks_type"),
+        CheckConstraint("status IN ('scheduled', 'cancelled', 'played')", name="ck_weeks_status"),
+        CheckConstraint("nine IS NULL OR nine IN ('front', 'back')", name="ck_weeks_nine"),
+        CheckConstraint(
+            "(week_type = 'rain_date' AND nine IS NULL) OR "
+            "(week_type IN ('match', 'play_with_team') AND nine IS NOT NULL)",
+            name="ck_weeks_type_nine",
+        ),
+        CheckConstraint("makeup_for_week_id IS NULL OR makeup_for_week_id != id", name="ck_weeks_makeup_not_self"),
+        UniqueConstraint("season_id", "index", name="uq_weeks_season_index"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    season_id: Mapped[int] = mapped_column(ForeignKey("seasons.id", name="fk_weeks_season"), nullable=False, index=True)
+    index: Mapped[int] = mapped_column(Integer, nullable=False)
+    play_date: Mapped[date] = mapped_column(nullable=False)
+    nine: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    week_type: Mapped[str] = mapped_column(String(16), nullable=False, server_default="match")
+    makeup_for_week_id: Mapped[int | None] = mapped_column(ForeignKey("weeks.id", name="fk_weeks_makeup_for"), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, server_default="scheduled")
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    season: Mapped["Season"] = relationship()
+    makeup_for: Mapped["Week | None"] = relationship(remote_side="Week.id", foreign_keys=[makeup_for_week_id])
+
+
 class RosterImportBatch(Base):
     """One staged CSV roster upload, pending admin review (GL-11/GL-12).
 

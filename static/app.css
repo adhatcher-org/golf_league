@@ -1170,3 +1170,67 @@ button:disabled:hover {
         justify-content: space-between;
     }
 }
+
+/* Week schedule preview: full table on desktop, stacked cards on phones. */
+.week-preview { overflow-x: auto; }
+.week-preview__table { min-width: 0; table-layout: auto; }
+.week-preview__table th,
+.week-preview__table td { padding: 0.6rem 0.75rem; vertical-align: middle; white-space: nowrap; }
+.week-preview__table select,
+.week-preview__table input { width: auto; min-width: 100%; min-height: 2.5rem; padding: 0.4rem 0.6rem; font-size: 0.92rem; }
+.week-preview__table select { min-width: 9.5rem; }
+.week-preview__table td[data-label="Makeup for"] select { min-width: 7rem; }
+.week-preview__table td[data-label="Status"] select { min-width: 8rem; }
+.week-preview__table td[data-label="Notes"] { width: 100%; }
+.week-preview__table td[data-label="Notes"] input { width: 100%; min-width: 12rem; }
+.week-preview__date { font-variant-numeric: tabular-nums; }
+.week-preview__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+
+@media (max-width: 720px) {
+    .week-preview { overflow: visible; border: 0; background: transparent; }
+    .week-preview__table,
+    .week-preview__table tbody,
+    .week-preview__table tr,
+    .week-preview__table th,
+    .week-preview__table td { display: block; min-width: 0; }
+    .week-preview__table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .week-preview__table tr {
+        margin-bottom: 0.9rem;
+        padding: 0.4rem 0.9rem 0.8rem;
+        border: 1px solid var(--line);
+        border-radius: 0.55rem;
+        background: var(--surface);
+    }
+    .week-preview__table tbody tr:hover { background: var(--surface); }
+    .week-preview__table th[scope="row"] {
+        padding: 0.6rem 0;
+        background: transparent;
+        font-size: 0.95rem;
+        letter-spacing: 0.045em;
+    }
+    .week-preview__table th[scope="row"]::before { content: "Week "; }
+    .week-preview__table td {
+        display: grid;
+        grid-template-columns: 6.5rem 1fr;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.35rem 0;
+        border: 0;
+        white-space: normal;
+    }
+    .week-preview__table td::before {
+        content: attr(data-label);
+        color: var(--muted);
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.045em;
+        text-transform: uppercase;
+    }
+    .week-preview__table select,
+    .week-preview__table input,
+    .week-preview__table td[data-label] select { width: 100%; min-width: 0; min-height: 2.9rem; }
+    .week-preview__table td[data-label="Notes"] { width: auto; }
+    .week-preview__table td[data-label="Notes"] input { min-width: 0; }
+    .week-preview__actions button { flex: 1 1 10rem; }
+}
+.week-preview-form { width: 100%; max-width: none; }
