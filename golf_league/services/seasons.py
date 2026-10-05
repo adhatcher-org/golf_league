@@ -19,6 +19,7 @@ from golf_league.models import (
     SeasonParticipant,
     TeeRating,
     TeeSet,
+    Week,
 )
 
 VALID_STATUSES = ("draft", "active", "complete")
@@ -286,6 +287,17 @@ def update_season(
         errors["course_id"] = (
             "Cannot change the season course while participant overrides exist."
         )
+    if session.execute(
+        select(Week.id).where(Week.season_id == season_id).limit(1)
+    ).first() is not None:
+        for field, column in (
+            ("start_date", "start_date"),
+            ("end_date", "end_date"),
+            ("play_weekday", "play_weekday"),
+            ("first_week_nine", "first_week_nine"),
+        ):
+            if column in parsed and parsed[column] != getattr(season, column):
+                errors[field] = "Cannot change schedule-defining season fields after weeks exist."
     if errors:
         raise SeasonValidationError(errors)
     season.year = int(parsed["year"])
