@@ -55,9 +55,27 @@ def validate_csrf(session_value: str, submitted: str) -> bool:
     return hmac.compare_digest(expected, submitted)
 
 
-async def require_user(
+async def get_optional_user(
     request: Request, session: Session = Depends(get_session)  # noqa: B008
-) -> User:
+) -> User | None:
+    """Return the current user, or None when the request has no valid session."""
+    settings = _current_settings(request)
+    cookie_value = request.cookies.get(SESSION_COOKIE_NAME)
+    if not cookie_value:
+        return None
+
+    loaded = load_session_cookie(cookie_value, settings.session_secret)
+    if loaded is None:
+        return None
+
+    user_id, session_version = loaded
+    user = session.get(User, user_id)
+    if user is None or user.session_version != session_version:
+        return None
+    return user
+
+
+async def require_user(user: User | None = Depends(get_optional_user)) -> User:  # noqa: B008
     """Reject anonymous or invalid sessions; otherwise return the User.
 
     A session is invalid when the cookie is missing, its signature is
@@ -65,33 +83,31 @@ async def require_user(
     session version it carries no longer matches the user's current one
     (i.e. every prior session was invalidated by a version bump).
     """
-    settings = _current_settings(request)
-    cookie_value = request.cookies.get(SESSION_COOKIE_NAME)
-    if not cookie_value:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
-        )
-
-    loaded = load_session_cookie(cookie_value, settings.session_secret)
-    if loaded is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
-        )
-
-    user_id, session_version = loaded
-    user = session.get(User, user_id)
-    if user is None or user.session_version != session_version:
+    if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
         )
     return user
 
 
-async def require_verified_user(user: User = Depends(require_user)) -> User:  # noqa: B008
-    """Reject a valid but unverified session; `is_admin` is never a bypass."""
-    if user.email_verified_at is None:
+async def get_optional_verified_user(
+    user: User | None = Depends(get_optional_user),  # noqa: B008
+) -> User | None:
+    """Return a verified user or None; reject a valid but unverified session."""
+    if user is not None and user.email_verified_at is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Email verification required"
+        )
+    return user
+
+
+async def require_verified_user(
+    user: User | None = Depends(get_optional_verified_user),  # noqa: B008
+) -> User:
+    """Require a verified user; `is_admin` is never a verification bypass."""
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
         )
     return user
 

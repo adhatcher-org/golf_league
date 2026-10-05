@@ -1,22 +1,44 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Golf League{% endblock %}</title>
-    <link rel="stylesheet" href="/static/app.css">
+    <link rel="stylesheet" href="/static/app.css?v=20261004-roster-save">
 </head>
 <body>
-    <header>
-        <h1>Golf League</h1>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="site-header">
+        <div class="site-header__inner">
+            <a class="brand" href="/" aria-label="Golf League home">
+                <span class="brand__mark" aria-hidden="true">G</span>
+                <span class="brand__name">Golf League</span>
+            </a>
+            <nav class="site-nav" aria-label="Main navigation">
+                <a href="/">Home</a>
+                <a href="/roster">Player roster</a>
+                <details class="nav-menu">
+                    <summary>Manage</summary>
+                    <div class="nav-menu__panel">
+                        <a href="/admin/golfers">Golfers</a>
+                        <a href="/admin/roster/imports/new">Import roster</a>
+                        <a href="/admin/courses">Courses</a>
+                        <a href="/admin/seasons/new">New season</a>
+                    </div>
+                </details>
+                <a class="site-nav__login" href="/login">Log in</a>
+            </nav>
+        </div>
     </header>
-    
-    <main>
+
+    <main id="main-content" class="page-shell">
         {% block content %}{% endblock %}
     </main>
-    
-    <footer>
-        <p>&copy; 2026 Golf League</p>
+
+    <footer class="site-footer">
+        <p>Golf League <span aria-hidden="true">·</span> Season workspace</p>
     </footer>
-    
-    <script src="/static/app.js"></script>
+
+    <script src="/static/app.js?v=20261004"></script>
 </body>
 </html>

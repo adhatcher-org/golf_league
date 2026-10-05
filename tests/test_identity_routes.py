@@ -78,6 +78,7 @@ def test_correct_credentials_redirect_and_set_session_cookie(client):
     )
 
     assert response.status_code == 303
+    assert response.headers["location"] == "/roster"
     assert "session" in response.cookies
 
 

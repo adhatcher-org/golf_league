@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -51,14 +51,28 @@ def _validate_seed_source(value: object) -> str | None:
     return source or None
 
 
-def _effective_values(golfer: Golfer, participant: SeasonParticipant | None) -> tuple[TeeSet, int | None]:
-    tee_id = participant.tee_set_id if participant and participant.tee_set_id is not None else golfer.default_tee_set_id
-    effective_tee = participant.tee_set if participant and participant.tee_set_id == tee_id and participant.tee_set is not None else golfer.default_tee_set
-    if effective_tee.id != tee_id:
-        raise RuntimeError("participant tee relationship was not loaded")
+def _default_tee(session: Session, season: Season, golfer: Golfer) -> TeeSet | None:
+    if golfer.default_tee_set_id is not None:
+        tee = session.get(TeeSet, golfer.default_tee_set_id)
+        if tee is not None and tee.course_id == season.course_id:
+            return tee
+    return session.execute(select(TeeSet).where(
+        TeeSet.course_id == season.course_id,
+        TeeSet.color_label == golfer.default_tee_label,
+    ).order_by(TeeSet.id).limit(1)).scalar_one_or_none()
+
+
+def _effective_values(session: Session, season: Season, golfer: Golfer,
+                      participant: SeasonParticipant | None) -> tuple[TeeSet, int | None]:
+    if participant and participant.tee_set_id is not None:
+        effective_tee = participant.tee_set
+    else:
+        effective_tee = _default_tee(session, season, golfer)
+    if effective_tee is None:
+        raise ParticipantValidationError({"golfer_id": "Golfer's tee does not match a tee at this season's course."})
     if participant and participant.seed_handicap_strokes is not None:
         handicap = participant.seed_handicap_strokes
-    elif tee_id == golfer.default_tee_set_id:
+    elif participant is None or participant.tee_set_id is None:
         handicap = golfer.handicap_strokes
     else:
         handicap = None
@@ -89,7 +103,8 @@ def list_participant_views(session: Session, season_id: int) -> list[Participant
         .where(SeasonParticipant.season_id == season_id)
         .order_by(Golfer.last_name, Golfer.first_name)
     ).all()
-    return [ParticipantView(row, golfer, *_effective_values(golfer, row)) for row, golfer in rows]
+    season = session.get(Season, season_id)
+    return [ParticipantView(row, golfer, *_effective_values(session, season, golfer, row)) for row, golfer in rows]
 
 
 def list_available_golfers(session: Session, season_id: int) -> list[Golfer]:
@@ -98,10 +113,14 @@ def list_available_golfers(session: Session, season_id: int) -> list[Golfer]:
         return []
     participant_ids = select(SeasonParticipant.golfer_id).where(SeasonParticipant.season_id == season_id)
     course_tee_ids = select(TeeSet.id).where(TeeSet.course_id == season.course_id)
+    course_tee_labels = select(TeeSet.color_label).where(TeeSet.course_id == season.course_id)
     return list(session.execute(
         select(Golfer).where(
             Golfer.is_active.is_(True),
-            Golfer.default_tee_set_id.in_(course_tee_ids),
+            or_(
+                Golfer.default_tee_set_id.in_(course_tee_ids),
+                Golfer.default_tee_label.in_(course_tee_labels),
+            ),
             Golfer.id.not_in(participant_ids),
         )
         .order_by(Golfer.last_name, Golfer.first_name)
@@ -112,8 +131,8 @@ def _checked_golfer(session: Session, season: Season, golfer_id: object) -> Golf
     golfer = session.get(Golfer, _whole_id(golfer_id, "golfer_id"))
     if golfer is None or not golfer.is_active:
         raise ParticipantValidationError({"golfer_id": "Choose an active golfer."})
-    default_tee = session.get(TeeSet, golfer.default_tee_set_id)
-    if default_tee is None or default_tee.course_id != season.course_id:
+    default_tee = _default_tee(session, season, golfer)
+    if default_tee is None:
         raise ParticipantValidationError({"golfer_id": "Golfer's default tee must belong to this season's course."})
     return golfer
 
@@ -205,11 +224,11 @@ def effective_participant(session: Session, season_id: int, golfer_id: int) -> P
     golfer = session.get(Golfer, golfer_id)
     if season is None or golfer is None:
         return None
-    default_tee = session.get(TeeSet, golfer.default_tee_set_id)
-    if default_tee is None or default_tee.course_id != season.course_id:
+    default_tee = _default_tee(session, season, golfer)
+    if default_tee is None:
         raise ParticipantValidationError({"golfer_id": "Golfer's default tee does not belong to the season course."})
     row = session.execute(select(SeasonParticipant).where(
         SeasonParticipant.season_id == season_id, SeasonParticipant.golfer_id == golfer_id
     )).scalar_one_or_none()
-    tee, handicap = _effective_values(golfer, row)
+    tee, handicap = _effective_values(session, season, golfer, row)
     return ParticipantView(row, golfer, tee, handicap)

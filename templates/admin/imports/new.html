@@ -12,18 +12,15 @@
 <form method="post" action="/admin/roster/imports/new" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label>
-        Course
-        <select name="course_id" required>
-            <option value="">Select a course</option>
-            {% for course in courses %}
-            <option value="{{ course.id }}" {% if preselected_course_id == course.id %}selected{% endif %}>{{ course.name }}</option>
-            {% endfor %}
-        </select>
+        CSV roster file
+        <input type="file" name="files" accept=".csv" required>
     </label>
-    <label>
-        CSV files (one or two: regular roster, sub list)
-        <input type="file" name="files" multiple accept=".csv">
-    </label>
+    <section aria-labelledby="csv-format-heading">
+        <h3 id="csv-format-heading">CSV file format</h3>
+        <p>Upload a UTF-8 CSV with this exact header row and column order:</p>
+        <pre>FirstName,LastName,Tee,Handicap,Email,PhoneNumber</pre>
+        <p><code>Tee</code> must be <code>Blue</code>, <code>White</code>, or <code>Gold</code>. <code>Handicap</code> may be blank; otherwise use a whole number, including signed values.</p>
+    </section>
     <button type="submit">Upload</button>
 </form>
 

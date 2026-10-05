@@ -1,4 +1,4 @@
-First Name,Last Name,Phone,Email,2025 HC
-Cara,Sub,555-0200,cara.sub@example.test,
-Drew,Plus,555-0201,drew.plus@example.test,-3
-Evan,Scratch,555-0202,evan.scratch@example.test,0
+FirstName,LastName,Tee,Handicap,Email,PhoneNumber
+Cara,Sub,White,,cara.sub@example.test,555-0200
+Drew,Plus,White,-3,drew.plus@example.test,555-0201
+Evan,Scratch,White,0,evan.scratch@example.test,555-0202

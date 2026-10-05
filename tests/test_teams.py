@@ -12,6 +12,7 @@ from golf_league.models import (
     Course,
     Golfer,
     Season,
+    SeasonGolfer,
     SeasonParticipant,
     Team,
     TeamMember,
@@ -48,6 +49,7 @@ def _season(session, course_id, *, status="draft"):
 def _golfer(session, tee, *, strokes=6, active=True, first="Sample"):
     golfer = Golfer(
         first_name=first, last_name="Golfer", default_tee_set_id=tee.id,
+        default_tee_label=tee.color_label,
         handicap_strokes=strokes, handicap_source="self_reported",
         handicap_status="needs_contact" if strokes is None else "ok",
         is_active=active,
@@ -62,6 +64,15 @@ def _member(golfer, position):
 
 
 def _team(session, season, golfers, *, number=1, name="Sample Team"):
+    existing_ids = set(session.scalars(
+        select(SeasonGolfer.golfer_id).where(SeasonGolfer.season_id == season.id)
+    ))
+    session.add_all(
+        SeasonGolfer(season_id=season.id, golfer_id=golfer.id)
+        for golfer in golfers
+        if golfer.is_active and golfer.id not in existing_ids
+    )
+    session.commit()
     return save_team(
         session, season.id, name=name, number=number, sort_order=number,
         members=[_member(golfer, position) for position, golfer in enumerate(golfers, 1)],
@@ -75,6 +86,8 @@ def _ids_for_client(client):
         tee = session.execute(select(TeeSet).where(TeeSet.course_id == course.id)).scalars().first()
         season = _season(session, course.id, status="active")
         golfer = _golfer(session, tee)
+        session.add(SeasonGolfer(season_id=season.id, golfer_id=golfer.id))
+        session.commit()
         return season.id, golfer.id, tee.id
     finally:
         session.close()
@@ -130,6 +143,11 @@ def test_team_mutation_is_atomic_on_invalid_member(session, wyandot_course):
     replacement = _golfer(session, course.tee_sets[0], first="Replacement")
     no_seed = _golfer(session, course.tee_sets[0], strokes=None, first="Missing")
     team = _team(session, season, [first])
+    session.add_all([
+        SeasonGolfer(season_id=season.id, golfer_id=replacement.id),
+        SeasonGolfer(season_id=season.id, golfer_id=no_seed.id),
+    ])
+    session.commit()
     with pytest.raises(TeamValidationError, match="effective seed"):
         save_team(
             session, season.id, team_id=team.id, name="Changed", number=9,
@@ -182,6 +200,7 @@ def test_members_must_be_active_course_eligible_and_have_effective_seed(session,
         seed_handicap_strokes=None,
     )
     session.add(participant)
+    session.add(SeasonGolfer(season_id=season.id, golfer_id=override_golfer.id))
     session.commit()
     with pytest.raises(TeamValidationError, match="effective seed"):
         save_team(session, season.id, name="NoFallback", number=4, sort_order=4,

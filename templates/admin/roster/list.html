@@ -1,20 +1,53 @@
 {% extends "base.html" %}
 {% block title %}Golfers - Golf League{% endblock %}
 {% block content %}
-<h2>Golfers</h2>
-<p><a href="/admin/golfers/new">Add a golfer</a></p>
-<ul>
-{% for golfer in golfers %}
-    <li>
-        <a href="/admin/golfers/{{ golfer.id }}/edit">{{ golfer.first_name }} {{ golfer.last_name }}</a>
-        - {{ golfer.default_tee_set.name }} ({{ golfer.default_tee_set.gender }})
-        - status: {{ golfer.handicap_status }}
-        - handicap: {{ golfer.handicap_strokes if golfer.handicap_strokes is not none else "none" }}
-        {% if golfer.email %} - {{ golfer.email }}{% endif %}
-        {% if golfer.phone %} - {{ golfer.phone }}{% endif %}
-    </li>
+<header class="admin-page-heading">
+    <div>
+        <p class="eyebrow">Manage · Roster</p>
+        <h1>Golfers</h1>
+        <p>{{ golfers|length }} {{ "player" if golfers|length == 1 else "players" }} in the roster</p>
+    </div>
+    <a class="button-link" href="/admin/golfers/new">Add a golfer</a>
+</header>
+
+{% if golfers %}
+<div class="table-wrap golfer-table-wrap">
+    <table class="golfer-table">
+        <thead>
+            <tr><th scope="col">Golfer</th><th scope="col">Default tee</th><th scope="col">Handicap</th><th scope="col">Contact</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr>
+        </thead>
+        <tbody>
+        {% for golfer in golfers %}
+            <tr>
+                <td class="golfer-table__name">
+                    <a href="/admin/golfers/{{ golfer.id }}/edit">{{ golfer.first_name }} {{ golfer.last_name }}</a>
+                    <span>Golfer #{{ golfer.id }}</span>
+                </td>
+                <td>
+                    <span class="golfer-table__tee">{{ golfer.default_tee_set.name if golfer.default_tee_set else golfer.default_tee_label }}</span>
+                    {% if golfer.default_tee_set %}<small>{{ golfer.default_tee_set.gender }}</small>{% endif %}
+                </td>
+                <td>
+                    <strong class="golfer-table__handicap">{{ golfer.handicap_strokes if golfer.handicap_strokes is not none else "—" }}</strong>
+                    <small>{{ golfer.handicap_status|replace("_", " ")|title }}</small>
+                </td>
+                <td class="golfer-table__contact">
+                    {% if golfer.email %}<a href="mailto:{{ golfer.email }}">{{ golfer.email }}</a>{% endif %}
+                    {% if golfer.phone %}<a href="tel:{{ golfer.phone }}">{{ golfer.phone }}</a>{% endif %}
+                    {% if not golfer.email and not golfer.phone %}<span class="golfer-table__empty">No contact details</span>{% endif %}
+                </td>
+                <td class="golfer-table__action"><a href="/admin/golfers/{{ golfer.id }}/edit" aria-label="Edit {{ golfer.first_name }} {{ golfer.last_name }}">Edit <span aria-hidden="true">→</span></a></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
 {% else %}
-    <li>No golfers yet.</li>
-{% endfor %}
-</ul>
+<section class="golfer-empty">
+    <span class="golfer-empty__mark" aria-hidden="true">G</span>
+    <h2>No golfers yet</h2>
+    <p>Add players individually or import a roster to get started.</p>
+    <a class="button-link" href="/admin/golfers/new">Add the first golfer</a>
+</section>
+{% endif %}
 {% endblock %}

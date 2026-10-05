@@ -58,12 +58,11 @@ def test_migration_is_idempotent_and_downgrades_cleanly(tmp_path):
     db_path = tmp_path / "migration2.db"
     database_url = f"sqlite:///{db_path}"
 
-    upgrade_to_head(database_url)
-    upgrade_to_head(database_url)  # idempotent: no-op on second call
-
     from golf_league.migrations import _make_config as make_config
 
     config = make_config(database_url)
+    command.upgrade(config, "e5a1c3d9f2b7")
+    command.upgrade(config, "e5a1c3d9f2b7")  # idempotent: no-op on second call
     command.downgrade(config, "a3f9c1d2e4b6")
 
     engine = create_engine(database_url)

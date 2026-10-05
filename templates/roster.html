@@ -1,17 +1,27 @@
 {% extends "base.html" %}
 {% block title %}Player roster - Golf League{% endblock %}
 {% block content %}
-<h2>Player roster</h2>
-<table>
-    <thead><tr><th>Name</th><th>Tee</th><th>Handicap</th></tr></thead>
-    <tbody>
-    {% for player in players %}
-    <tr>
-        <td>{{ player.first_name }} {{ player.last_name }}</td>
-        <td>{{ player.tee_color }}</td>
-        <td>{% if player.handicap_strokes is none %}No handicap on file{% else %}{{ player.handicap_strokes }}{% endif %}</td>
-    </tr>
-    {% endfor %}
-    </tbody>
-</table>
+<section class="page-heading" aria-labelledby="page-title">
+    <p class="eyebrow">League workspace</p>
+    <h1 id="page-title">Player roster</h1>
+    <p>Active players and their current tee and handicap information.</p>
+</section>
+{% if players %}
+<div class="table-wrap">
+    <table aria-label="Active player roster">
+        <thead><tr><th scope="col">Name</th><th scope="col">Tee</th><th scope="col">Handicap</th></tr></thead>
+        <tbody>
+        {% for player in players %}
+        <tr>
+            <td>{{ player.first_name }} {{ player.last_name }}</td>
+            <td>{{ player.tee_color }}</td>
+            <td>{% if player.handicap_strokes is none %}No handicap on file{% else %}{{ player.handicap_strokes }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="empty-state">There are no active players in the roster yet.</p>
+{% endif %}
 {% endblock %}

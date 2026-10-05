@@ -1,26 +1,130 @@
 {% extends "base.html" %}
-{% block title %}Review Import - Golf League{% endblock %}
+{% block title %}Review roster import - Golf League{% endblock %}
 {% block content %}
-<h2>Import batch #{{ batch.id }}</h2>
-<p>Course: {{ course.name if course else batch.course_id }}</p>
-<p>State: {{ batch.state }}</p>
-<p>Initial import: {{ "yes" if batch.is_initial else "no" }}</p>
-<p>Created: {{ batch.created_at }} · Expires: {{ batch.expires_at }} · Rows: {{ batch.row_count }}</p>
-{% for message in errors.values() %}<p class="error">{{ message }}</p>{% endfor %}
-{% if batch.state != "staged" %}<p>Results: created {{ batch.created_count }}, updated {{ batch.updated_count }}, unchanged {{ batch.unchanged_count }}, skipped {{ batch.skipped_count }}.</p>{% endif %}
-<table><thead><tr><th>Position</th><th>Source</th><th>Role</th><th>Review</th><th>Error / warnings</th><th>Raw line</th></tr></thead><tbody>
-{% for row in rows %}<tr>
-<td>{{ row.position }}</td><td>{{ row.source_file }}:{{ row.source_row }}</td><td>{{ row.source_role }}</td>
-<td>{% if batch.state == "staged" %}
-<form method="post" action="/admin/roster/imports/{{ batch.id }}/rows/{{ row.id }}/edit">
-<input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="batch_version" value="{{ batch.version }}"><input type="hidden" name="row_version" value="{{ row.version }}">
-<label>First <input name="first_name" value="{{ row.first_name or '' }}"></label><label>Last <input name="last_name" value="{{ row.last_name or '' }}"></label><label>Email <input name="email" value="{{ row.email or '' }}"></label><label>Phone <input name="phone" value="{{ row.phone or '' }}"></label>
-{% if row.source_role == "summer_regular" %}<label>Tee <select name="tee_label"><option value="" {% if not row.tee_label %}selected{% endif %}></option><option value="Gold" {% if row.tee_label == "Gold" %}selected{% endif %}>Gold</option><option value="White" {% if row.tee_label == "White" %}selected{% endif %}>White</option></select></label><label>Gold HC <input name="handicap_gold" value="{{ row.handicap_gold if row.handicap_gold is not none else '' }}"></label><label>White HC <input name="handicap_white" value="{{ row.handicap_white if row.handicap_white is not none else '' }}"></label><input type="hidden" name="handicap_single" value="">{% else %}<input type="hidden" name="tee_label" value=""><input type="hidden" name="handicap_gold" value=""><input type="hidden" name="handicap_white" value=""><label>HC <input name="handicap_single" value="{{ row.handicap_single if row.handicap_single is not none else '' }}"></label>{% endif %}
-<label><input type="checkbox" name="included" value="true" {% if row.included %}checked{% endif %}> Include</label><label><input type="checkbox" name="update_opt_in" value="true" {% if row.update_opt_in %}checked{% endif %}> Allow protected update</label>
-<button name="action" value="edit">Save</button><button name="action" value="swap_names">Swap names</button>{% if row.near_miss_suggestion %}<button name="action" value="accept_domain_suggestion">Use {{ row.near_miss_suggestion }}</button>{% endif %}
-</form>
-{% else %}{{ row.first_name }} {{ row.last_name }} · {{ row.email }}{% endif %}</td>
-<td>{{ row.validation_error }}{% for code in row.warning_codes %}{% if loop.first and not row.validation_error %}{% else %}, {% endif %}{{ code }}{% endfor %}</td><td>{{ row.raw_line }}</td>
-</tr>{% endfor %}</tbody></table>
-{% if batch.state == "staged" %}<form method="post" action="/admin/roster/imports/{{ batch.id }}/apply"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="batch_version" value="{{ batch.version }}"><button>Apply included rows</button></form><form method="post" action="/admin/roster/imports/{{ batch.id }}/discard"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="batch_version" value="{{ batch.version }}"><button>Discard batch</button></form>{% endif %}
+{% set stats = namespace(included=0, attention=0) %}
+{% for row in rows %}
+    {% if row.included %}
+        {% set stats.included = stats.included + 1 %}
+        {% if row.validation_error %}{% set stats.attention = stats.attention + 1 %}{% endif %}
+    {% endif %}
+{% endfor %}
+
+<header class="import-heading">
+    <div>
+        <p class="eyebrow">Roster import · Batch #{{ batch.id }}</p>
+        <h1>Review roster</h1>
+        <p class="import-heading__meta">{{ batch.row_count }} {{ "player" if batch.row_count == 1 else "players" }} · Uploaded {{ batch.created_at }}</p>
+    </div>
+    <span class="import-state import-state--{{ batch.state }}">{{ batch.state|title }}</span>
+</header>
+
+{% for message in errors.values() %}
+<p class="import-alert" role="alert">{{ message }}</p>
+{% endfor %}
+
+{% if batch.state != "staged" %}
+<p class="import-results">Results: <strong>{{ batch.created_count }} created</strong>, {{ batch.updated_count }} updated, {{ batch.unchanged_count }} unchanged, {{ batch.skipped_count }} skipped.</p>
+{% else %}
+<div class="import-overview" aria-label="Import review summary">
+    <p><strong>{{ stats.included }}</strong><span>included</span></p>
+    <p class="{% if stats.attention %}import-overview__attention{% endif %}"><strong>{{ stats.attention }}</strong><span>need attention</span></p>
+</div>
+
+<section class="import-roster" aria-label="Players to review">
+    <div class="import-fields__header" aria-hidden="true">
+        <span>Player</span>
+        <span>FirstName</span><span>LastName</span><span>Email</span><span>PhoneNumber</span><span>Tee</span><span>Handicap</span>
+    </div>
+    {% for row in rows %}
+    <article class="import-row{% if row.validation_error %} import-row--error{% endif %}" id="player-{{ row.id }}">
+        <header class="import-row__heading">
+            <div class="import-row__identity">
+                <span class="import-row__number">{{ "%02d"|format(row.position) }}</span>
+                <div>
+                    <h2>{{ row.first_name or "New player" }} {{ row.last_name or "" }}</h2>
+                    <p>{{ row.source_file }} · row {{ row.source_row }}</p>
+                </div>
+            </div>
+            {% if row.validation_error %}
+            <span class="import-row__issue">{{ row.validation_error|replace("_", " ")|title }}</span>
+            {% elif row.warning_codes %}
+            <span class="import-row__note">{{ row.warning_codes|length }} {{ "note" if row.warning_codes|length == 1 else "notes" }}</span>
+            {% else %}
+            <span class="import-row__ok">Ready</span>
+            {% endif %}
+        </header>
+
+        <form class="import-row__form" method="post" action="/admin/roster/imports/{{ batch.id }}/rows/{{ row.id }}/edit">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="batch_version" value="{{ batch.version }}">
+            <input type="hidden" name="row_version" value="{{ row.version }}">
+
+            <div class="import-fields">
+                <div class="import-fields__player">
+                    {{ row.first_name or "New player" }} {{ row.last_name or "" }}
+                    <small>{{ row.source_file }} · row {{ row.source_row }}</small>
+                    {% if row.validation_error %}<small class="import-fields__status import-fields__status--error">{{ row.validation_error|replace("_", " ")|title }}</small>
+                    {% elif row.warning_codes %}<small class="import-fields__status">{{ row.warning_codes|length }} {{ "note" if row.warning_codes|length == 1 else "notes" }}</small>
+                    {% else %}<small class="import-fields__status import-fields__status--ready">Ready</small>{% endif %}
+                </div>
+                <label><span class="visually-hidden">FirstName</span><input name="first_name" value="{{ row.first_name or '' }}" autocomplete="given-name" maxlength="15" aria-label="FirstName"></label>
+                <label><span class="visually-hidden">LastName</span><input name="last_name" value="{{ row.last_name or '' }}" autocomplete="family-name" maxlength="25" aria-label="LastName"></label>
+                <label class="import-fields__email"><span class="visually-hidden">Email</span><input name="email" value="{{ row.email or '' }}" autocomplete="email" inputmode="email" maxlength="35" aria-label="Email"></label>
+                <label><span class="visually-hidden">PhoneNumber</span><input name="phone" value="{{ row.phone or '' }}" autocomplete="tel" maxlength="13" aria-label="PhoneNumber"></label>
+                <label><span class="visually-hidden">Tee</span><select name="tee_label" aria-label="Tee for {{ row.first_name or 'player' }} {{ row.last_name or '' }}">
+                    <option value="" {% if not row.tee_label %}selected{% endif %}>Choose</option>
+                    {% for tee in ["Blue", "White", "Gold"] %}<option value="{{ tee }}" {% if row.tee_label == tee %}selected{% endif %}>{{ tee }}</option>{% endfor %}
+                </select></label>
+                <label><span class="visually-hidden">Handicap</span><input name="handicap_single" value="{{ row.handicap_single if row.handicap_single is not none else '' }}" inputmode="numeric" maxlength="5" aria-label="Handicap"></label>
+            </div>
+            <input type="hidden" name="handicap_gold" value="">
+            <input type="hidden" name="handicap_white" value="">
+
+            <div class="import-row__footer">
+                <div class="import-row__choices">
+                    <label class="import-check"><input type="checkbox" name="included" value="true" {% if row.included %}checked{% endif %}><span>Include player</span></label>
+                    <label class="import-check"><input type="checkbox" name="update_opt_in" value="true" {% if row.update_opt_in %}checked{% endif %}><span>Allow updates to an existing player</span></label>
+                </div>
+                <div class="import-row__buttons">
+                    {% if row.near_miss_suggestion %}<button class="button-secondary" name="action" value="accept_domain_suggestion">Use {{ row.near_miss_suggestion }}</button>{% endif %}
+                    <button class="button-secondary" name="action" value="swap_names">Swap names</button>
+                    <button name="action" value="edit">Save changes</button>
+                </div>
+            </div>
+        </form>
+
+        {% if row.validation_error or row.warning_codes %}
+        <div class="import-row__feedback" {% if row.validation_error %}role="status"{% endif %}>
+            {% if row.validation_error %}<p class="import-row__error-text">{{ row.validation_error|replace("_", " ")|title }}</p>{% endif %}
+            {% if row.warning_codes %}<p>{{ row.warning_codes|join(", ")|replace("_", " ")|capitalize }}</p>{% endif %}
+        </div>
+        {% endif %}
+
+        <details class="import-row__source">
+            <summary>Original CSV row</summary>
+            <code>{{ row.raw_line }}</code>
+        </details>
+    </article>
+    {% else %}
+    <p class="empty-state">This import has no player rows.</p>
+    {% endfor %}
+</section>
+
+<div class="import-actions">
+    <div>
+        <strong>Ready to apply {{ stats.included }} {{ "player" if stats.included == 1 else "players" }}?</strong>
+        {% if stats.attention %}<p id="apply-help">Fix the {{ stats.attention }} included {{ "row" if stats.attention == 1 else "rows" }} with errors before applying.</p>{% else %}<p>Only included players will be added or updated.</p>{% endif %}
+    </div>
+    <div class="import-actions__buttons">
+        <form method="post" action="/admin/roster/imports/{{ batch.id }}/discard">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="batch_version" value="{{ batch.version }}">
+            <button class="button-secondary">Discard import</button>
+        </form>
+        <form method="post" action="/admin/roster/imports/{{ batch.id }}/apply">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="batch_version" value="{{ batch.version }}">
+            <button {% if stats.attention %}disabled aria-describedby="apply-help"{% endif %}>Apply included players</button>
+        </form>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

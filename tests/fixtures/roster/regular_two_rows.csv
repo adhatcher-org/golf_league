@@ -1,3 +1,3 @@
-Name,Status,Gold HC,White HC,Email,Phone #
-"Example, Ann",Gold,12,14,ann.example@example.test,555-0100
-"Sample, Bob",White,9,11,bob.sample@example.test,555-0101
+FirstName,LastName,Tee,Handicap,Email,PhoneNumber
+Ann,Example,Gold,12,ann.example@example.test,555-0100
+Bob,Sample,White,11,bob.sample@example.test,555-0101

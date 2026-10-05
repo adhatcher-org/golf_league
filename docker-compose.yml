@@ -11,6 +11,10 @@ services:
       # .env file next to this compose file. It is never baked into the
       # image or committed here.
       - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET must be set in the environment or a local .env file}
+      # Used only on first boot when the database has no users. Keep these
+      # values in the shell environment or an untracked local .env file.
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/readyz').status == 200 else 1)"]
       interval: 30s

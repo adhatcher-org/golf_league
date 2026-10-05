@@ -50,7 +50,9 @@ def _golfer_form_context(
     golfer=None,
     errors=None,
     selected_tee_set_id: int | None = None,
+    selected_tee_label: str | None = None,
     rendered_tee_set_id: int | str | None = None,
+    rendered_tee_label: str | None = None,
     handicap_display: str | None = None,
 ) -> dict:
     seed = _csrf_seed(request)
@@ -60,7 +62,9 @@ def _golfer_form_context(
         "errors": errors,
         "csrf_token": generate_csrf_token(seed) if seed else "",
         "selected_tee_set_id": selected_tee_set_id,
+        "selected_tee_label": selected_tee_label,
         "rendered_tee_set_id": rendered_tee_set_id,
+        "rendered_tee_label": rendered_tee_label,
         "handicap_display": handicap_display,
     }
 
@@ -176,10 +180,12 @@ async def update_golfer_submit(
     email: str = Form(""),
     phone: str = Form(""),
     default_tee_set_id: str = Form(""),
+    default_tee_label: str = Form(""),
     handicap_strokes: str = Form(""),
     notes: str = Form(""),
     is_active: str = Form(""),
     rendered_tee_set_id: str = Form(""),
+    rendered_tee_label: str = Form(""),
     csrf_token: str = Form(""),
     session: Session = Depends(get_session),  # noqa: B008
     admin=Depends(require_admin),  # noqa: B008
@@ -197,8 +203,26 @@ async def update_golfer_submit(
     # rendered with; when it does not match the submitted tee (including
     # when it is missing, empty or non-numeric), nothing is written and the
     # form comes back asking for the handicap at the newly chosen tee.
-    if not _tee_selection_confirmed(rendered_tee_set_id, default_tee_set_id):
-        new_tee_set_id = _try_parse_int(default_tee_set_id)
+    selected_tee = default_tee_label or default_tee_set_id
+    tee_confirmed = (
+        rendered_tee_label == default_tee_label
+        and default_tee_label in {"Blue", "White", "Gold"}
+        if default_tee_label
+        else _tee_selection_confirmed(rendered_tee_set_id, default_tee_set_id)
+    )
+    if not tee_confirmed:
+        new_tee_set_id = _try_parse_int(selected_tee)
+        selected_tee_label = None
+        if new_tee_set_id is not None:
+            selected_tee_label = next(
+                (
+                    tee_set.color_label
+                    for course in list_courses_with_tee_sets(session)
+                    for tee_set in course.tee_sets
+                    if tee_set.id == new_tee_set_id
+                ),
+                None,
+            )
         return _templates(request).TemplateResponse(
             request,
             "admin/roster/form.html",
@@ -213,8 +237,18 @@ async def update_golfer_submit(
                     )
                 },
                 selected_tee_set_id=new_tee_set_id,
+                selected_tee_label=(
+                    selected_tee
+                    if new_tee_set_id is None
+                    else selected_tee_label
+                ),
                 rendered_tee_set_id=(
                     new_tee_set_id if new_tee_set_id is not None else ""
+                ),
+                rendered_tee_label=(
+                    selected_tee
+                    if selected_tee in {"Blue", "White", "Gold"}
+                    else selected_tee_label
                 ),
                 handicap_display="",
             ),
@@ -227,7 +261,8 @@ async def update_golfer_submit(
             golfer_id,
             first_name=first_name,
             last_name=last_name,
-            default_tee_set_id=default_tee_set_id,
+            default_tee_set_id=(default_tee_set_id if not default_tee_label else None),
+            default_tee_label=(default_tee_label or None),
             email=email or None,
             phone=phone or None,
             handicap_strokes=handicap_strokes,
@@ -239,7 +274,11 @@ async def update_golfer_submit(
             request,
             "admin/roster/form.html",
             _golfer_form_context(
-                request, session, golfer=existing, errors=exc.errors
+                request,
+                session,
+                golfer=existing,
+                errors=exc.errors,
+                selected_tee_label=(default_tee_label or None),
             ),
             status_code=exc.status_code,
         )

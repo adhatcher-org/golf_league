@@ -35,7 +35,7 @@ def _edit(client, batch_id, row_id, batch_version, row_version, **overrides):
         "batch_version": str(batch_version), "row_version": str(row_version),
         "action": "edit", "first_name": "Ann", "last_name": "Example",
         "email": "ann.example@example.test", "phone": "555-0100", "tee_label": "Gold",
-        "handicap_gold": "5", "handicap_white": "6", "handicap_single": "",
+        "handicap_gold": "", "handicap_white": "", "handicap_single": "5",
         "included": "true",
     }
     data.update(overrides)
@@ -55,7 +55,7 @@ def test_corrected_invalid_handicap_applies_and_preserves_provenance(admin_clien
     try:
         row = session.get(RosterImportRow, row_id)
         assert row.raw_line.endswith("555-0100")
-        assert row.handicap_gold == 5
+        assert row.handicap_single == 5
         assert session.execute(select(Golfer)).scalar_one().handicap_strokes == 5
         assert session.get(RosterImportBatch, batch_id).created_count == 1
     finally:

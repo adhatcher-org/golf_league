@@ -70,13 +70,23 @@ def _require_csrf(seed: str, submitted: str) -> None:
         )
 
 
+def _login_destination(requested: str | None) -> str:
+    """Keep the post-login destination on the roster page and same-origin."""
+    allowed_destinations = {"/roster"}
+    return requested if requested in allowed_destinations else "/roster"
+
+
 @router.get("/login")
 async def login_form(request: Request) -> Response:
     seed = request.cookies.get(CSRF_COOKIE_NAME) or generate_token()
     response = _templates(request).TemplateResponse(
         request,
         "identity/login.html",
-        {"errors": None, "csrf_token": generate_csrf_token(seed)},
+        {
+            "errors": None,
+            "csrf_token": generate_csrf_token(seed),
+            "next_path": _login_destination(request.query_params.get("next")),
+        },
     )
     response.set_cookie(CSRF_COOKIE_NAME, seed, httponly=True, samesite="lax")
     return response
@@ -88,6 +98,7 @@ async def login_submit(
     email: str = Form(""),
     password: str = Form(""),
     csrf_token: str = Form(""),
+    next_path: str = Form("/roster", alias="next"),
     session: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
     seed = _csrf_seed(request)
@@ -97,7 +108,11 @@ async def login_submit(
         return _templates(request).TemplateResponse(
             request,
             "identity/login.html",
-            {"errors": {"login": _NEUTRAL_LOGIN_MESSAGE}, "csrf_token": generate_csrf_token(seed)},
+            {
+                "errors": {"login": _NEUTRAL_LOGIN_MESSAGE},
+                "csrf_token": generate_csrf_token(seed),
+                "next_path": _login_destination(next_path),
+            },
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
@@ -112,7 +127,9 @@ async def login_submit(
 
     settings = _settings(request)
     cookie_value = create_session_cookie(user.id, user.session_version, settings.session_secret)
-    redirect = RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+    redirect = RedirectResponse(
+        url=_login_destination(next_path), status_code=status.HTTP_303_SEE_OTHER
+    )
     redirect.set_cookie(SESSION_COOKIE_NAME, cookie_value, httponly=True, samesite="lax")
     return redirect
 

@@ -22,26 +22,33 @@ def _fixture_upload(name: str, field_name: str = "files") -> tuple:
 
 
 def _regular_csv(rows: list[list[str]]) -> bytes:
-    """Build a `summer_regular` CSV in memory from `[name, status, gold, white, email, phone]` rows."""
+    """Translate legacy-shaped fixtures into the current six-column roster CSV."""
     import csv as csv_module
 
     buf = io.StringIO()
     writer = csv_module.writer(buf)
-    writer.writerow(["Name", "Status", "Gold HC", "White HC", "Email", "Phone #"])
+    writer.writerow(["FirstName", "LastName", "Tee", "Handicap", "Email", "PhoneNumber"])
     for row in rows:
-        writer.writerow(row)
+        name, tee, gold_hc, white_hc, email, phone = row
+        if "," in name:
+            last_name, first_name = name.split(",", 1)
+        else:
+            first_name, last_name = name, ""
+        handicap = gold_hc if tee.strip().lower() == "gold" else white_hc
+        writer.writerow([first_name.strip(), last_name.strip(), tee, handicap, email, phone])
     return buf.getvalue().encode("utf-8")
 
 
 def _sub_csv(rows: list[list[str]]) -> bytes:
-    """Build a `summer_sub` CSV in memory from `[first, last, phone, email, hc]` rows."""
+    """Translate legacy-shaped fixtures into the current six-column roster CSV."""
     import csv as csv_module
 
     buf = io.StringIO()
     writer = csv_module.writer(buf)
-    writer.writerow(["First Name", "Last Name", "Phone", "Email", "2025 HC"])
+    writer.writerow(["FirstName", "LastName", "Tee", "Handicap", "Email", "PhoneNumber"])
     for row in rows:
-        writer.writerow(row)
+        first_name, last_name, phone, email, handicap = row
+        writer.writerow([first_name, last_name, "White", handicap, email, phone])
     return buf.getvalue().encode("utf-8")
 
 
@@ -118,7 +125,7 @@ def test_staging_a_regular_csv_creates_a_batch_and_rows_and_leaves_golfers_untou
         session.close()
 
 
-def test_staging_a_sub_csv_records_source_role_summer_sub_and_no_tee_label(admin_client):
+def test_staging_roster_rows_records_tee_and_handicap_for_every_player(admin_client):
     _, csrf_token = _new_page_csrf(admin_client)
     response = _upload(
         admin_client,
@@ -133,8 +140,8 @@ def test_staging_a_sub_csv_records_source_role_summer_sub_and_no_tee_label(admin
         rows = session.execute(select(RosterImportRow)).scalars().all()
         assert len(rows) == 3
         for row in rows:
-            assert row.source_role == "summer_sub"
-            assert row.tee_label is None
+            assert row.source_role == "roster"
+            assert row.tee_label == "White"
     finally:
         session.close()
 
@@ -163,22 +170,23 @@ def test_one_batch_may_hold_a_regular_file_and_a_sub_file(admin_client):
             .scalars()
             .all()
         )
-        assert [row.source_role for row in rows] == [
-            "summer_regular", "summer_regular", "summer_sub", "summer_sub", "summer_sub",
-        ]
+        assert [row.source_role for row in rows] == ["roster"] * 5
         assert [row.position for row in rows] == [1, 2, 3, 4, 5]
     finally:
         session.close()
 
 
-def test_the_upload_form_preselects_the_only_course(admin_client):
+def test_the_upload_form_documents_the_course_independent_csv_format(admin_client):
     page = admin_client.get("/admin/roster/imports/new")
     assert page.status_code == 200
-    course_id = _course_id(admin_client)
-    assert f'value="{course_id}" selected' in page.text
+    for heading in ("FirstName", "LastName", "Tee", "Handicap", "Email", "PhoneNumber"):
+        assert heading in page.text
+    for tee in ("Blue", "White", "Gold"):
+        assert f">{tee}<" in page.text
+    assert 'name="course_id"' not in page.text
 
 
-def test_the_batch_records_the_course_the_admin_a_ninety_day_expiry_and_zero_result_counters(
+def test_the_batch_is_course_independent_and_has_a_ninety_day_expiry_and_zero_result_counters(
     admin_client,
 ):
     _, csrf_token = _new_page_csrf(admin_client)
@@ -194,7 +202,7 @@ def test_the_batch_records_the_course_the_admin_a_ninety_day_expiry_and_zero_res
     session = Session(bind=admin_client.app.state.engine)
     try:
         batch = session.execute(select(RosterImportBatch)).scalar_one()
-        assert str(batch.course_id) == course_id
+        assert batch.course_id is None
         assert batch.created_count == 0
         assert batch.updated_count == 0
         assert batch.unchanged_count == 0
@@ -220,9 +228,9 @@ def test_a_quoted_comma_row_keeps_its_original_text_in_raw_line(admin_client):
     session = Session(bind=admin_client.app.state.engine)
     try:
         row = session.execute(select(RosterImportRow)).scalar_one()
-        assert row.first_name == "Jo Ann"
+        assert row.first_name == "Jo, Ann"
         assert row.last_name == "de Vries"
-        assert '"de Vries, Jo Ann"' in row.raw_line
+        assert '"Jo, Ann"' in row.raw_line
     finally:
         session.close()
 
@@ -410,7 +418,7 @@ def test_invalid_utf8_bytes_are_422_and_stage_nothing(admin_client):
         session.close()
 
 
-def test_a_course_without_exactly_one_mens_gold_and_one_mens_white_tee_is_422(
+def test_a_course_without_tee_sets_does_not_block_roster_import(
     empty_admin_client,
 ):
     from golf_league.models import Course
@@ -433,12 +441,7 @@ def test_a_course_without_exactly_one_mens_gold_and_one_mens_white_tee_is_422(
         course_id=course_id,
         files=[_fixture_upload("regular_two_rows.csv")],
     )
-    assert response.status_code == 422
-    # Jinja autoescapes the apostrophes in the rendered message.
-    assert "course_id" in response.text
-    assert "Course needs exactly one men" in response.text
-    assert "Gold and one men" in response.text
-    assert "White tee." in response.text
+    assert response.status_code == 303
 
 
 def test_a_rejected_upload_re_renders_the_form_without_the_admins_input(admin_client):
@@ -743,7 +746,7 @@ def test_every_row_sharing_a_duplicated_email_carries_email_duplicate_in_batch(
         session.close()
 
 
-def test_a_sub_row_for_a_new_golfer_is_tee_required_for_new_golfer_outside_an_initial_batch(
+def test_a_roster_row_keeps_its_explicit_tee_outside_an_initial_batch(
     admin_client,
 ):
     _consume_initial_batch(admin_client)
@@ -762,12 +765,13 @@ def test_a_sub_row_for_a_new_golfer_is_tee_required_for_new_golfer_outside_an_in
         row = session.execute(
             select(RosterImportRow).where(RosterImportRow.batch_id == batch_id)
         ).scalar_one()
-        assert row.validation_error == "tee_required_for_new_golfer"
+        assert row.validation_error is None
+        assert row.tee_label == "White"
     finally:
         session.close()
 
 
-def test_an_initial_batch_records_tee_defaulted_white_and_handicap_defaulted_zero_instead(
+def test_an_initial_batch_keeps_blank_handicap_missing_and_imported_tee(
     admin_client,
 ):
     _, csrf_token = _new_page_csrf(admin_client)
@@ -792,8 +796,9 @@ def test_an_initial_batch_records_tee_defaulted_white_and_handicap_defaulted_zer
         ).scalar_one()
         assert row.validation_error is None
         codes = set(decode_warnings(row.warnings))
-        assert "handicap_defaulted_zero" in codes
-        assert "tee_defaulted_white" in codes
+        assert "handicap_blank" in codes
+        assert "handicap_defaulted_zero" not in codes
+        assert row.tee_label == "White"
     finally:
         session.close()
 
@@ -1085,7 +1090,7 @@ def test_no_email_phone_or_raw_line_appears_in_any_log_record_or_exception_messa
 # empty purge) that the tests above did not reach.
 
 
-def test_a_non_numeric_course_id_is_422_and_stages_nothing(admin_client):
+def test_a_non_numeric_course_id_is_ignored_for_course_independent_import(admin_client):
     _, csrf_token = _new_page_csrf(admin_client)
     response = _upload(
         admin_client,
@@ -1093,17 +1098,17 @@ def test_a_non_numeric_course_id_is_422_and_stages_nothing(admin_client):
         course_id="not-a-number",
         files=[_fixture_upload("regular_two_rows.csv")],
     )
-    assert response.status_code == 422
-    assert "Choose a course." in response.text
+    assert response.status_code == 303
 
     session = Session(bind=admin_client.app.state.engine)
     try:
-        assert session.execute(select(RosterImportBatch)).scalars().all() == []
+        batch = session.execute(select(RosterImportBatch)).scalar_one()
+        assert batch.course_id is None
     finally:
         session.close()
 
 
-def test_an_unknown_numeric_course_id_is_422_and_stages_nothing(admin_client):
+def test_an_unknown_course_id_does_not_affect_roster_import(admin_client):
     _, csrf_token = _new_page_csrf(admin_client)
     response = _upload(
         admin_client,
@@ -1111,12 +1116,12 @@ def test_an_unknown_numeric_course_id_is_422_and_stages_nothing(admin_client):
         course_id="999999",
         files=[_fixture_upload("regular_two_rows.csv")],
     )
-    assert response.status_code == 422
-    assert "Choose a course." in response.text
+    assert response.status_code == 303
 
     session = Session(bind=admin_client.app.state.engine)
     try:
-        assert session.execute(select(RosterImportBatch)).scalars().all() == []
+        batch = session.execute(select(RosterImportBatch)).scalar_one()
+        assert batch.course_id is None
     finally:
         session.close()
 
@@ -1223,7 +1228,7 @@ def test_a_name_that_fails_to_parse_reports_name_unparseable(admin_client):
             select(RosterImportRow).where(RosterImportRow.batch_id == batch_id)
         ).scalar_one()
         assert row.validation_error == "name_unparseable"
-        assert row.first_name is None
+        assert row.first_name == "NoCommaHere"
         assert row.last_name is None
     finally:
         session.close()
@@ -1353,7 +1358,7 @@ def test_the_review_page_shows_a_near_miss_suggestion_for_a_flagged_email(admin_
     assert response.status_code == 303
     review = admin_client.get(response.headers["location"])
     assert review.status_code == 200
-    assert "email_domain_near_miss" in review.text
+    assert "Email domain near miss" in review.text
     assert "icloud.com" in review.text
 
 

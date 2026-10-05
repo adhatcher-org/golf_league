@@ -34,7 +34,9 @@ def _login_as(client, *, verified):
 
 def test_roster_requires_verified_user_and_exposes_only_projection(client):
     _add_golfer(client)
-    assert client.get("/roster").status_code == 401
+    anonymous = client.get("/roster", follow_redirects=False)
+    assert anonymous.status_code == 303
+    assert anonymous.headers["location"] == "/login?next=/roster"
     _login_as(client, verified=False)
     assert client.get("/roster").status_code == 403
     _login_as(client, verified=True)

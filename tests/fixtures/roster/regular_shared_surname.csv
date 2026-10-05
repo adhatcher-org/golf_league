@@ -1,3 +1,3 @@
-Name,Status,Gold HC,White HC,Email,Phone #
-"Sameson, Amy",Gold,3,4,amy.sameson@example.test,555-0105
-"Sameson, Ben",White,3,4,ben.sameson@example.test,555-0106
+FirstName,LastName,Tee,Handicap,Email,PhoneNumber
+Amy,Sameson,Gold,3,amy.sameson@example.test,555-0105
+Ben,Sameson,White,4,ben.sameson@example.test,555-0106

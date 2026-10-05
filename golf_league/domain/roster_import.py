@@ -13,8 +13,7 @@ from golf_league.domain.roster import (
     validate_handicap_strokes,
 )
 
-REGULAR_HEADERS = ("Name", "Status", "Gold HC", "White HC", "Email", "Phone #")
-SUB_HEADERS = ("First Name", "Last Name", "Phone", "Email", "2025 HC")
+ROSTER_HEADERS = ("FirstName", "LastName", "Tee", "Handicap", "Email", "PhoneNumber")
 
 HARD_ERRORS = (
     "name_unparseable", "email_missing", "email_malformed", "email_duplicate_in_batch",
@@ -36,17 +35,13 @@ MAX_PHONE_LENGTH = 40
 
 
 def detect_header_set(header: Sequence[str]) -> str | None:
-    """Return `"summer_regular"`, `"summer_sub"` or None for a header row.
+    """Return `"roster"` or None for a header row.
 
     Each cell is stripped before comparison; the comparison is over the
     whole tuple (column count and order both matter) and case-sensitive.
     """
     stripped = tuple(cell.strip() for cell in header)
-    if stripped == REGULAR_HEADERS:
-        return "summer_regular"
-    if stripped == SUB_HEADERS:
-        return "summer_sub"
-    return None
+    return "roster" if stripped == ROSTER_HEADERS else None
 
 
 def split_regular_name(value: str) -> tuple[str, str] | None:
@@ -66,14 +61,9 @@ def split_regular_name(value: str) -> tuple[str, str] | None:
 
 
 def resolve_status(value: str) -> str | None:
-    """Return `"Gold"`, `"White"`, or None for blank or unknown text."""
+    """Return a supported tee label or None for blank or unknown text."""
     stripped = value.strip()
-    lowered = stripped.lower()
-    if lowered == "gold":
-        return "Gold"
-    if lowered == "white":
-        return "White"
-    return None
+    return stripped if stripped in {"Blue", "White", "Gold"} else None
 
 
 def parse_handicap_cell(value: str) -> tuple[int | None, bool]:
@@ -235,7 +225,7 @@ def selected_handicap(
         if tee_label == "White":
             return handicap_white
         return None
-    if source_role == "summer_sub":
+    if source_role in {"summer_sub", "roster"}:
         return handicap_single
     return None
 
@@ -283,8 +273,7 @@ def decode_warnings(text: str) -> list[str]:
 
 
 __all__ = [
-    "REGULAR_HEADERS",
-    "SUB_HEADERS",
+    "ROSTER_HEADERS",
     "HARD_ERRORS",
     "WARNINGS",
     "KNOWN_DOMAINS",

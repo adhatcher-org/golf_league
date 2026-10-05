@@ -6,7 +6,6 @@ from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.exc import IntegrityError
 
 from golf_league.migrations import _make_config as make_config
-from golf_league.migrations import upgrade_to_head
 
 PRIOR_HEAD = "7a31b6e9c204"
 
@@ -65,7 +64,7 @@ def test_team_migration_constraints_upgrade_and_downgrade(tmp_path):
                 "INSERT INTO seasons (year,course_id,start_date,end_date,play_weekday,status,first_week_nine) VALUES (2027,(SELECT id FROM courses),'2027-08-26','2027-10-28',3,'draft','front')"
             )
             season_two = connection.exec_driver_sql("SELECT max(id) FROM seasons").scalar_one()
-        upgrade_to_head(database_url)
+        command.upgrade(config, "b8d4c0e2f671")
         inspector = inspect(engine)
         assert {"teams", "team_members"} <= set(inspector.get_table_names())
         assert {c["name"] for c in inspector.get_columns("teams")} == {
