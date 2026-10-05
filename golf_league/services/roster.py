@@ -8,7 +8,7 @@ written.
 
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -21,6 +21,7 @@ from golf_league.domain.roster import (
 )
 from golf_league.models import (
     Golfer,
+    PlayerMatch,
     Season,
     SeasonGolfer,
     SeasonParticipant,
@@ -28,6 +29,7 @@ from golf_league.models import (
     TeamMember,
     TeeSet,
     User,
+    WeekHandicap,
 )
 
 # Sentinel distinguishing "the caller did not pass `handicap_strokes` at
@@ -321,7 +323,11 @@ def delete_golfer(session: Session, golfer_id: int) -> bool | None:
     participant_count = session.query(SeasonParticipant).filter_by(golfer_id=golfer_id).count()
     season_roster_count = session.query(SeasonGolfer).filter_by(golfer_id=golfer_id).count()
     team_membership_count = session.query(TeamMember).filter_by(golfer_id=golfer_id).count()
-    if user_count or participant_count or season_roster_count or team_membership_count:
+    player_match_count = session.query(PlayerMatch).filter(or_(
+        PlayerMatch.a_golfer_id == golfer_id, PlayerMatch.b_golfer_id == golfer_id,
+    )).count()
+    snapshot_count = session.query(WeekHandicap).filter_by(golfer_id=golfer_id).count()
+    if user_count or participant_count or season_roster_count or team_membership_count or player_match_count or snapshot_count:
         references = []
         if user_count:
             references.append(f"linked to {user_count} user account{'s' if user_count != 1 else ''}")
@@ -331,6 +337,10 @@ def delete_golfer(session: Session, golfer_id: int) -> bool | None:
             references.append(f"included in {season_roster_count} season roster{'s' if season_roster_count != 1 else ''}")
         if team_membership_count:
             references.append(f"on {team_membership_count} team membership row{'s' if team_membership_count != 1 else ''}")
+        if player_match_count:
+            references.append(f"in {player_match_count} player match{'es' if player_match_count != 1 else ''}")
+        if snapshot_count:
+            references.append(f"in {snapshot_count} week handicap(s)")
         raise RosterValidationError({"delete": "Cannot delete golfer: " + ", ".join(references) + "."})
     session.delete(golfer)
     session.commit()

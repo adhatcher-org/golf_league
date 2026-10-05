@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Shift dates' if action == 'shift' else 'Change nine' }} - Golf League{% endblock %}
+{% block content %}
+<h1>{{ 'Shift dates' if action == 'shift' else 'Change nine' }} · Week {{ week.index }}</h1>
+<p>{{ week.play_date }} · {{ week.nine|title if week.nine else 'Nine reserved' }}</p>
+{% if errors %}<div class="error" role="alert">{% for message in errors.values() %}<p>{{ message }}</p>{% endfor %}</div>{% endif %}
+{% if preview is none %}
+<form method="post" action="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/{{ action }}/preview">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% if action == 'shift' %}
+    <p>The selected week and every later week move by the same whole number of weeks.</p>
+    <label for="new-date">New date for week {{ week.index }}</label>
+    <input type="date" id="new-date" name="new_date" value="{{ week.play_date }}">
+    {% else %}
+    <label for="new-nine">New nine</label>
+    <select id="new-nine" name="new_nine"><option value="front" {% if week.nine == 'front' %}selected{% endif %}>Front</option><option value="back" {% if week.nine == 'back' %}selected{% endif %}>Back</option></select>
+    <label><input type="checkbox" name="rerotate" value="1"> Also re-rotate later weeks</label>
+    <p>Reserved rain dates need the separate activation workflow.</p>
+    {% endif %}
+    <p><button type="submit">Preview {{ 'shift' if action == 'shift' else 'nine change' }}</button></p>
+</form>
+{% else %}
+<h2>Review {{ 'shift' if action == 'shift' else 'nine' }} preview</h2>
+<p>Nothing has been saved. Confirm to apply these changes.</p>
+{% if preview.changes %}
+<div class="table-wrap"><table><thead><tr><th>Week</th><th>Before</th><th>After</th></tr></thead>
+<tbody>{% for change in preview.changes %}<tr><th scope="row">{{ change.index }}</th><td>{{ change.old_value }}</td><td>{{ change.new_value }}</td></tr>{% endfor %}</tbody></table></div>
+{% else %}<p>No changes are needed.</p>{% endif %}
+{% if action == 'nine' %}<p>{{ 'Later scheduled weeks will be re-rotated.' if rerotate else 'Other weeks keep their stored nines.' }} Handicap strokes are never recalculated.</p>{% endif %}
+{% if preview.warnings %}
+<h2>Par differences</h2><p>These differences do not prevent the change. Handicap strokes stay as recorded.</p>
+<ul>{% for warning in preview.warnings %}<li>Week {{ warning.index }} · {{ warning.golfer_name }} · {{ warning.tee_name }}: par {{ warning.old_par }} → {{ warning.new_par }}</li>{% endfor %}</ul>
+{% endif %}
+<form method="post" action="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/{{ action }}/confirm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="fingerprint" value="{{ preview.fingerprint }}">
+    <input type="hidden" name="signature" value="{{ signature }}">
+    <input type="hidden" name="{{ 'new_date' if action == 'shift' else 'new_nine' }}" value="{{ target }}">
+    <input type="hidden" name="rerotate" value="{{ '1' if rerotate else '0' }}">
+    <p><button type="submit">Confirm {{ 'shift' if action == 'shift' else 'nine change' }}</button></p>
+</form>
+{% endif %}
+<p><a href="/admin/seasons/{{ season.id }}/weeks">Cancel and return to weeks</a></p>
+{% endblock %}

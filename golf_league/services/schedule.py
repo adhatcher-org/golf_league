@@ -4,12 +4,25 @@ import hashlib
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
-from golf_league.domain.schedule import generate_weeks
-from golf_league.models import Season, Week
+from golf_league.domain.schedule import generate_weeks, rotate_nines, shift_from
+from golf_league.models import (
+    Golfer,
+    Season,
+    SeasonGolfer,
+    TeamMatch,
+    TeeRating,
+    TeeSet,
+    Week,
+    WeekHandicap,
+)
+from golf_league.services.participants import (
+    ParticipantValidationError,
+    effective_participant,
+)
 from golf_league.services.seasons import season_week_count
 
 WEEK_TYPES = ("match", "play_with_team", "rain_date")
@@ -179,7 +192,7 @@ def edit_week(  # noqa: C901
     if week_type == "rain_date" and week.nine is not None:
         raise ScheduleValidationError({"week_type": "A week with a nine cannot be changed to a rain date."})
     if week_type != "rain_date" and week.nine is None:
-        raise ScheduleValidationError({"week_type": "This rain date has no nine; nine editing is available in GL-34."})
+        raise ScheduleValidationError({"week_type": "This rain date has no nine; use the separate GL-37 activation workflow."})
     if week.status == "played" and (week_type != week.week_type or status != week.status):
         raise ScheduleConflict("Played weeks cannot be changed.")
     if status == "cancelled" and week.week_type != "match":
@@ -217,8 +230,14 @@ def delete_week(session: Session, season_id: int, week_id: int) -> None:
     if week is None or week.season_id != season_id:
         raise LookupError("Week not found.")
     refs = session.execute(select(Week.id).where(Week.makeup_for_week_id == week_id).limit(1)).first()
+    match_count = session.scalar(select(func.count(TeamMatch.id)).where(TeamMatch.week_id == week_id))
+    if match_count:
+        raise ScheduleConflict(f"Cannot delete week: referenced by {match_count} team match(es).")
     if refs:
         raise ScheduleConflict("This week is referenced as a makeup target by another week.")
+    snapshot_count = session.scalar(select(func.count(WeekHandicap.id)).where(WeekHandicap.week_id == week_id))
+    if snapshot_count:
+        raise ScheduleConflict(f"Cannot delete week: referenced by {snapshot_count} week handicap(s).")
     session.delete(week)
     session.commit()
 
@@ -228,3 +247,177 @@ __all__ = [
     "commit_generated_weeks", "delete_week", "edit_week", "list_weeks", "schedule_fingerprint",
     "validate_proposal", "week_fingerprint",
 ]
+
+
+@dataclass(frozen=True)
+class WeekChange:
+    week_id: int
+    index: int
+    old_value: date | str
+    new_value: date | str
+
+
+@dataclass(frozen=True)
+class ParWarning:
+    week_id: int
+    index: int
+    golfer_id: int
+    golfer_name: str
+    tee_set_id: int
+    tee_name: str
+    old_par: int
+    new_par: int
+
+
+@dataclass(frozen=True)
+class SchedulePreview:
+    changes: tuple[WeekChange, ...]
+    warnings: tuple[ParWarning, ...]
+    fingerprint: str
+
+
+def reserve_schedule_write(session: Session) -> None:
+    """Reserve SQLite writes before fresh validation; never commit the caller."""
+    connection = session.connection()
+    if connection.dialect.name != "sqlite":
+        raise ScheduleConflict("Schedule confirmation requires SQLite write serialization.")
+    try:
+        if connection.connection.driver_connection.in_transaction:
+            # A caller may already own a transaction. Upgrade it before any reads.
+            connection.exec_driver_sql("UPDATE seasons SET id = id WHERE 0")
+        else:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+    except OperationalError as exc:
+        raise ScheduleConflict("The schedule is being changed. Retry a fresh preview.") from exc
+
+
+def _preview_state(session: Session, season_id: int, week_id: int):
+    with session.no_autoflush:
+        season = session.get(Season, season_id, populate_existing=True)
+        weeks = list(session.scalars(select(Week).where(Week.season_id == season_id)
+                                    .order_by(Week.index).execution_options(populate_existing=True)))
+    week = next((row for row in weeks if row.id == week_id), None)
+    if season is None or week is None:
+        raise LookupError("Week or season not found.")
+    return season, weeks, week
+
+
+def _intent_fingerprint(season, weeks, week_id, action, target, rerotate=False):
+    raw = "|".join([schedule_fingerprint(season), *(week_fingerprint(row) for row in weeks),
+                    str(season.course_id), str(season.year), str(season.name_override), str(season.status),
+                    str(week_id), action, str(target), str(rerotate)])
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def preview_shift(session: Session, season_id: int, week_id: int, *, new_date: date) -> SchedulePreview:
+    season, weeks, week = _preview_state(session, season_id, week_id)
+    if any(row.status == "played" for row in weeks if row.index >= week.index):
+        raise ScheduleConflict("Played weeks cannot be shifted.")
+    try:
+        shifted = shift_from([(row.index, row.play_date, row.status) for row in weeks], week.index, new_date)
+    except ValueError as exc:
+        raise ScheduleValidationError({"new_date": str(exc)}) from exc
+    earlier_dates = {row.play_date for row in weeks if row.index < week.index}
+    if any(new in earlier_dates for _, _, new in shifted):
+        raise ScheduleConflict("A shifted date collides with an earlier week.")
+    if shifted[-1][2] < season.start_date:
+        raise ScheduleValidationError({"new_date": "The season end cannot precede its start."})
+    by_index = {row.index: row.id for row in weeks}
+    changes = tuple(WeekChange(by_index[index], index, old, new) for index, old, new in shifted if old != new)
+    return SchedulePreview(changes, (), _intent_fingerprint(season, weeks, week_id, "shift", new_date))
+
+
+def _par_warnings(session: Session, season_id: int, changes) -> tuple[ParWarning, ...]:
+    roster = {}
+    for golfer_id in session.scalars(select(SeasonGolfer.golfer_id).where(SeasonGolfer.season_id == season_id)):
+        try:
+            view = effective_participant(session, season_id, golfer_id)
+        except ParticipantValidationError:
+            continue
+        if view is not None:
+            roster[(golfer_id, view.effective_tee.id)] = (view.golfer, view.effective_tee)
+    warnings = []
+    for change in changes:
+        population = dict(roster)
+        for snapshot in session.scalars(select(WeekHandicap).where(WeekHandicap.week_id == change.week_id)):
+            population[(snapshot.golfer_id, snapshot.tee_set_id)] = (
+                session.get(Golfer, snapshot.golfer_id), session.get(TeeSet, snapshot.tee_set_id),
+            )
+        for (golfer_id, tee_id), (golfer, tee) in sorted(population.items()):
+            pars = {r.scope: r.par for r in session.scalars(select(TeeRating).where(TeeRating.tee_set_id == tee_id))}
+            old, new = pars.get(change.old_value), pars.get(change.new_value)
+            if old is not None and new is not None and old != new:
+                warnings.append(ParWarning(change.week_id, change.index, golfer_id,
+                                           f"{golfer.first_name} {golfer.last_name}", tee_id, tee.name, old, new))
+    return tuple(warnings)
+
+
+def preview_nine(session: Session, season_id: int, week_id: int, *, new_nine: str,
+                 rerotate: bool = False) -> SchedulePreview:
+    season, weeks, week = _preview_state(session, season_id, week_id)
+    if week.status == "played":
+        raise ScheduleConflict("Played weeks cannot be changed.")
+    if week.status != "scheduled" or week.nine is None:
+        raise ScheduleValidationError({"new_nine": "Choose a scheduled week with a nine. Reserved rain dates require GL-37 activation."})
+    eligible = [row for row in weeks if row.status == "scheduled"]
+    try:
+        rotated = rotate_nines([(row.index, row.nine) for row in eligible], week.index, new_nine)
+    except ValueError as exc:
+        raise ScheduleValidationError({"new_nine": str(exc)}) from exc
+    by_index = {row.index: row for row in weeks}
+    changes = tuple(WeekChange(by_index[index].id, index, by_index[index].nine, nine)
+                    for index, nine in rotated if nine is not None and by_index[index].nine != nine
+                    and (rerotate or index == week.index))
+    with session.no_autoflush:
+        warnings = _par_warnings(session, season_id, changes)
+    return SchedulePreview(changes, warnings, _intent_fingerprint(season, weeks, week_id, "nine", new_nine, rerotate))
+
+
+def confirm_nine_core(session: Session, season_id: int, week_id: int, *, new_nine: str,
+                      rerotate: bool = False, expected_fingerprint: str) -> SchedulePreview:
+    """Apply only week metadata inside the caller's transaction, without committing.
+
+    GL-36 can relabel snapshots for the returned changes before its single commit.
+    The core reserves writes and reads fresh state even when the caller cached rows.
+    """
+    reserve_schedule_write(session)
+    preview = preview_nine(session, season_id, week_id, new_nine=new_nine, rerotate=rerotate)
+    if preview.fingerprint != expected_fingerprint:
+        raise ScheduleConflict("The schedule or requested change changed after this preview. Review a fresh preview.")
+    for change in preview.changes:
+        session.get(Week, change.week_id).nine = change.new_value
+    return preview
+
+
+def confirm_nine(session: Session, season_id: int, week_id: int, *, new_nine: str,
+                 rerotate: bool = False, expected_fingerprint: str) -> SchedulePreview:
+    try:
+        preview = confirm_nine_core(session, season_id, week_id, new_nine=new_nine,
+                                    rerotate=rerotate, expected_fingerprint=expected_fingerprint)
+        from golf_league.services.handicaps import relabel_week_nine
+        for change in preview.changes:
+            relabel_week_nine(session, change.week_id, change.new_value)
+        session.commit()
+        return preview
+    except Exception:
+        session.rollback()
+        raise
+
+
+def confirm_shift(session: Session, season_id: int, week_id: int, *, new_date: date,
+                  expected_fingerprint: str) -> SchedulePreview:
+    try:
+        reserve_schedule_write(session)
+        preview = preview_shift(session, season_id, week_id, new_date=new_date)
+        if preview.fingerprint != expected_fingerprint:
+            raise ScheduleConflict("The schedule or requested change changed after this preview. Review a fresh preview.")
+        for change in preview.changes:
+            session.get(Week, change.week_id).play_date = change.new_value
+        if preview.changes:
+            last = list_weeks(session, season_id)[-1]
+            session.get(Season, season_id).end_date = last.play_date
+        session.commit()
+        return preview
+    except Exception:
+        session.rollback()
+        raise

@@ -29,6 +29,7 @@ from golf_league.models import (
     SeasonParticipant,
     TeeRating,
     TeeSet,
+    WeekHandicap,
 )
 
 
@@ -383,7 +384,8 @@ def delete_tee_set(session: Session, course_id: int, tee_set_id: int) -> bool | 
     yardage_count = session.query(HoleYardage).filter_by(tee_set_id=tee_set_id).count()
     golfer_count = session.query(Golfer).filter_by(default_tee_set_id=tee_set_id).count()
     participant_count = session.query(SeasonParticipant).filter_by(tee_set_id=tee_set_id).count()
-    if yardage_count or golfer_count or participant_count:
+    snapshot_count = session.query(WeekHandicap).filter_by(tee_set_id=tee_set_id).count()
+    if yardage_count or golfer_count or participant_count or snapshot_count:
         parts = []
         if yardage_count:
             parts.append(f"{yardage_count} hole yardages")
@@ -391,6 +393,8 @@ def delete_tee_set(session: Session, course_id: int, tee_set_id: int) -> bool | 
             parts.append(f"{golfer_count} golfer default-tee references")
         if participant_count:
             parts.append(f"{participant_count} season participant overrides")
+        if snapshot_count:
+            parts.append(f"{snapshot_count} week handicaps")
         raise CourseValidationError({"delete": "Cannot delete tee set: " + ", ".join(parts) + "."})
     session.delete(tee_set)
     session.commit()

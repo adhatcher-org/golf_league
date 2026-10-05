@@ -17,6 +17,7 @@ from golf_league.domain.rate_limit import RateLimiter
 from golf_league.migrations import upgrade_to_head
 from golf_league.routers.admin_courses import router as admin_courses_router
 from golf_league.routers.admin_imports import router as admin_imports_router
+from golf_league.routers.admin_matches import router as admin_matches_router
 from golf_league.routers.admin_participants import router as admin_participants_router
 from golf_league.routers.admin_roster import router as admin_roster_router
 from golf_league.routers.admin_seasons import router as admin_seasons_router
@@ -120,6 +121,7 @@ def create_app(settings=None) -> FastAPI:
     app.include_router(admin_participants_router)
     app.include_router(admin_teams_router)
     app.include_router(admin_weeks_router)
+    app.include_router(admin_matches_router)
 
     # Health endpoints
     @app.get("/")
