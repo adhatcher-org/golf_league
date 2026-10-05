@@ -146,3 +146,77 @@ def test_public_regenerate_fault_preserves_history(matches, monkeypatch):
     with Session(client.app.state.engine) as session:
         assert [(r.id, r.a_golfer_id, r.b_golfer_id) for r in session.scalars(select(PlayerMatch))] == before
         assert list(session.scalars(select(WeekHandicap.id))) == snapshot_ids
+
+
+def business_rows(client):
+    """Capture all persisted matchup and snapshot fields, including historical metadata."""
+    with Session(client.app.state.engine) as session:
+        return {
+            model.__tablename__: [
+                tuple(getattr(row, column.name) for column in model.__table__.columns)
+                for row in session.scalars(select(model).order_by(model.id))
+            ]
+            for model in (TeamMatch, PlayerMatch, WeekHandicap)
+        }
+
+
+@pytest.mark.parametrize('field', ['home_team_id', 'away_team_id', 'golfer_id'])
+@pytest.mark.parametrize('value', [
+    pytest.param('0', id='zero'),
+    pytest.param(str(2**63), id='int64-overflow'),
+    pytest.param('9999999999999999999999', id='larger-decimal'),
+    pytest.param('9' * 5000, id='5000-digits'),
+    pytest.param('²', id='superscript-two'),
+])
+def test_invalid_id_range_matrix_html_reset_and_no_business_writes(matches, field, value):
+    client, ids = matches
+    assert post_create(client, ids).status_code == 303
+    before = business_rows(client)
+    if field == 'golfer_id':
+        row_id = before['player_matches'][0][0]
+        path = f"/admin/seasons/{ids['season']}/player-matches/{row_id}/substitute"
+        data = {'side': 'b', 'golfer_id': value,
+                'csrf_token': _extract_csrf(client.get(path).text)}
+        response = client.post(path, data=data, follow_redirects=False)
+        assert 'Side A: A1 Example' in response.text
+        assert 'Side B: B1 Example' in response.text
+        assert '<option value="a">A · A1 Example</option>' in response.text
+        assert '<option value="b">B · B1 Example</option>' in response.text
+        assert '<option value="">Choose substitute</option>' in response.text
+    else:
+        response = post_create(client, ids, **{field: value})
+        assert '<select name="home_team_id" id="home"><option value="">Choose team</option>' in response.text
+        assert '<select name="away_team_id" id="away"><option value="">Choose team</option>' in response.text
+    assert response.status_code == 422
+    assert 'text/html' in response.headers['content-type']
+    assert 'Choose a valid player or team.' in response.text
+    assert '<div class="error" role="alert">' in response.text
+    assert ' selected' not in response.text
+    assert business_rows(client) == before
+
+
+@pytest.mark.parametrize('field', ['home_team_id', 'away_team_id', 'golfer_id'])
+@pytest.mark.parametrize('value', [999999, 2**63 - 1], ids=['absent', 'max-int64'])
+def test_representable_absent_form_ids_remain_404_without_writes(matches, field, value):
+    client, ids = matches
+    assert post_create(client, ids).status_code == 303
+    before = business_rows(client)
+    if field == 'golfer_id':
+        path = f"/admin/seasons/{ids['season']}/player-matches/{before['player_matches'][0][0]}/substitute"
+        response = client.post(path, data={'side': 'a', 'golfer_id': value,
+            'csrf_token': _extract_csrf(client.get(path).text)}, follow_redirects=False)
+    else:
+        response = post_create(client, ids, **{field: str(value)})
+    assert response.status_code == 404
+    assert business_rows(client) == before
+
+
+@pytest.mark.parametrize('field', ['home_team_id', 'away_team_id'])
+def test_representable_foreign_team_form_ids_remain_404_without_writes(matches, field):
+    client, ids = matches
+    assert post_create(client, ids).status_code == 303
+    with Session(client.app.state.engine) as session:
+        foreign = seed_fixture(session)
+    before = business_rows(client)
+    assert post_create(client, ids, **{field: foreign['teams'][0]}).status_code == 404
+    assert business_rows(client) == before

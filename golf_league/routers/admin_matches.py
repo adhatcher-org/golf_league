@@ -40,9 +40,17 @@ def _csrf(request, token):
 
 
 def _number(value, field):
-    if not value.strip().isdecimal():
-        raise MatchupValidationError({field: "Choose a valid player or team."})
-    return int(value.strip())
+    text = value.strip()
+    errors = {field: "Choose a valid player or team."}
+    if not text.isdecimal():
+        raise MatchupValidationError(errors)
+    try:
+        number = int(text)
+    except (ValueError, OverflowError) as exc:
+        raise MatchupValidationError(errors) from exc
+    if not 0 < number <= (2**63 - 1):
+        raise MatchupValidationError(errors)
+    return number
 
 
 def _week(session, season_id, week_id):
