@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
+from golf_league.config import get_settings
 from golf_league.database import get_session
 from golf_league.models import Week
 from golf_league.security import generate_csrf_token, require_admin, validate_csrf
@@ -226,7 +227,8 @@ def _change_resources(session, season_id, week_id):
 def _intent_signature(request, season_id, week_id, action, target, rerotate, fingerprint):
     raw = "|".join(map(str, (season_id, week_id, action, target, rerotate, fingerprint,
                             request.cookies.get("session") or "")))
-    secret = request.app.state.settings.session_secret
+    settings = getattr(request.app.state, "settings", None) or get_settings()
+    secret = settings.session_secret
     return hmac.new(secret.encode(), raw.encode(), hashlib.sha256).hexdigest()
 
 

@@ -217,3 +217,45 @@ def test_confirmation_reserves_write_before_validation_and_refuses_competing_wri
         assert confirming.get(Week, ids[3]).play_date == date(2026, 9, 17)
         with pytest.raises(ScheduleConflict, match="fresh preview"):
             confirm_shift(confirming, sid, ids[3], new_date=date(2026, 9, 24), expected_fingerprint=preview.fingerprint)
+
+
+@pytest.mark.parametrize("action,field,target,tampered", [
+    ("shift", "new_date", "2026-09-24", "2026-10-01"),
+    ("nine", "new_nine", "front", "back"),
+])
+def test_default_app_factory_signs_previews_and_refuses_tampered_confirmation(
+    tmp_path, monkeypatch, action, field, target, tampered,
+):
+    from conftest import _make_admin_client
+    from fastapi.testclient import TestClient
+
+    from golf_league.app import create_app
+
+    monkeypatch.setenv("SESSION_SECRET", "synthetic-default-factory-secret")
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'default-factory.db'}")
+    monkeypatch.setenv("SEED_COURSE", "true")
+    app = create_app()
+    assert not hasattr(app.state, "settings")
+    with TestClient(app) as client:
+        _make_admin_client(client)
+        with Session(app.state.engine) as session:
+            course = session.scalar(select(Course).where(Course.name == "Wyandot Golf Club"))
+            season, weeks = make_fall(session, course)
+            sid, wid = season.id, weeks[3].id
+        path = f"/admin/seasons/{sid}/weeks/{wid}/{action}"
+        csrf = hidden(client.get(path).text, "csrf_token")
+        preview = client.post(path + "/preview", data={"csrf_token": csrf, field: target})
+        assert preview.status_code == 200
+        data = confirm_data(preview.text, field)
+        for altered in ({field: tampered}, {"signature": "forged"}):
+            assert client.post(path + "/confirm", data={**data, **altered}).status_code == 409
+        with Session(app.state.engine) as session:
+            week = session.get(Week, wid)
+            assert week.play_date == date(2026, 9, 17) and week.nine == "back"
+        confirmed = client.post(path + "/confirm", data=data, follow_redirects=False)
+        assert confirmed.status_code == 303
+        assert confirmed.headers["location"] == f"/admin/seasons/{sid}/weeks"
+        with Session(app.state.engine) as session:
+            week = session.get(Week, wid)
+            assert week.play_date == (date(2026, 9, 24) if action == "shift" else date(2026, 9, 17))
+            assert week.nine == ("front" if action == "nine" else "back")
