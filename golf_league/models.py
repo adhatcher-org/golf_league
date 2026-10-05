@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -15,10 +15,30 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
+from sqlalchemy.types import TypeDecorator
 
 
 class Base(DeclarativeBase):
     pass
+
+
+class UTCDateTime(TypeDecorator):
+    """Keep UTC timestamps aware when SQLite returns a naive datetime."""
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("Timestamp must be timezone-aware.")
+        return value.astimezone(UTC)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 class User(Base):
@@ -487,3 +507,54 @@ class UserToken(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
+
+
+class TeamMatch(Base):
+    """An explicit team pairing, with restrictive references and stable identity."""
+
+    __tablename__ = "team_matches"
+    __table_args__ = (
+        UniqueConstraint("week_id", "home_team_id", name="uq_team_matches_week_home"),
+        UniqueConstraint("week_id", "away_team_id", name="uq_team_matches_week_away"),
+        CheckConstraint(
+            "(home_team_id = away_team_id AND is_self_match = 1) OR "
+            "(home_team_id != away_team_id AND is_self_match = 0)",
+            name="ck_team_matches_self_shape",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    week_id: Mapped[int] = mapped_column(ForeignKey("weeks.id"), nullable=False, index=True)
+    home_team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), nullable=False, index=True)
+    away_team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), nullable=False, index=True)
+    is_self_match: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+
+    week: Mapped["Week"] = relationship()
+    home_team: Mapped["Team"] = relationship(foreign_keys=[home_team_id])
+    away_team: Mapped["Team"] = relationship(foreign_keys=[away_team_id])
+
+
+class PlayerMatch(Base):
+    """One generated slot; manual replacements survive repeated generation."""
+
+    __tablename__ = "player_matches"
+    __table_args__ = (
+        UniqueConstraint("team_match_id", "position_label", name="uq_player_matches_pairing_slot"),
+        CheckConstraint("position_label IN ('1','2','3','4','P1vP2','P3vP4')", name="ck_player_matches_slot"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    team_match_id: Mapped[int] = mapped_column(ForeignKey("team_matches.id"), nullable=False, index=True)
+    position_label: Mapped[str] = mapped_column(String(5), nullable=False)
+    a_golfer_id: Mapped[int] = mapped_column(ForeignKey("golfers.id"), nullable=False, index=True)
+    b_golfer_id: Mapped[int] = mapped_column(ForeignKey("golfers.id"), nullable=False, index=True)
+    a_is_sub: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
+    b_is_sub: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
+    vs_own_handicap: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
+    manually_adjusted: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
+    generated_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False, server_default=func.current_timestamp())
+
+    team_match: Mapped["TeamMatch"] = relationship()
+    a_golfer: Mapped["Golfer"] = relationship(foreign_keys=[a_golfer_id])
+    b_golfer: Mapped["Golfer"] = relationship(foreign_keys=[b_golfer_id])

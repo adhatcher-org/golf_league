@@ -4,12 +4,12 @@ import hashlib
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from golf_league.domain.schedule import generate_weeks, rotate_nines, shift_from
-from golf_league.models import Season, SeasonGolfer, TeeRating, Week
+from golf_league.models import Season, SeasonGolfer, TeamMatch, TeeRating, Week
 from golf_league.services.participants import (
     ParticipantValidationError,
     effective_participant,
@@ -221,6 +221,9 @@ def delete_week(session: Session, season_id: int, week_id: int) -> None:
     if week is None or week.season_id != season_id:
         raise LookupError("Week not found.")
     refs = session.execute(select(Week.id).where(Week.makeup_for_week_id == week_id).limit(1)).first()
+    match_count = session.scalar(select(func.count(TeamMatch.id)).where(TeamMatch.week_id == week_id))
+    if match_count:
+        raise ScheduleConflict(f"Cannot delete week: referenced by {match_count} team match(es).")
     if refs:
         raise ScheduleConflict("This week is referenced as a makeup target by another week.")
     session.delete(week)
