@@ -1,6 +1,7 @@
 """Session-taking schedule operations for seasons and printed weeks."""
 
 import hashlib
+import json
 from dataclasses import dataclass
 from datetime import date
 
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 from golf_league.domain.schedule import generate_weeks, rotate_nines, shift_from
 from golf_league.models import (
     Golfer,
+    PlayerMatch,
     Season,
     SeasonGolfer,
     TeamMatch,
@@ -178,7 +180,9 @@ def edit_week(  # noqa: C901
     notes: str,
     expected_fingerprint: str,
 ) -> Week:
-    week = session.get(Week, week_id)
+    if status == "cancelled":
+        reserve_schedule_write(session)
+    week = session.get(Week, week_id, populate_existing=True)
     if week is None or week.season_id != season_id:
         raise LookupError("Week not found.")
     if week_fingerprint(week) != expected_fingerprint:
@@ -197,6 +201,15 @@ def edit_week(  # noqa: C901
         raise ScheduleConflict("Played weeks cannot be changed.")
     if status == "cancelled" and week.week_type != "match":
         raise ScheduleValidationError({"status": "Only match weeks can be cancelled here."})
+    if status == "cancelled":
+        matches = list(session.scalars(
+            select(TeamMatch).where(TeamMatch.week_id == week.id).order_by(TeamMatch.id)
+        ))
+        if matches:
+            match_ids = ", ".join(str(match.id) for match in matches)
+            raise ScheduleConflict(
+                f"This week has generated matches ({match_ids}); use a rain-date activation to cancel it."
+            )
     target_id = None
     if str(makeup_for_index).strip():
         text = str(makeup_for_index).strip()
@@ -223,6 +236,174 @@ def edit_week(  # noqa: C901
     session.commit()
     session.refresh(week)
     return week
+
+
+@dataclass(frozen=True)
+class RainDatePreview:
+    source_id: int
+    source_index: int
+    source_date: date
+    source_nine: str
+    target_id: int
+    target_index: int
+    target_date: date
+    match_count: int
+    snapshot_count: int
+    fingerprint: str
+
+
+def _rain_date_fingerprint(session: Session, season: Season, weeks: list[Week], source_id: int,
+                           target_id: int) -> str:
+    payload: dict[str, object] = {
+        "season": schedule_fingerprint(season),
+        "weeks": [week_fingerprint(row) for row in weeks],
+    }
+    match_ids = list(session.scalars(
+        select(TeamMatch.id).where(TeamMatch.week_id == source_id).order_by(TeamMatch.id)
+    ))
+    target_match_ids = list(session.scalars(
+        select(TeamMatch.id).where(TeamMatch.week_id == target_id).order_by(TeamMatch.id)
+    ))
+    matches = list(session.scalars(
+        select(TeamMatch).where(TeamMatch.id.in_(match_ids + target_match_ids)).order_by(TeamMatch.id)
+        .execution_options(populate_existing=True)
+    )) if match_ids or target_match_ids else []
+    payload["matches"] = [
+        (row.id, row.week_id, row.home_team_id, row.away_team_id, row.is_self_match, row.sort_order)
+        for row in matches
+    ]
+    player_rows = list(session.scalars(
+        select(PlayerMatch).join(TeamMatch).where(TeamMatch.id.in_(match_ids + target_match_ids))
+        .order_by(PlayerMatch.id).execution_options(populate_existing=True)
+    )) if match_ids or target_match_ids else []
+    payload["player_matches"] = [
+        (row.id, row.team_match_id, row.position_label, row.a_golfer_id, row.b_golfer_id,
+         row.a_is_sub, row.b_is_sub, row.vs_own_handicap, row.manually_adjusted,
+         row.generated_at.isoformat()) for row in player_rows
+    ]
+    snapshots = list(session.scalars(
+        select(WeekHandicap).where(WeekHandicap.week_id.in_((source_id, target_id)))
+        .order_by(WeekHandicap.week_id, WeekHandicap.id).execution_options(populate_existing=True)
+    ))
+    payload["snapshots"] = [
+        (row.id, row.week_id, row.golfer_id, row.tee_set_id, row.nine, row.strokes,
+         row.source, row.computed_at.isoformat()) for row in snapshots
+    ]
+    serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode()).hexdigest()
+
+
+def _rain_date_state(session: Session, season_id: int, source_id: int):
+    season, weeks, source = _preview_state(session, season_id, source_id)
+    return season, weeks, source
+
+
+def _validate_makeup_ancestry(session: Session, source: Week, target: Week, season_id: int) -> None:
+    current_id = source.makeup_for_week_id
+    seen = {source.id}
+    while current_id is not None:
+        if current_id == target.id or current_id in seen:
+            raise ScheduleValidationError({"target_week_id": "Makeup links cannot form a cycle."})
+        seen.add(current_id)
+        current = session.get(Week, current_id, populate_existing=True)
+        if current is None or current.season_id != season_id:
+            raise ScheduleConflict("The source week has an invalid makeup reservation.")
+        current_id = current.makeup_for_week_id
+
+
+def _validate_rain_date_target(session: Session, source: Week, target: Week, season_id: int) -> None:
+    if source.season_id != season_id or target.season_id != season_id:
+        raise LookupError("Week not found.")
+    if source.id == target.id:
+        raise ScheduleValidationError({"target_week_id": "Choose a different week for the rain date."})
+    if source.week_type != "match" or source.nine is None or source.status not in {"scheduled", "cancelled"}:
+        if source.status == "played":
+            raise ScheduleConflict("Played weeks cannot be moved to a rain date.")
+        raise ScheduleValidationError({"source_week_id": "Choose a scheduled or cancelled match week with a nine."})
+    if target.status == "played":
+        raise ScheduleConflict("Played weeks cannot be used as a rain date.")
+    if target.week_type != "rain_date" or target.index <= source.index:
+        raise ScheduleValidationError({"target_week_id": "Choose an unused later rain-date row in this season."})
+    if target.makeup_for_week_id not in (None, source.id):
+        raise ScheduleConflict("This rain date is already reserved for another week.")
+    _validate_makeup_ancestry(session, source, target, season_id)
+
+
+def preview_rain_date(session: Session, season_id: int, source_id: int, target_id: int) -> RainDatePreview:
+    season, weeks, source = _rain_date_state(session, season_id, source_id)
+    target = next((row for row in weeks if row.id == target_id), None)
+    if target is None:
+        raise LookupError("Week not found.")
+    _validate_rain_date_target(session, source, target, season_id)
+    other_reservations = list(session.scalars(select(Week.id).where(
+        Week.season_id == season_id, Week.makeup_for_week_id == source.id, Week.id != target.id,
+    )))
+    if other_reservations:
+        raise ScheduleConflict("This week already has a different rain date reserved.")
+    match_count = session.scalar(select(func.count(TeamMatch.id)).where(TeamMatch.week_id == source.id)) or 0
+    target_match_count = session.scalar(select(func.count(TeamMatch.id)).where(TeamMatch.week_id == target.id)) or 0
+    snapshot_count = session.scalar(select(func.count(WeekHandicap.id)).where(WeekHandicap.week_id == source.id)) or 0
+    target_snapshot_count = session.scalar(select(func.count(WeekHandicap.id)).where(WeekHandicap.week_id == target.id)) or 0
+    if target_match_count or target_snapshot_count:
+        raise ScheduleConflict("The rain-date row already has matches or handicap snapshots.")
+    return RainDatePreview(
+        source.id, source.index, source.play_date, source.nine, target.id, target.index,
+        target.play_date, match_count, snapshot_count,
+        _rain_date_fingerprint(session, season, weeks, source.id, target.id),
+    )
+
+
+def confirm_rain_date(session: Session, season_id: int, source_id: int, target_id: int,
+                      *, expected_fingerprint: str) -> RainDatePreview:
+    """Atomically move one match week and its snapshots onto a reserved rain date."""
+    try:
+        reserve_schedule_write(session)
+        season, weeks, source = _rain_date_state(session, season_id, source_id)
+        target = next((row for row in weeks if row.id == target_id), None)
+        if target is None:
+            raise LookupError("Week not found.")
+        # State-derived idempotency allows a retried form to return the original result.
+        if (source.status == "cancelled" and target.week_type == "match"
+                and target.makeup_for_week_id == source.id):
+            match_count = session.scalar(select(func.count(TeamMatch.id)).where(TeamMatch.week_id == target.id)) or 0
+            snapshot_count = session.scalar(select(func.count(WeekHandicap.id)).where(WeekHandicap.week_id == target.id)) or 0
+            result = RainDatePreview(source.id, source.index, source.play_date, source.nine,
+                                     target.id, target.index, target.play_date, match_count, snapshot_count,
+                                     expected_fingerprint)
+            session.commit()
+            return result
+        _validate_rain_date_target(session, source, target, season_id)
+        other_reservations = list(session.scalars(select(Week.id).where(
+            Week.season_id == season_id, Week.makeup_for_week_id == source.id, Week.id != target.id,
+        )))
+        if other_reservations:
+            raise ScheduleConflict("This week already has a different rain date reserved.")
+        preview = preview_rain_date(session, season_id, source_id, target_id)
+        if preview.fingerprint != expected_fingerprint:
+            raise ScheduleConflict("The schedule changed after this preview. Review a fresh rain-date preview.")
+        matches = list(session.scalars(
+            select(TeamMatch).where(TeamMatch.week_id == source.id).order_by(TeamMatch.id)
+            .execution_options(populate_existing=True)
+        ))
+        snapshots = list(session.scalars(
+            select(WeekHandicap).where(WeekHandicap.week_id == source.id).order_by(WeekHandicap.id)
+            .execution_options(populate_existing=True)
+        ))
+        source.status = "cancelled"
+        target.week_type = "match"
+        target.status = "scheduled"
+        target.nine = source.nine
+        target.makeup_for_week_id = source.id
+        for match in matches:
+            match.week_id = target.id
+        for snapshot in snapshots:
+            snapshot.week_id = target.id
+            snapshot.nine = source.nine
+        session.commit()
+        return preview
+    except Exception:
+        session.rollback()
+        raise
 
 
 def delete_week(session: Session, season_id: int, week_id: int) -> None:

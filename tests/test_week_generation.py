@@ -148,6 +148,28 @@ def test_week_edit_is_stale_safe_and_delete_refuses_makeup_references(session, w
     assert list_weeks(session, season.id)[-1].index == 9
 
 
+def test_week_edit_refuses_plain_cancellation_when_matchups_exist(session, wyandot_course):
+    from golf_league.models import Team, TeamMatch
+
+    season = _season(session, wyandot_course())
+    rows = _commit(session, season)
+    team_a = Team(season_id=season.id, name="Synthetic A", number=1, sort_order=1)
+    team_b = Team(season_id=season.id, name="Synthetic B", number=2, sort_order=2)
+    session.add_all([team_a, team_b])
+    session.flush()
+    match = TeamMatch(week_id=rows[1].id, home_team_id=team_a.id, away_team_id=team_b.id,
+                      is_self_match=False, sort_order=1)
+    session.add(match)
+    session.flush()
+    with pytest.raises(ScheduleConflict, match=rf"generated matches \({match.id}\)"):
+        edit_week(session, season.id, rows[1].id, week_type="match", status="cancelled",
+                  makeup_for_index="", notes="", expected_fingerprint=week_fingerprint(rows[1]))
+    assert rows[1].status == "scheduled"
+    edit_week(session, season.id, rows[0].id, week_type="match", status="cancelled",
+              makeup_for_index="", notes="", expected_fingerprint=week_fingerprint(rows[0]))
+    assert rows[0].status == "cancelled"
+
+
 def test_week_edit_rejects_cycle_that_reaches_edited_week_with_no_current_makeup(session, wyandot_course):
     season = _season(session, wyandot_course())
     rows = _commit(session, season)
