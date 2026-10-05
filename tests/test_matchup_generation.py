@@ -34,13 +34,15 @@ from golf_league.services.matchups import (
     MatchupConflict,
     MatchupValidationError,
     create_team_match,
-    generate_player_matches,
+)
+from golf_league.services.matchups import (
+    _generate_player_matches as generate_player_matches,
 )
 from golf_league.services.roster import RosterValidationError, delete_golfer
 from golf_league.services.schedule import ScheduleConflict, delete_week
 
 NOW = datetime(2026, 10, 5, 12, tzinfo=UTC)
-HEAD = "9d5b4a7c2e61"
+HEAD = "6a2e9d4b7c31"
 
 
 def clock():
@@ -291,8 +293,7 @@ def test_protected_participant_checked_instead_of_replaced_member_seed(matchup_d
         session.commit()
         sub.handicap_strokes = None
         session.commit()
-        with pytest.raises(MatchupValidationError, match="seed"):
-            generate_player_matches(session, pairing.id, clock=clock)
+        assert contents(generate_player_matches(session, pairing.id, clock=clock)) == before
         session.rollback()
         assert contents(list(session.scalars(select(PlayerMatch).order_by(PlayerMatch.id)))) == before
 
@@ -471,11 +472,6 @@ def test_fresh_and_prior_head_migration_preserves_data_and_one_head(tmp_path, pr
         engine.dispose()
 
 
-def test_no_public_matchup_mutation_route_added():
-    from golf_league.app import create_app
-    from golf_league.config import Settings
-    app = create_app(Settings(session_secret="synthetic-route-inventory"))
-    assert not any("matchup" in getattr(route, "path", "") or "pairing" in getattr(route, "path", "") for route in app.routes)
 
 
 def test_existing_delete_routes_return_409_and_match_reference_counts(admin_client):

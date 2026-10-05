@@ -74,7 +74,7 @@
         <td>{{ week.status|title }}</td>
         <td>{% if week.makeup_for %}Week {{ week.makeup_for.index }}{% else %}—{% endif %}</td>
         <td>{{ week.notes or '—' }}</td>
-        <td><a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/edit">Edit</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/shift">Shift dates</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/nine">Change nine</a>
+        <td><a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/edit">Edit</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/matches/new">Matches</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/shift">Shift dates</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/nine">Change nine</a>
             <form method="post" action="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/delete" style="display:inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Delete</button>
             </form></td>

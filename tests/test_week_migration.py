@@ -53,7 +53,7 @@ def _assert_schema(engine):
 def test_fresh_upgrade_has_one_head_and_weeks_constraints(tmp_path):
     url = f"sqlite:///{tmp_path / 'fresh.db'}"
     config = make_config(url)
-    assert ScriptDirectory.from_config(config).get_heads() == ["9d5b4a7c2e61"]
+    assert ScriptDirectory.from_config(config).get_heads() == ["6a2e9d4b7c31"]
     upgrade_to_head(url)
     engine = _engine(url)
     try:
@@ -94,7 +94,7 @@ def test_upgrade_from_current_prior_head_preserves_data_and_downgrades_cleanly(t
         engine.dispose()
     command.upgrade(config, "head")
     command.upgrade(config, "head")
-    assert ScriptDirectory.from_config(config).get_heads() == ["9d5b4a7c2e61"]
+    assert ScriptDirectory.from_config(config).get_heads() == ["6a2e9d4b7c31"]
     engine = _engine(url)
     try:
         _assert_schema(engine)

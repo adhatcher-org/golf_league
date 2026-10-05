@@ -558,3 +558,26 @@ class PlayerMatch(Base):
     team_match: Mapped["TeamMatch"] = relationship()
     a_golfer: Mapped["Golfer"] = relationship(foreign_keys=[a_golfer_id])
     b_golfer: Mapped["Golfer"] = relationship(foreign_keys=[b_golfer_id])
+
+
+class WeekHandicap(Base):
+    """Historical effective 9-hole seed, unique for a golfer in a week."""
+
+    __tablename__ = "week_handicaps"
+    __table_args__ = (
+        UniqueConstraint("week_id", "golfer_id", name="uq_week_handicaps_week_golfer"),
+        CheckConstraint("nine IN ('front','back')", name="ck_week_handicaps_nine"),
+        CheckConstraint("source IN ('seeded','carried','computed')", name="ck_week_handicaps_source"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    week_id: Mapped[int] = mapped_column(ForeignKey("weeks.id"), nullable=False, index=True)
+    golfer_id: Mapped[int] = mapped_column(ForeignKey("golfers.id"), nullable=False, index=True)
+    tee_set_id: Mapped[int] = mapped_column(ForeignKey("tee_sets.id"), nullable=False, index=True)
+    nine: Mapped[str] = mapped_column(String(5), nullable=False)
+    strokes: Mapped[int] = mapped_column(Integer, nullable=False)
+    source: Mapped[str] = mapped_column(String(8), nullable=False, server_default="seeded")
+    computed_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False, server_default=func.current_timestamp())
+
+    week: Mapped["Week"] = relationship()
+    golfer: Mapped["Golfer"] = relationship()
+    tee_set: Mapped["TeeSet"] = relationship()

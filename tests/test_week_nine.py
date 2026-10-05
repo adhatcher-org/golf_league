@@ -5,6 +5,7 @@ from datetime import date
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from test_matchup_generation import matchup_db as _matchup_db
 from test_week_shift import confirm_data, hidden
 from test_week_shift import fall as _fall
 from test_week_shift import route_schedule as _route_schedule
@@ -20,6 +21,7 @@ from golf_league.services.schedule import (
     preview_nine,
 )
 
+matchup_db = _matchup_db
 fall = _fall
 route_schedule = _route_schedule
 
@@ -154,3 +156,41 @@ def test_nine_http_preview_confirm_tamper_stale_and_refusals(route_schedule):
         session.get(Week, ids[3]).status = "played"
         session.commit()
     assert client.post(base + "/preview", data={"csrf_token": csrf, "new_nine": "back"}).status_code == 409
+
+
+def test_rotation_warnings_snapshot_only_persisted_tees_and_relabel(matchup_db):
+    from test_matchup_generation import clock
+
+    from golf_league.models import WeekHandicap
+    from golf_league.services.handicaps import ensure_week_handicap
+    from golf_league.services.matchups import generate_week_matches
+
+    engine, ids = matchup_db
+    with Session(engine) as session:
+        for week in ids['weeks'][:2]:
+            generate_week_matches(session, ids['season'], week_id=week,
+                home_team_id=ids['teams'][0], away_team_id=ids['teams'][1], clock=clock)
+        sub = Golfer(first_name='Unselected', last_name='Synthetic', default_tee_set_id=ids['tee'],
+                     handicap_strokes=0, handicap_source='self_reported', handicap_status='ok')
+        session.add(sub)
+        session.commit()
+        sub_id = sub.id
+        for week in ids['weeks'][:2]:
+            ensure_week_handicap(session, week, sub_id, clock=clock)
+        session.commit()
+        sub.default_tee_set_id = None
+        sub.default_tee_label = 'Unavailable'
+        rating = session.scalar(select(TeeRating).where(TeeRating.tee_set_id == ids['tee'], TeeRating.scope == 'back'))
+        rating.par = 35
+        session.commit()
+        before = {r.id:(r.strokes, r.source, r.computed_at) for r in session.scalars(select(WeekHandicap))}
+        preview = preview_nine(session, ids['season'], ids['weeks'][0], new_nine='back', rerotate=True)
+        assert len(preview.warnings) == 50
+        assert {w.index for w in preview.warnings} == {1, 2, 3}
+        assert {(w.week_id, w.golfer_id, w.tee_set_id) for w in preview.warnings}.__len__() == 50
+        assert len([w for w in preview.warnings if w.golfer_id == sub_id]) == 2
+        confirm_nine(session, ids['season'], ids['weeks'][0], new_nine='back', rerotate=True,
+                     expected_fingerprint=preview.fingerprint)
+        for snap in session.scalars(select(WeekHandicap)):
+            assert snap.nine == session.get(Week, snap.week_id).nine
+            assert (snap.strokes, snap.source, snap.computed_at) == before[snap.id]

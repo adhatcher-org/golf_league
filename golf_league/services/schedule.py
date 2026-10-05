@@ -9,7 +9,16 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from golf_league.domain.schedule import generate_weeks, rotate_nines, shift_from
-from golf_league.models import Season, SeasonGolfer, TeamMatch, TeeRating, Week
+from golf_league.models import (
+    Golfer,
+    Season,
+    SeasonGolfer,
+    TeamMatch,
+    TeeRating,
+    TeeSet,
+    Week,
+    WeekHandicap,
+)
 from golf_league.services.participants import (
     ParticipantValidationError,
     effective_participant,
@@ -226,6 +235,9 @@ def delete_week(session: Session, season_id: int, week_id: int) -> None:
         raise ScheduleConflict(f"Cannot delete week: referenced by {match_count} team match(es).")
     if refs:
         raise ScheduleConflict("This week is referenced as a makeup target by another week.")
+    snapshot_count = session.scalar(select(func.count(WeekHandicap.id)).where(WeekHandicap.week_id == week_id))
+    if snapshot_count:
+        raise ScheduleConflict(f"Cannot delete week: referenced by {snapshot_count} week handicap(s).")
     session.delete(week)
     session.commit()
 
@@ -316,25 +328,27 @@ def preview_shift(session: Session, season_id: int, week_id: int, *, new_date: d
 
 
 def _par_warnings(session: Session, season_id: int, changes) -> tuple[ParWarning, ...]:
-    warnings = []
-    roster_ids = list(session.scalars(select(SeasonGolfer.golfer_id)
-                                     .where(SeasonGolfer.season_id == season_id).order_by(SeasonGolfer.golfer_id)))
-    for golfer_id in roster_ids:
+    roster = {}
+    for golfer_id in session.scalars(select(SeasonGolfer.golfer_id).where(SeasonGolfer.season_id == season_id)):
         try:
             view = effective_participant(session, season_id, golfer_id)
         except ParticipantValidationError:
-            continue  # No effective tee: do not invent a numeric par comparison.
-        if view is None:
             continue
-        tee = view.effective_tee
-        pars = {row.scope: row.par for row in session.scalars(select(TeeRating).where(TeeRating.tee_set_id == tee.id))}
-        for change in changes:
+        if view is not None:
+            roster[(golfer_id, view.effective_tee.id)] = (view.golfer, view.effective_tee)
+    warnings = []
+    for change in changes:
+        population = dict(roster)
+        for snapshot in session.scalars(select(WeekHandicap).where(WeekHandicap.week_id == change.week_id)):
+            population[(snapshot.golfer_id, snapshot.tee_set_id)] = (
+                session.get(Golfer, snapshot.golfer_id), session.get(TeeSet, snapshot.tee_set_id),
+            )
+        for (golfer_id, tee_id), (golfer, tee) in sorted(population.items()):
+            pars = {r.scope: r.par for r in session.scalars(select(TeeRating).where(TeeRating.tee_set_id == tee_id))}
             old, new = pars.get(change.old_value), pars.get(change.new_value)
             if old is not None and new is not None and old != new:
-                golfer = view.golfer
                 warnings.append(ParWarning(change.week_id, change.index, golfer_id,
-                                           f"{golfer.first_name} {golfer.last_name}", tee.id,
-                                           tee.name, old, new))
+                                           f"{golfer.first_name} {golfer.last_name}", tee_id, tee.name, old, new))
     return tuple(warnings)
 
 
@@ -380,6 +394,9 @@ def confirm_nine(session: Session, season_id: int, week_id: int, *, new_nine: st
     try:
         preview = confirm_nine_core(session, season_id, week_id, new_nine=new_nine,
                                     rerotate=rerotate, expected_fingerprint=expected_fingerprint)
+        from golf_league.services.handicaps import relabel_week_nine
+        for change in preview.changes:
+            relabel_week_nine(session, change.week_id, change.new_value)
         session.commit()
         return preview
     except Exception:

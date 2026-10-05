@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Week {{ week.index }} matches - Golf League{% endblock %}
+{% block content %}
+<h1>Week {{ week.index }} matches</h1>
+<p>{{ week.play_date }} · {{ week.nine|title if week.nine else 'Reserved' }}</p>
+<p><a href="/admin/seasons/{{ season.id }}/weeks">Back to season weeks</a></p>
+{% if notice %}<p role="status">{{ notice }}</p>{% endif %}
+{% if errors %}<div class="error" role="alert">{% for message in errors.values() %}<p>{{ message }}</p>{% endfor %}</div>{% endif %}
+{% if week.status == 'scheduled' and week.week_type == 'match' %}
+<h2>Add pairing and generate matches</h2>
+<form method="post" action="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/matches/new">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label for="home">Home team</label><select name="home_team_id" id="home"><option value="">Choose team</option>{% for team in teams %}<option value="{{ team.id }}">{{ team.number }} · {{ team.name }}</option>{% endfor %}</select>
+<label for="away">Away team</label><select name="away_team_id" id="away"><option value="">Choose team</option>{% for team in teams %}<option value="{{ team.id }}">{{ team.number }} · {{ team.name }}</option>{% endfor %}</select>
+<p>Choosing the same team creates P1 versus P2 and P3 versus P4.</p>
+<p><button type="submit">Create pairing and matches</button></p>
+</form>
+{% endif %}
+{% for item in matches %}
+<section><h2>{{ item.pairing.home_team.name }} vs {{ item.pairing.away_team.name }}</h2>
+<div class="table-wrap"><table><thead><tr><th>Slot</th><th>Side A</th><th>Handicap</th><th>Side B</th><th>Handicap</th><th>Manage</th></tr></thead>
+<tbody>{% for player in item.players %}<tr>
+<th scope="row">{{ player.position_label }}</th>
+<td>{{ player.a_golfer.first_name }} {{ player.a_golfer.last_name }}{% if player.a_is_sub %} (sub){% endif %}</td><td>{{ snapshots[player.a_golfer_id].strokes if player.a_golfer_id in snapshots else '—' }}</td>
+<td>{{ player.b_golfer.first_name }} {{ player.b_golfer.last_name }}{% if player.b_is_sub %} (sub){% endif %}</td><td>{{ snapshots[player.b_golfer_id].strokes if player.b_golfer_id in snapshots else '—' }}</td>
+<td>{% if week.status == 'scheduled' and week.week_type == 'match' %}<a href="/admin/seasons/{{ season.id }}/player-matches/{{ player.id }}/substitute">Substitute player</a>{% endif %}</td>
+</tr>{% endfor %}</tbody></table></div>
+{% if week.status == 'scheduled' and week.week_type == 'match' %}
+<form method="post" action="/admin/seasons/{{ season.id }}/team-matches/{{ item.pairing.id }}/generate"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><p><button type="submit">Regenerate matches</button></p></form>
+<p>Regeneration preserves substitutions and recorded handicap snapshots.</p>
+{% endif %}</section>{% else %}<p>No pairings yet.</p>{% endfor %}
+{% endblock %}
