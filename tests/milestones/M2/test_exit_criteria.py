@@ -45,11 +45,14 @@ def _csrf(html: str) -> str:
 
 
 def _regular_csv(rows: list[list[str]]) -> bytes:
-    """Return a minimal, valid summer-regular roster export."""
+    """Convert existing M2 fixtures to the current course-independent CSV contract."""
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Name", "Status", "Gold HC", "White HC", "Email", "Phone #"])
-    writer.writerows(rows)
+    writer.writerow(["FirstName", "LastName", "Tee", "Handicap", "Email", "PhoneNumber"])
+    for name, tee, gold_handicap, white_handicap, email, phone in rows:
+        last_name, first_name = name.split(",", 1)
+        handicap = gold_handicap if tee == "Gold" else white_handicap
+        writer.writerow([first_name.strip(), last_name.strip(), tee, handicap, email, phone])
     return output.getvalue().encode("utf-8")
 
 
@@ -161,9 +164,9 @@ def _edit(
         "email": row.email or "",
         "phone": phone,
         "tee_label": tee_label,
-        "handicap_gold": handicap_gold,
+        "handicap_gold": "",
         "handicap_white": handicap_white,
-        "handicap_single": "",
+        "handicap_single": handicap_gold if tee_label == "Gold" else handicap_white,
         "included": "true",
     }
     if update_opt_in:
@@ -210,7 +213,7 @@ def test_fresh_boot_admin_import_registration_and_private_roster(m2_app: TestCli
     staged = _batch(m2_app, batch_id)
     staged_row = _row(m2_app, batch_id, _PLAYER_EMAIL)
     assert staged.is_initial is True and staged.row_count == 1
-    assert staged_row.source_role == "summer_regular"
+    assert staged_row.source_role == "roster"
     assert staged_row.source_file == "initial-roster.csv" and staged_row.source_row == 1
     assert staged_row.raw_line.endswith("555-0100")
     assert _apply(m2_app, batch_id, staged.version).status_code == 303
@@ -220,7 +223,8 @@ def test_fresh_boot_admin_import_registration_and_private_roster(m2_app: TestCli
         golfer = session.scalar(select(Golfer).where(Golfer.email == _PLAYER_EMAIL))
         assert batch is not None and (batch.created_count, batch.updated_count) == (1, 0)
         assert golfer is not None
-        assert golfer.default_tee_set.color_label == "Gold"
+        assert golfer.default_tee_label == "Gold"
+        assert golfer.default_tee_set_id is None
         assert golfer.handicap_strokes == 5 and golfer.handicap_status == "ok"
 
     _register_verify_and_login(m2_app)
@@ -230,7 +234,6 @@ def test_fresh_boot_admin_import_registration_and_private_roster(m2_app: TestCli
         _PLAYER_EMAIL,
         "555-0100",
         "Player, Pat",
-        "/admin/",
         "/verify/",
         "token",
     ):
@@ -270,7 +273,7 @@ def test_hard_error_is_atomic_and_protected_updates_require_opt_in(m2_app: TestC
     with _session(m2_app) as session:
         golfer = session.scalar(select(Golfer).where(Golfer.email == "good@example.test"))
         assert golfer is not None
-        assert golfer.phone == "555-0100" and golfer.default_tee_set.color_label == "Gold"
+        assert golfer.phone == "555-0100" and golfer.default_tee_label == "Gold"
         assert golfer.handicap_strokes == 5
 
     row = _row(m2_app, protected_batch, "good@example.test")
@@ -283,7 +286,7 @@ def test_hard_error_is_atomic_and_protected_updates_require_opt_in(m2_app: TestC
     with _session(m2_app) as session:
         golfer = session.scalar(select(Golfer).where(Golfer.email == "good@example.test"))
         assert golfer is not None
-        assert golfer.phone == "555-9999" and golfer.default_tee_set.color_label == "White"
+        assert golfer.phone == "555-9999" and golfer.default_tee_label == "White"
         assert golfer.handicap_strokes == 10
 
 

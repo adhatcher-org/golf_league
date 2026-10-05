@@ -1,9 +1,8 @@
 """Admin routes for CSV roster import staging.
 
 HTTP only: every database access goes through
-`golf_league.services.roster_imports` (and, for the course picker,
-`golf_league.services.courses`). `golf_league.models` is never imported
-here.
+`golf_league.services.roster_imports`. `golf_league.models` is never
+imported here.
 """
 
 from datetime import UTC, datetime
@@ -23,7 +22,6 @@ from sqlalchemy.orm import Session
 
 from golf_league.database import get_session
 from golf_league.security import generate_csrf_token, require_admin, validate_csrf
-from golf_league.services.courses import get_course, list_courses_with_tee_sets
 from golf_league.services.roster_imports import (
     ImportApplyError,
     ImportConflictError,
@@ -61,10 +59,7 @@ def _require_csrf(request: Request, submitted: str) -> None:
 
 def _new_form_context(request: Request, session: Session, *, errors=None) -> dict:
     seed = _csrf_seed(request)
-    courses = list_courses_with_tee_sets(session)
     return {
-        "courses": courses,
-        "preselected_course_id": courses[0].id if len(courses) == 1 else None,
         "errors": errors,
         "csrf_token": generate_csrf_token(seed) if seed else "",
     }
@@ -76,7 +71,6 @@ def _review_context(request: Request, session: Session, batch_id: int, *, errors
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     return {
         "batch": batch,
-        "course": get_course(session, batch.course_id),
         "rows": review_rows(session, batch_id),
         "errors": errors or {},
         "csrf_token": generate_csrf_token(_csrf_seed(request)),
@@ -97,7 +91,6 @@ async def new_import_form(
 @router.post("/admin/roster/imports/new")
 async def create_import(
     request: Request,
-    course_id: str = Form(""),
     csrf_token: str = Form(""),
     files: list[UploadFile] = File(default=[]),  # noqa: B008
     session: Session = Depends(get_session),  # noqa: B008
@@ -116,7 +109,6 @@ async def create_import(
         batch_id = stage_batch(
             session,
             created_by_user_id=admin.id,
-            course_id=course_id,
             files=file_pairs,
             now=now,
         )

@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
@@ -120,6 +120,10 @@ def create_app(settings=None) -> FastAPI:
     app.include_router(admin_teams_router)
 
     # Health endpoints
+    @app.get("/")
+    async def home() -> RedirectResponse:
+        return RedirectResponse(url="/roster", status_code=303)
+
     @app.get("/healthz")
     async def healthz() -> JSONResponse:
         return JSONResponse({"status": "ok"})

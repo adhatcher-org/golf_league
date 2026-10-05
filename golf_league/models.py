@@ -205,6 +205,22 @@ class Season(Base):
     course: Mapped["Course"] = relationship("Course", back_populates="seasons")
 
 
+class SeasonGolfer(Base):
+    """Explicit inclusion of a golfer in one season's roster."""
+
+    __tablename__ = "season_golfers"
+    __table_args__ = (
+        UniqueConstraint("season_id", "golfer_id", name="uq_season_golfers_season_golfer"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    season_id: Mapped[int] = mapped_column(ForeignKey("seasons.id"), nullable=False, index=True)
+    golfer_id: Mapped[int] = mapped_column(ForeignKey("golfers.id"), nullable=False, index=True)
+
+    season: Mapped["Season"] = relationship()
+    golfer: Mapped["Golfer"] = relationship()
+
+
 class SeasonParticipant(Base):
     """Optional season-specific tee and seed overrides for one golfer."""
 
@@ -247,9 +263,10 @@ class Golfer(Base):
     last_name: Mapped[str] = mapped_column(String(80), nullable=False)
     email: Mapped[str | None] = mapped_column(String(254), nullable=True, unique=True)
     phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    default_tee_set_id: Mapped[int] = mapped_column(
-        ForeignKey("tee_sets.id"), nullable=False
+    default_tee_set_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tee_sets.id"), nullable=True
     )
+    default_tee_label: Mapped[str] = mapped_column(String(30), nullable=False, default="White", server_default="White")
     handicap_strokes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     handicap_source: Mapped[str] = mapped_column(String(16), nullable=False)
     handicap_status: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -330,7 +347,7 @@ class RosterImportBatch(Base):
     created_by_user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"), nullable=False
     )
-    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), nullable=False)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id"), nullable=True)
     version: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1, server_default="1"
     )

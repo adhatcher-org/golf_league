@@ -10,6 +10,7 @@ from golf_league.services.auth import hash_password
 
 CSRF_RE = re.compile(r'name="csrf_token" value="([^"]*)"')
 RENDERED_TEE_RE = re.compile(r'name="rendered_tee_set_id" value="([^"]*)"')
+RENDERED_TEE_LABEL_RE = re.compile(r'name="rendered_tee_label" value="([^"]*)"')
 HANDICAP_VALUE_RE = re.compile(r'name="handicap_strokes" value="([^"]*)"')
 
 
@@ -22,6 +23,12 @@ def _extract_csrf(html: str) -> str:
 def _extract_rendered_tee(html: str) -> str:
     match = RENDERED_TEE_RE.search(html)
     assert match, f"no rendered_tee_set_id field found in: {html!r}"
+    return match.group(1)
+
+
+def _extract_rendered_tee_label(html: str) -> str:
+    match = RENDERED_TEE_LABEL_RE.search(html)
+    assert match, f"no rendered_tee_label field found in: {html!r}"
     return match.group(1)
 
 
@@ -128,7 +135,7 @@ def test_admin_creates_a_golfer_through_the_form(client):
     list_page = admin_client.get("/admin/golfers")
     assert list_page.status_code == 200
     assert "Ann Diaz" in list_page.text
-    assert "ok" in list_page.text
+    assert "Ok" in list_page.text
 
 
 def test_creating_a_golfer_with_only_the_three_required_fields_succeeds(client):
@@ -359,6 +366,72 @@ def test_admin_edits_a_golfer_and_updates_its_handicap_and_status(client):
     assert 'value="0"' in reloaded.text
 
 
+def test_edit_golfer_uses_course_independent_blue_white_gold_tee_labels(client):
+    admin_client = _admin_client(client)
+    tee_id = _deer_tee_set_id(admin_client)
+    golfer_id = _create_golfer(
+        admin_client, tee_id, email="label.edit@example.test", handicap_strokes="12"
+    )
+
+    edit_page = admin_client.get(f"/admin/golfers/{golfer_id}/edit")
+    assert edit_page.status_code == 200
+    assert 'name="default_tee_label"' in edit_page.text
+    assert 'value="Blue"' in edit_page.text
+    assert 'value="White" selected' in edit_page.text
+    assert 'value="Gold"' in edit_page.text
+    assert "Wyandot Golf Club" not in edit_page.text
+    csrf_token = _extract_csrf(edit_page.text)
+
+    first_response = admin_client.post(
+        f"/admin/golfers/{golfer_id}/edit",
+        data={
+            "first_name": "Edit",
+            "last_name": "Label",
+            "email": "label.edit@example.test",
+            "phone": "",
+            "default_tee_label": "Gold",
+            "handicap_strokes": "12",
+            "notes": "",
+            "is_active": "true",
+            "rendered_tee_set_id": str(tee_id),
+            "rendered_tee_label": _extract_rendered_tee_label(edit_page.text),
+            "csrf_token": csrf_token,
+        },
+    )
+    assert first_response.status_code == 422
+    assert 'value="Gold" selected' in first_response.text
+    assert _extract_rendered_tee_label(first_response.text) == "Gold"
+    assert _extract_handicap_value(first_response.text) == ""
+
+    second_response = admin_client.post(
+        f"/admin/golfers/{golfer_id}/edit",
+        data={
+            "first_name": "Edit",
+            "last_name": "Label",
+            "email": "label.edit@example.test",
+            "phone": "",
+            "default_tee_label": "Gold",
+            "handicap_strokes": "9",
+            "notes": "",
+            "is_active": "true",
+            "rendered_tee_set_id": str(tee_id),
+            "rendered_tee_label": _extract_rendered_tee_label(first_response.text),
+            "csrf_token": _extract_csrf(first_response.text),
+        },
+        follow_redirects=False,
+    )
+    assert second_response.status_code == 303
+
+    session = Session(bind=admin_client.app.state.engine)
+    try:
+        golfer = session.get(Golfer, golfer_id)
+        assert golfer.default_tee_label == "Gold"
+        assert golfer.default_tee_set_id is None
+        assert golfer.handicap_strokes == 9
+    finally:
+        session.close()
+
+
 def test_editing_a_golfer_with_invalid_handicap_re_renders_422_and_changes_nothing(client):
     admin_client = _admin_client(client)
     tee_id = _deer_tee_set_id(admin_client)
@@ -460,8 +533,9 @@ def test_changing_the_tee_re_renders_once_with_a_blank_handicap(client):
 
     # The new tee is selected, rendered_tee_set_id now names it, and the
     # old handicap number does not reappear in the field.
-    assert f'value="{snake_id}" selected' in response.text
+    assert 'value="Gold" selected' in response.text
     assert _extract_rendered_tee(response.text) == str(snake_id)
+    assert _extract_rendered_tee_label(response.text) == "Gold"
     assert _extract_handicap_value(response.text) == ""
     assert "12" not in _extract_handicap_value(response.text)
 

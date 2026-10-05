@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Seasons - Golf League{% endblock %}
+{% block content %}
+<header class="admin-page-heading">
+    <div>
+        <p class="eyebrow">Manage · Seasons</p>
+        <h1>Seasons</h1>
+        <p>Choose a season to manage its players, teams and settings.</p>
+    </div>
+    <a class="button-link" href="/admin/seasons/new">Create season</a>
+</header>
+{% if seasons %}
+<div class="table-wrap golfer-table-wrap">
+    <table>
+        <caption class="visually-hidden">All seasons, most recent first</caption>
+        <thead>
+            <tr><th scope="col">Season</th><th scope="col">Dates</th><th scope="col">Status</th><th scope="col">Manage</th></tr>
+        </thead>
+        <tbody>
+        {% for season in seasons %}
+            <tr>
+                <th scope="row"><a href="/admin/seasons/{{ season.id }}/participants">{{ display_names[season.id] }}</a></th>
+                <td>{{ season.start_date.strftime('%b %-d, %Y') }} – {{ season.end_date.strftime('%b %-d, %Y') }}</td>
+                <td>{{ season.status|title }}</td>
+                <td>
+                    <a href="/admin/seasons/{{ season.id }}/participants" aria-label="Players for {{ display_names[season.id] }}">Players</a> ·
+                    <a href="/admin/seasons/{{ season.id }}/teams" aria-label="Teams for {{ display_names[season.id] }}">Teams</a> ·
+                    <a href="/admin/seasons/{{ season.id }}/edit" aria-label="Settings for {{ display_names[season.id] }}">Settings</a>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<section class="empty-state">
+    <h2>No seasons yet</h2>
+    <p>Create a season to select players and build teams.</p>
+    <a class="button-link" href="/admin/seasons/new">Create your first season</a>
+</section>
+{% endif %}
+{% endblock %}

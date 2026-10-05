@@ -37,10 +37,8 @@ from golf_league.domain.roster_import import (
     resolve_status,
     sanitize_display_name,
     selected_handicap,
-    split_regular_name,
 )
 from golf_league.models import (
-    Course,
     Golfer,
     RosterImportBatch,
     RosterImportRow,
@@ -81,23 +79,15 @@ def _cell(row: Sequence[str], index: int) -> str:
     return row[index] if index < len(row) else ""
 
 
-def _build_regular_row(cells: Sequence[str]) -> dict[str, object]:
-    """Parse one `summer_regular` data row into its stored, normalized fields."""
-    name_cell = _cell(cells, 0)
-    status_cell = _cell(cells, 1)
-    gold_cell = _cell(cells, 2)
-    white_cell = _cell(cells, 3)
+def _build_roster_row(cells: Sequence[str]) -> dict[str, object]:
+    """Parse one course-independent roster row."""
+    first_name = normalize_name(_cell(cells, 0)) or None
+    last_name = normalize_name(_cell(cells, 1)) or None
+    tee_cell = _cell(cells, 2).strip()
+    tee_label = resolve_status(tee_cell)
+    handicap_single, handicap_ok = parse_handicap_cell(_cell(cells, 3))
     email_cell = _cell(cells, 4)
     phone_cell = _cell(cells, 5)
-
-    split = split_regular_name(name_cell)
-    first_name, last_name = split if split is not None else (None, None)
-
-    status_stripped = status_cell.strip()
-    tee_label = resolve_status(status_cell)
-
-    handicap_gold, gold_ok = parse_handicap_cell(gold_cell)
-    handicap_white, white_ok = parse_handicap_cell(white_cell)
 
     email_value, email_warnings = normalize_email_cell(email_cell)
     phone_value = normalize_phone(phone_cell)
@@ -109,11 +99,11 @@ def _build_regular_row(cells: Sequence[str]) -> dict[str, object]:
         static_error = "email_missing"
     elif not email_is_wellformed(email_value):
         static_error = "email_malformed"
-    elif tee_label is None and not status_stripped:
+    elif tee_label is None and not tee_cell:
         static_error = "status_blank"
     elif tee_label is None:
         static_error = "status_unknown"
-    elif not gold_ok or not white_ok:
+    elif not handicap_ok:
         static_error = "handicap_invalid"
     elif phone_value is not None and len(phone_value) > MAX_PHONE_LENGTH:
         static_error = "phone_invalid"
@@ -124,9 +114,9 @@ def _build_regular_row(cells: Sequence[str]) -> dict[str, object]:
         "email": email_value,
         "phone": phone_value,
         "tee_label": tee_label,
-        "handicap_gold": handicap_gold,
-        "handicap_white": handicap_white,
-        "handicap_single": None,
+        "handicap_gold": None,
+        "handicap_white": None,
+        "handicap_single": handicap_single,
         "static_error": static_error,
         "stage_warnings": email_warnings,
     }
@@ -215,16 +205,6 @@ def _parse_csv_file(display_name: str, text: str) -> dict[str, object]:
     return {"display_name": display_name, "role": role, "data_rows": data_rows}
 
 
-def _validate_course(session: Session, course_id: str) -> Course:
-    """Step 2: `course_id` must decimal-name a real `courses` row."""
-    if not isinstance(course_id, str) or not course_id.isdecimal():
-        _reject("course_id", "Choose a course.")
-    course = session.get(Course, int(course_id))
-    if course is None:
-        _reject("course_id", "Choose a course.")
-    return course
-
-
 def _kept_files(files: Sequence[tuple[str, bytes]]) -> list[tuple[str, bytes]]:
     """Step 3: drop the empty part an unfilled file input sends."""
     kept = [(name, content) for name, content in files if name or content]
@@ -263,16 +243,6 @@ def _check_row_counts(parsed_files: list[dict[str, object]]) -> None:
         _reject("files", "More than 1000 rows in one upload.")
 
 
-def _require_resolved_tees(session: Session, course_id: int) -> None:
-    """Step 9: the course must resolve exactly one men's Gold and White tee."""
-    tee_ids = _resolved_tee_ids(session, course_id)
-    if "Gold" not in tee_ids or "White" not in tee_ids:
-        _reject(
-            "course_id",
-            "Course needs exactly one men's Gold and one men's White tee.",
-        )
-
-
 def _build_all_rows(
     parsed_files: list[dict[str, object]],
 ) -> list[tuple[dict[str, object], str, str, int, str]]:
@@ -282,11 +252,7 @@ def _build_all_rows(
         role = entry["role"]
         display_name = entry["display_name"]
         for source_row, raw_line, cells in entry["data_rows"]:
-            built = (
-                _build_regular_row(cells)
-                if role == "summer_regular"
-                else _build_sub_row(cells)
-            )
+            built = _build_roster_row(cells)
             built_rows.append((built, role, display_name, source_row, raw_line))
     return built_rows
 
@@ -308,7 +274,7 @@ def _insert_batch_and_rows(
     session: Session,
     *,
     created_by_user_id: int,
-    course_id: int,
+    course_id: int | None,
     is_initial: bool,
     source_display_name: str,
     built_rows: list[tuple[dict[str, object], str, str, int, str]],
@@ -368,7 +334,7 @@ def stage_batch(
     session: Session,
     *,
     created_by_user_id: int,
-    course_id: str,
+    course_id: str | None = None,
     files: Sequence[tuple[str, bytes]],
     now: datetime,
 ) -> int:
@@ -380,7 +346,6 @@ def stage_batch(
     and writing nothing on the first failure; otherwise inserts the batch and
     its rows, calls `revalidate_batch`, and commits exactly once.
     """
-    course = _validate_course(session, course_id)
     kept_files = _kept_files(files)
     _check_total_size(kept_files)
     decoded = _decode_files(kept_files)
@@ -390,7 +355,6 @@ def stage_batch(
         _parse_csv_file(sanitize_display_name(name), text) for name, text in decoded
     ]
     _check_row_counts(parsed_files)
-    _require_resolved_tees(session, course.id)
 
     built_rows = _build_all_rows(parsed_files)
     is_initial = _next_batch_is_initial(session)
@@ -401,7 +365,7 @@ def stage_batch(
     batch = _insert_batch_and_rows(
         session,
         created_by_user_id=created_by_user_id,
-        course_id=course.id,
+        course_id=None,
         is_initial=is_initial,
         source_display_name=source_display_name,
         built_rows=built_rows,
@@ -470,7 +434,7 @@ def review_rows(session: Session, batch_id: int) -> list[dict[str, object]]:
     return result
 
 
-def _resolved_tee_ids(session: Session, course_id: int) -> dict[str, int]:
+def _resolved_tee_ids(session: Session, course_id: int | None) -> dict[str, int]:
     """`{"Gold": id, "White": id}` for the men's tees of `course_id`.
 
     A label missing from the result means it did not resolve to exactly
@@ -478,6 +442,8 @@ def _resolved_tee_ids(session: Session, course_id: int) -> dict[str, int]:
     since tee resolution was already enforced at stage time.
     """
     resolved: dict[str, int] = {}
+    if course_id is None:
+        return resolved
     for label in ("Gold", "White"):
         matches = list(
             session.execute(
@@ -508,8 +474,12 @@ def _protected_field_changed(
     if row.phone is not None and not phones_equal(row.phone, golfer.phone):
         return True
     if row.tee_label is not None:
-        resolved_id = tee_ids.get(row.tee_label)
-        if resolved_id is not None and resolved_id != golfer.default_tee_set_id:
+        existing_tee_label = (
+            golfer.default_tee_set.color_label
+            if golfer.default_tee_set is not None
+            else golfer.default_tee_label
+        )
+        if row.tee_label != existing_tee_label:
             return True
     selected = selected_handicap(
         source_role=row.source_role,
@@ -621,7 +591,7 @@ def _compute_validation_code(
         return "email_malformed"
     if row.email in duplicate_emails:
         return "email_duplicate_in_batch"
-    if row.source_role == "summer_regular" and row.tee_label is None:
+    if row.source_role in {"summer_regular", "roster"} and row.tee_label is None:
         return "status_unknown" if frozen == "status_unknown" else "status_blank"
     if frozen == "handicap_invalid":
         return "handicap_invalid"
@@ -687,8 +657,6 @@ def edit_staged_row(
     if action == "swap_names":
         first_name, last_name = row.last_name or "", row.first_name or ""
         email, phone, tee_label = row.email or "", row.phone or "", row.tee_label or ""
-        handicap_gold = "" if row.handicap_gold is None else str(row.handicap_gold)
-        handicap_white = "" if row.handicap_white is None else str(row.handicap_white)
         handicap_single = "" if row.handicap_single is None else str(row.handicap_single)
         included, update_opt_in = row.included, row.update_opt_in
     elif action == "accept_domain_suggestion":
@@ -700,8 +668,6 @@ def edit_staged_row(
         email = f"{row.email.rsplit('@', 1)[0]}@{suggestion}"
         first_name, last_name, phone = row.first_name or "", row.last_name or "", row.phone or ""
         tee_label = row.tee_label or ""
-        handicap_gold = "" if row.handicap_gold is None else str(row.handicap_gold)
-        handicap_white = "" if row.handicap_white is None else str(row.handicap_white)
         handicap_single = "" if row.handicap_single is None else str(row.handicap_single)
         included, update_opt_in = row.included, row.update_opt_in
     elif action != "edit":
@@ -716,14 +682,15 @@ def edit_staged_row(
         "update_opt_in": update_opt_in,
         "version": row.version + 1,
     }
-    if row.source_role == "summer_regular":
+    if row.source_role in {"summer_regular", "roster"}:
         label = tee_label.strip()
-        if label not in ("", "Gold", "White"):
-            raise ImportValidationError({"tee_label": "Choose Gold or White."})
+        if label not in ("", "Blue", "White", "Gold"):
+            raise ImportValidationError({"tee_label": "Choose Blue, White, or Gold."})
         values.update(
             tee_label=label or None,
-            handicap_gold=_edit_handicap(handicap_gold),
-            handicap_white=_edit_handicap(handicap_white),
+            handicap_gold=None,
+            handicap_white=None,
+            handicap_single=_edit_handicap(handicap_single),
             validation_error=None if action == "edit" else row.validation_error,
         )
     else:
@@ -785,7 +752,7 @@ def _persisted_handicap(row: RosterImportRow, batch: RosterImportBatch) -> int |
         handicap_white=row.handicap_white,
         handicap_single=row.handicap_single,
     )
-    return 0 if selected is None and batch.is_initial else selected
+    return selected
 
 
 def _apply_row(
@@ -803,15 +770,12 @@ def _apply_row(
         select(Golfer).where(Golfer.email == row.email)
     ).scalar_one_or_none()
     tee_id = tee_ids.get(row.tee_label or "")
-    if tee_id is None and batch.is_initial:
-        tee_id = tee_ids["White"]
     handicap = _persisted_handicap(row, batch)
     if golfer is None:
-        if tee_id is None:
-            raise ImportApplyError()
         session.add(Golfer(
             first_name=row.first_name or "", last_name=row.last_name or "",
-            email=row.email, phone=row.phone, default_tee_set_id=tee_id,
+            email=row.email, phone=row.phone, default_tee_set_id=None,
+            default_tee_label=row.tee_label or "White",
             handicap_strokes=handicap, handicap_source="imported",
             handicap_status=derive_handicap_status(
                 email=row.email, handicap_strokes=handicap
@@ -839,6 +803,10 @@ def _existing_golfer_changes(
         changes["last_name"] = row.last_name
     if row.phone is not None and not phones_equal(row.phone, golfer.phone):
         changes["phone"] = row.phone
+    if row.tee_label is not None and row.tee_label != golfer.default_tee_label:
+        changes["default_tee_label"] = row.tee_label
+    if golfer.default_tee_set_id is not None:
+        changes["default_tee_set_id"] = None
     if tee_id is not None and tee_id != golfer.default_tee_set_id:
         changes["default_tee_set_id"] = tee_id
     if handicap is not None and handicap != golfer.handicap_strokes:
@@ -868,7 +836,7 @@ def apply_batch(
         if errors:
             session.rollback()
             raise ImportApplyError()
-        tee_ids = _resolved_tee_ids(session, batch.course_id)
+        tee_ids: dict[str, int] = {}
         counters = {"created": 0, "updated": 0, "unchanged": 0, "skipped": 0}
         for row in rows:
             _apply_row(session, row, batch, tee_ids, counters)
@@ -911,11 +879,8 @@ def _compute_row_warnings(
         "email_lowercased",
     }
 
-    landing_eligible = golfer is None and batch.is_initial
     if selected is None:
-        warnings.add("handicap_defaulted_zero" if landing_eligible else "handicap_blank")
-    if landing_eligible and row.tee_label is None:
-        warnings.add("tee_defaulted_white")
+        warnings.add("handicap_blank")
 
     if row.email is not None and "@" in row.email:
         domain = row.email.rsplit("@", 1)[-1]

@@ -172,10 +172,9 @@ def test_migration_is_idempotent_and_downgrades_cleanly(tmp_path):
     db_path = tmp_path / "migration4.db"
     database_url = f"sqlite:///{db_path}"
 
-    upgrade_to_head(database_url)
-    upgrade_to_head(database_url)  # idempotent: no-op on second call
-
     config = _make_config(database_url)
+    command.upgrade(config, "d24f7b6c1a9e")
+    command.upgrade(config, "d24f7b6c1a9e")  # idempotent: no-op on second call
     command.downgrade(config, "e5a1c3d9f2b7")
 
     engine = create_engine(database_url)
@@ -191,7 +190,7 @@ def test_migration_is_idempotent_and_downgrades_cleanly(tmp_path):
         engine.dispose()
 
     # And upgrading again from the downgraded state must succeed cleanly.
-    upgrade_to_head(database_url)
+    command.upgrade(config, "d24f7b6c1a9e")
     engine = create_engine(database_url)
     try:
         inspector = inspect(engine)

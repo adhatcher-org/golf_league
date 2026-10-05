@@ -1,14 +1,28 @@
 {% extends "base.html" %}
-{% block title %}{% if team %}Edit {{ team.name }}{% else %}New team{% endif %} - Golf League{% endblock %}
+{% block title %}{% if team %}Assign players · {{ team.name }}{% else %}Create team and assign players{% endif %} - Golf League{% endblock %}
 {% block content %}
-<h2>{% if team %}Edit team {{ team.number }}{% else %}New team{% endif %} — {{ season.name_override or season.year }}</h2>
+<header class="admin-page-heading">
+    <div>
+        <p class="eyebrow">Manage · {{ season.year }}</p>
+        <h1>{% if team %}Assign players / edit team {{ team.number }}{% else %}Create team and assign players{% endif %}</h1>
+        <p>{{ season.name_override or season.year }}{% if team %} · {{ team.name }}{% endif %}</p>
+    </div>
+</header>
+<nav aria-label="Team assignment navigation">
+    <p><a href="/admin/seasons/{{ season.id }}/teams">Back to teams</a>
+        · <a href="/admin/seasons/{{ season.id }}/participants">Season roster</a></p>
+</nav>
 {% if errors %}<ul class="error">{% for field, message in errors.items() %}<li>{{ field }}: {{ message }}</li>{% endfor %}</ul>{% endif %}
 <form method="post" action="{% if team %}/admin/teams/{{ team.id }}/edit{% else %}/admin/seasons/{{ season.id }}/teams/new{% endif %}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label>Team name <input name="name" value="{{ team.name if team else '' }}" required></label>
     <label>Team number <input name="number" value="{{ team.number if team else '' }}" inputmode="numeric" required></label>
     <label>Sort order <input name="sort_order" value="{{ team.sort_order if team else '0' }}" inputmode="numeric" required></label>
-    <p>Choose up to four active golfers with a valid season tee and effective seed. The slot sets the position. Blank slots keep the team incomplete.</p>
+    <h2>Assign players</h2>
+    <p>Choose one to four active golfers selected in the season roster, with a valid tee for this season's course and a handicap. Golfers assigned to another team in this season are unavailable. Each slot sets the position; a team with fewer than four players remains incomplete.</p>
+    {% if not golfers %}
+    <p class="empty-state">No eligible golfers are available. <a href="/admin/seasons/{{ season.id }}/participants">Select golfers in the season roster</a> and check their season tee and handicap before assigning players.</p>
+    {% endif %}
     {% for position in range(1, 5) %}
     <label>P{{ position }}
         <select name="member_{{ position }}">
@@ -26,6 +40,5 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <button type="submit">Assign positions by handicap</button>
 </form>
-<p><a href="/admin/seasons/{{ season.id }}/teams">Back to teams</a></p>
 {% endif %}
 {% endblock %}

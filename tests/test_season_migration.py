@@ -104,8 +104,8 @@ def test_prior_head_upgrade_preserves_course_and_downgrade_removes_only_seasons(
     finally:
         engine.dispose()
 
-    upgrade_to_head(database_url)
-    upgrade_to_head(database_url)
+    command.upgrade(config, "c7b4e2d8a91f")
+    command.upgrade(config, "c7b4e2d8a91f")
     engine = create_engine(database_url)
     try:
         with engine.connect() as connection:

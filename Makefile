@@ -1,7 +1,10 @@
-.PHONY: help lint test test-with-cov coverage security dependency-check check
+.PHONY: help build run stop lint test test-with-cov coverage security dependency-check check
 
 help:
 	@echo "Available commands:"
+	@echo "  build         - Build the Docker image"
+	@echo "  run           - Build and start the app in the foreground"
+	@echo "  stop          - Stop the Docker Compose app"
 	@echo "  lint          - Run linter"
 	@echo "  test          - Run tests"
 	@echo "  test-with-cov - Run tests with coverage"
@@ -9,6 +12,15 @@ help:
 	@echo "  security      - Run security checks"
 	@echo "  dependency-check - Check dependencies"
 	@echo "  check         - Run all checks"
+
+build:
+	docker compose build
+
+run:
+	docker compose up --build
+
+stop:
+	docker compose down
 
 lint:
 	uv run ruff check .

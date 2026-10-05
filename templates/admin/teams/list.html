@@ -1,9 +1,22 @@
 {% extends "base.html" %}
 {% block title %}{{ season.year }} Teams - Golf League{% endblock %}
 {% block content %}
-<h2>Teams — {{ season.name_override or season.year }}</h2>
-<p>Teams are entered manually. A team needs four members before matchup generation can proceed.</p>
-<p><a href="/admin/seasons/{{ season.id }}/teams/new">Add team</a> · <a href="/admin/seasons/{{ season.id }}/edit">Season settings</a></p>
+<header class="admin-page-heading season-roster-heading">
+    <div>
+        <p class="eyebrow">Manage · {{ season.year }}</p>
+        <h1>Teams — {{ season.name_override or season.year }}</h1>
+        <p>Teams are entered manually. A team needs four members before matchup generation can proceed.</p>
+    </div>
+    <a class="button-link" href="/admin/seasons/{{ season.id }}/teams/new">Create team</a>
+</header>
+<nav aria-label="Season navigation">
+    <p>
+        <a href="/admin/seasons">Seasons</a>
+        · <a href="/admin/seasons/{{ season.id }}/participants">Season roster</a>
+        · <span aria-current="page">Teams</span>
+        · <a href="/admin/seasons/{{ season.id }}/edit">Season settings</a>
+    </p>
+</nav>
 {% for view in teams %}
 <section>
     <h3>Team {{ view.team.number }}: {{ view.team.name }}</h3>
@@ -13,9 +26,9 @@
         <li>P{{ member.position }} — {{ member.golfer.last_name }}, {{ member.golfer.first_name }}</li>
     {% endfor %}
     </ol>
-    <p><a href="/admin/teams/{{ view.team.id }}/edit">Edit team</a></p>
+    <p><a href="/admin/teams/{{ view.team.id }}/edit">Assign players / edit team</a></p>
 </section>
 {% else %}
-<p>No teams have been entered for this season.</p>
+<p class="empty-state">No teams have been entered for this season. Choose Create team to name a team and assign its golfers.</p>
 {% endfor %}
 {% endblock %}

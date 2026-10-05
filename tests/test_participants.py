@@ -1,6 +1,7 @@
 """GL-31 participant override, role derivation and admin route tests."""
 
 from datetime import date
+from html.parser import HTMLParser
 
 import pytest
 from conftest import _extract_csrf
@@ -8,7 +9,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from golf_league.domain.roster import filter_sub_pool, role_from_membership
-from golf_league.models import Course, Golfer, Season, SeasonParticipant, TeeSet
+from golf_league.models import (
+    Course,
+    Golfer,
+    Season,
+    SeasonGolfer,
+    SeasonParticipant,
+    TeeSet,
+)
 from golf_league.services.participants import (
     ParticipantValidationError,
     add_participant_override,
@@ -17,6 +25,11 @@ from golf_league.services.participants import (
     update_participant_override,
 )
 from golf_league.services.roster import delete_golfer
+from golf_league.services.season_roster import (
+    SeasonRosterValidationError,
+    list_season_golfers,
+    save_season_golfers,
+)
 
 
 def _season(session, course_id):
@@ -40,6 +53,22 @@ def _golfer(session, tee, *, strokes=6, active=True, first="Sample"):
     session.add(row)
     session.commit()
     return row
+
+
+def _checked_roster_ids(html):
+    class RosterParser(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.ids = set()
+
+        def handle_starttag(self, tag, attrs):
+            fields = dict(attrs)
+            if tag == "input" and fields.get("name") == "golfer_ids" and "checked" in fields:
+                self.ids.add(int(fields["value"]))
+
+    parser = RosterParser()
+    parser.feed(html)
+    return parser.ids
 
 
 def test_role_and_sub_pool_are_derived_from_membership_facts(golfer):
@@ -132,6 +161,159 @@ def test_active_roster_golfer_without_override_remains_available(session, wyando
     assert list_available_golfers(session, season.id) == []
 
 
+def test_season_roster_bulk_selection_saves_only_selected_active_golfers(
+    session, wyandot_course
+):
+    course = wyandot_course()
+    season = _season(session, course.id)
+    tee = course.tee_sets[0]
+    selected = _golfer(session, tee, first="Selected")
+    omitted = _golfer(session, tee, first="Omitted")
+    inactive = _golfer(session, tee, first="Inactive", active=False)
+
+    save_season_golfers(session, season.id, [str(selected.id)])
+
+    views = {item.golfer.id: item for item in list_season_golfers(session, season.id)}
+    assert views[selected.id].included is True
+    assert views[omitted.id].included is False
+    assert views[inactive.id].included is False
+    assert session.query(SeasonGolfer).filter_by(season_id=season.id).count() == 1
+
+
+def test_admin_season_roster_post_persists_repeated_checkbox_values(admin_client):
+    session = Session(bind=admin_client.app.state.engine)
+    try:
+        course = session.execute(select(Course)).scalars().first()
+        tee = session.execute(
+            select(TeeSet).where(TeeSet.course_id == course.id)
+        ).scalars().first()
+        season = _season(session, course.id)
+        first = _golfer(session, tee, first="First")
+        second = _golfer(session, tee, first="Second")
+        season_id = season.id
+        selected_ids = (first.id, second.id)
+    finally:
+        session.close()
+
+    page = admin_client.get(f"/admin/seasons/{season_id}/participants")
+    payload = {
+        "csrf_token": _extract_csrf(page.text),
+        "golfer_ids": [str(golfer_id) for golfer_id in selected_ids],
+    }
+    response = admin_client.post(
+        f"/admin/seasons/{season_id}/participants/roster",
+        data=payload,
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        f"/admin/seasons/{season_id}/participants?roster_saved=1"
+    )
+    saved_page = admin_client.get(response.headers["location"])
+    assert saved_page.status_code == 200
+    assert "Season roster saved." in saved_page.text
+
+    session = Session(bind=admin_client.app.state.engine)
+    try:
+        saved_ids = set(session.scalars(
+            select(SeasonGolfer.golfer_id).where(SeasonGolfer.season_id == season_id)
+        ))
+        assert saved_ids == set(selected_ids)
+    finally:
+        session.close()
+
+
+def test_season_roster_rejects_inactive_ids_and_preserves_team_members(
+    session, wyandot_course
+):
+    from golf_league.models import Team, TeamMember
+
+    course = wyandot_course()
+    season = _season(session, course.id)
+    tee = course.tee_sets[0]
+    selected = _golfer(session, tee, first="Assigned")
+    inactive = _golfer(session, tee, first="Inactive", active=False)
+    save_season_golfers(session, season.id, [str(selected.id)])
+    team = Team(season_id=season.id, name="Team", number=1, sort_order=1)
+    session.add(team)
+    session.flush()
+    session.add(TeamMember(team_id=team.id, season_id=season.id, golfer_id=selected.id, position=1))
+    session.commit()
+
+    with pytest.raises(SeasonRosterValidationError):
+        save_season_golfers(session, season.id, [str(inactive.id)])
+
+    save_season_golfers(session, season.id, [])
+    assert session.query(SeasonGolfer).filter_by(
+        season_id=season.id, golfer_id=selected.id
+    ).one()
+
+
+def test_admin_season_roster_bulk_save_replaces_and_clears_only_current_season(admin_client):
+    with Session(bind=admin_client.app.state.engine) as session:
+        course = session.scalars(select(Course)).first()
+        season = _season(session, course.id)
+        other_season = _season(session, course.id)
+        golfers = [Golfer(
+            first_name=f"Synthetic {index}", last_name="Roster",
+            default_tee_label="Gold", default_tee_set_id=None,
+            handicap_strokes=0, handicap_source="self_reported", handicap_status="ok",
+        ) for index in range(32)]
+        session.add_all(golfers)
+        session.commit()
+        golfer_ids = [golfer.id for golfer in golfers]
+        season_id, other_season_id = season.id, other_season.id
+        save_season_golfers(session, other_season_id, [golfer_ids[-1]])
+
+    path = f"/admin/seasons/{season_id}/participants"
+    for selection in (golfer_ids, golfer_ids[:2], []):
+        page = admin_client.get(path)
+        payload = {"csrf_token": _extract_csrf(page.text)}
+        if selection:
+            payload["golfer_ids"] = [str(golfer_id) for golfer_id in selection]
+        response = admin_client.post(
+            f"{path}/roster", data=payload, follow_redirects=False,
+        )
+        assert response.status_code == 303
+        # Read again without the success query: the saved state must outlive the redirect.
+        fresh_page = admin_client.get(path)
+        assert fresh_page.status_code == 200
+        assert _checked_roster_ids(fresh_page.text) == set(selection)
+        with Session(bind=admin_client.app.state.engine) as session:
+            saved_ids = set(session.scalars(select(SeasonGolfer.golfer_id).where(
+                SeasonGolfer.season_id == season_id,
+            )))
+            assert saved_ids == set(selection)
+            assert set(session.scalars(select(SeasonGolfer.golfer_id).where(
+                SeasonGolfer.season_id == other_season_id,
+            ))) == {golfer_ids[-1]}
+            views = list_season_golfers(session, season_id)
+            assert {view.golfer.id for view in views if view.included} == set(selection)
+
+
+def test_admin_season_roster_invalid_selection_preserves_saved_roster(admin_client):
+    with Session(bind=admin_client.app.state.engine) as session:
+        course = session.scalars(select(Course)).first()
+        tee = session.scalars(select(TeeSet).where(TeeSet.course_id == course.id)).first()
+        season = _season(session, course.id)
+        golfer = _golfer(session, tee)
+        season_id, golfer_id = season.id, golfer.id
+        save_season_golfers(session, season_id, [golfer_id])
+
+    path = f"/admin/seasons/{season_id}/participants"
+    assert admin_client.post(f"{path}/roster", data={}).status_code == 403
+    page = admin_client.get(path)
+    response = admin_client.post(f"{path}/roster", data={
+        "csrf_token": _extract_csrf(page.text), "golfer_ids": ["invalid"],
+    })
+    assert response.status_code == 422
+    assert "The golfer selection is invalid." in response.text
+    with Session(bind=admin_client.app.state.engine) as session:
+        assert set(session.scalars(select(SeasonGolfer.golfer_id).where(
+            SeasonGolfer.season_id == season_id,
+        ))) == {golfer_id}
+
+
 def test_cross_course_tee_is_rejected_and_tee_delete_is_blocked(session, wyandot_course, golfer):
     course = wyandot_course()
     season = _season(session, course.id)
@@ -187,7 +369,7 @@ def test_admin_participant_page_and_add_require_admin_and_csrf(admin_client, emp
     page = admin_client.get(f"/admin/seasons/{ids[0]}/participants")
     assert page.status_code == 200
     token = _extract_csrf(page.text)
-    assert "Active and sub status comes from team membership" in page.text
+    assert "Every active golfer without a team is a sub" in page.text
     assert admin_client.post(
         f"/admin/seasons/{ids[0]}/participants/add",
         data={"golfer_id": str(ids[1]), "seed_handicap_strokes": "-3", "csrf_token": token},
@@ -252,4 +434,4 @@ def test_admin_cross_course_override_rerenders_422(admin_client):
         data={"golfer_id": str(golfer_id), "tee_set_id": str(foreign_id), "csrf_token": _extract_csrf(page.text)},
     )
     assert response.status_code == 422
-    assert "tee_set_id:" in response.text
+    assert "Choose a tee at this season&#39;s course." in response.text

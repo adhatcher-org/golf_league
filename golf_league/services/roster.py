@@ -22,6 +22,7 @@ from golf_league.domain.roster import (
 from golf_league.models import (
     Golfer,
     Season,
+    SeasonGolfer,
     SeasonParticipant,
     Team,
     TeamMember,
@@ -76,6 +77,7 @@ def _validate_golfer_fields(
     first_name: str,
     last_name: str,
     default_tee_set_id: object,
+    default_tee_label: object = None,
     handicap_strokes: object,
 ) -> dict[str, str]:
     errors: dict[str, str] = {}
@@ -85,7 +87,10 @@ def _validate_golfer_fields(
     if not last_name or not normalize_name(last_name):
         errors["last_name"] = "Last name is required."
 
-    if default_tee_set_id is None or not str(default_tee_set_id).strip():
+    if default_tee_label is not None:
+        if str(default_tee_label).strip() not in {"Blue", "White", "Gold"}:
+            errors["default_tee_label"] = "Choose Blue, White, or Gold."
+    elif default_tee_set_id is None or not str(default_tee_set_id).strip():
         errors["default_tee_set_id"] = "Tee is required."
     else:
         try:
@@ -150,6 +155,7 @@ def create_golfer(
 
     normalized_email = normalize_email(email)
     strokes = _parse_handicap_strokes(handicap_strokes)
+    tee_set = session.get(TeeSet, int(str(default_tee_set_id).strip()))
 
     golfer = Golfer(
         first_name=normalize_name(first_name),
@@ -157,6 +163,7 @@ def create_golfer(
         email=normalized_email,
         phone=normalize_phone(phone),
         default_tee_set_id=int(str(default_tee_set_id).strip()),
+        default_tee_label=tee_set.color_label,
         handicap_strokes=strokes,
         handicap_source="self_reported",
         handicap_status=derive_handicap_status(
@@ -176,13 +183,34 @@ def create_golfer(
     return golfer
 
 
+def _tee_update_values(
+    session: Session,
+    golfer: Golfer,
+    *,
+    default_tee_set_id: object,
+    default_tee_label: object,
+    errors: dict[str, str],
+) -> tuple[int | None, str | None, bool]:
+    if default_tee_label is not None:
+        if "default_tee_label" in errors:
+            return None, None, False
+        label = str(default_tee_label).strip()
+        return None, label, label != golfer.default_tee_label
+    if "default_tee_set_id" in errors:
+        return None, None, False
+    tee_set_id = int(str(default_tee_set_id).strip())
+    tee_set = session.get(TeeSet, tee_set_id)
+    return tee_set_id, tee_set.color_label, tee_set_id != golfer.default_tee_set_id
+
+
 def update_golfer(
     session: Session,
     golfer_id: int,
     *,
     first_name: str,
     last_name: str,
-    default_tee_set_id: object,
+    default_tee_set_id: object = None,
+    default_tee_label: object = None,
     email: str | None = None,
     phone: str | None = None,
     handicap_strokes: object = _UNSET,
@@ -191,9 +219,9 @@ def update_golfer(
 ) -> Golfer | None:
     """Update a golfer; returns None when `golfer_id` does not exist.
 
-    When `default_tee_set_id` names a different tee set than the one
-    currently stored, `handicap_strokes` must be supplied again in this
-    same call — either a number or an explicit blank (`""`) meaning NULL.
+    When the tee label or tee set changes, `handicap_strokes` must be
+    supplied again in this same call — either a number or an explicit
+    blank (`""`) meaning NULL.
     Leaving `handicap_strokes` at its `_UNSET` default while changing the
     tee is a validation error naming `handicap_strokes`; the previously
     stored strokes are never carried across a tee change. Omitting it when
@@ -208,14 +236,19 @@ def update_golfer(
         session,
         first_name=first_name,
         last_name=last_name,
-        default_tee_set_id=default_tee_set_id,
+        default_tee_set_id=(None if default_tee_label is not None else default_tee_set_id),
+        default_tee_label=default_tee_label,
         handicap_strokes=(handicap_strokes if supplied else None),
     )
 
-    new_tee_set_id: int | None = None
-    if "default_tee_set_id" not in errors:
-        new_tee_set_id = int(str(default_tee_set_id).strip())
-        tee_changed = new_tee_set_id != golfer.default_tee_set_id
+    new_tee_set_id, new_tee_label, tee_changed = _tee_update_values(
+        session,
+        golfer,
+        default_tee_set_id=default_tee_set_id,
+        default_tee_label=default_tee_label,
+        errors=errors,
+    )
+    if tee_changed:
         if tee_changed and not supplied:
             errors["handicap_strokes"] = (
                 "Changing the tee requires the handicap to be supplied again."
@@ -244,6 +277,7 @@ def update_golfer(
     golfer.email = normalized_email
     golfer.phone = normalize_phone(phone)
     golfer.default_tee_set_id = new_tee_set_id
+    golfer.default_tee_label = new_tee_label
     golfer.handicap_strokes = strokes
     golfer.handicap_status = derive_handicap_status(
         email=normalized_email, handicap_strokes=strokes
@@ -285,13 +319,16 @@ def delete_golfer(session: Session, golfer_id: int) -> bool | None:
         return None
     user_count = session.query(User).filter_by(golfer_id=golfer_id).count()
     participant_count = session.query(SeasonParticipant).filter_by(golfer_id=golfer_id).count()
+    season_roster_count = session.query(SeasonGolfer).filter_by(golfer_id=golfer_id).count()
     team_membership_count = session.query(TeamMember).filter_by(golfer_id=golfer_id).count()
-    if user_count or participant_count or team_membership_count:
+    if user_count or participant_count or season_roster_count or team_membership_count:
         references = []
         if user_count:
             references.append(f"linked to {user_count} user account{'s' if user_count != 1 else ''}")
         if participant_count:
             references.append(f"on {participant_count} season participant row{'s' if participant_count != 1 else ''}")
+        if season_roster_count:
+            references.append(f"included in {season_roster_count} season roster{'s' if season_roster_count != 1 else ''}")
         if team_membership_count:
             references.append(f"on {team_membership_count} team membership row{'s' if team_membership_count != 1 else ''}")
         raise RosterValidationError({"delete": "Cannot delete golfer: " + ", ".join(references) + "."})
@@ -316,10 +353,9 @@ def list_active_roster_players(session: Session) -> list[RosterPlayer]:
         select(
             Golfer.first_name,
             Golfer.last_name,
-            TeeSet.color_label,
+            Golfer.default_tee_label,
             Golfer.handicap_strokes,
         )
-        .join(TeeSet, Golfer.default_tee_set_id == TeeSet.id)
         .where(Golfer.is_active.is_(True))
         .order_by(Golfer.last_name, Golfer.first_name)
     ).all()

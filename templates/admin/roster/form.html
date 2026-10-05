@@ -13,6 +13,7 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     {% if golfer %}
     <input type="hidden" name="rendered_tee_set_id" value="{{ rendered_tee_set_id if rendered_tee_set_id is not none else golfer.default_tee_set_id }}">
+    <input type="hidden" name="rendered_tee_label" value="{{ rendered_tee_label if rendered_tee_label is not none else golfer.default_tee_label }}">
     {% endif %}
     <label>
         First name
@@ -32,6 +33,14 @@
     </label>
     <label>
         Tee
+        {% if golfer %}
+        <select name="default_tee_label" required>
+            {% set _selected_tee_label = selected_tee_label if selected_tee_label is not none else golfer.default_tee_label %}
+            <option value="Blue" {% if _selected_tee_label == 'Blue' %}selected{% endif %}>Blue</option>
+            <option value="White" {% if _selected_tee_label == 'White' %}selected{% endif %}>White</option>
+            <option value="Gold" {% if _selected_tee_label == 'Gold' %}selected{% endif %}>Gold</option>
+        </select>
+        {% else %}
         <select name="default_tee_set_id" required>
             <option value="">Select a tee</option>
             {% for course in courses %}
@@ -41,6 +50,7 @@
             {% endfor %}
             {% endfor %}
         </select>
+        {% endif %}
     </label>
     <label>
         Handicap strokes

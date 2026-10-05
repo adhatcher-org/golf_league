@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from golf_league.domain.teams import order_members_by_seed, season_ready_for_matchups
-from golf_league.models import Golfer, Season, Team, TeamMember
+from golf_league.models import Golfer, Season, SeasonGolfer, Team, TeamMember
 from golf_league.services.participants import (
     ParticipantValidationError,
     effective_participant,
@@ -74,6 +74,11 @@ def _validate_members(session: Session, season: Season, team_id: int | None,
             raise TeamValidationError({"golfer_id": "Choose an existing golfer."})
         if not golfer.is_active:
             raise TeamValidationError({"golfer_id": "Choose an active golfer."})
+        if session.execute(select(SeasonGolfer.id).where(
+            SeasonGolfer.season_id == season.id,
+            SeasonGolfer.golfer_id == golfer.id,
+        ).limit(1)).first() is None:
+            raise TeamValidationError({"golfer_id": "Include the golfer in this season before assigning a team."})
         try:
             effective = effective_participant(session, season.id, golfer.id)
         except ParticipantValidationError:
@@ -162,8 +167,11 @@ def list_assignable_golfers(session: Session, season_id: int, team_id: int | Non
         TeamMember.season_id == season_id,
         TeamMember.team_id != team_id if team_id is not None else True,
     )
+    included = select(SeasonGolfer.golfer_id).where(SeasonGolfer.season_id == season_id)
     golfers = session.execute(
-        select(Golfer).where(Golfer.is_active.is_(True)).order_by(Golfer.last_name, Golfer.first_name, Golfer.id)
+        select(Golfer).where(
+            Golfer.is_active.is_(True), Golfer.id.in_(included)
+        ).order_by(Golfer.last_name, Golfer.first_name, Golfer.id)
     ).scalars()
     result = []
     for golfer in golfers:

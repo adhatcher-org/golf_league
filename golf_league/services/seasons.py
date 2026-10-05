@@ -234,6 +234,17 @@ def get_season(session: Session, season_id: int) -> Season | None:
     return session.get(Season, season_id)
 
 
+def list_seasons(session: Session) -> list[Season]:
+    """Return every season, with the most recent seasons first."""
+    return list(
+        session.execute(
+            select(Season).order_by(
+                Season.year.desc(), Season.start_date.desc(), Season.id.desc()
+            )
+        ).scalars()
+    )
+
+
 def update_season(
     session: Session,
     season_id: int,
@@ -299,6 +310,7 @@ __all__ = [
     "create_season",
     "get_season",
     "list_courses_for_season_form",
+    "list_seasons",
     "season_display_name",
     "season_week_count",
     "update_season",

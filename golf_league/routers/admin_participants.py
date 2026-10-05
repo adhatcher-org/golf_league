@@ -16,6 +16,11 @@ from golf_league.services.participants import (
     list_participant_views,
     update_participant_override,
 )
+from golf_league.services.season_roster import (
+    SeasonRosterValidationError,
+    list_season_golfers,
+    save_season_golfers,
+)
 
 router = APIRouter()
 
@@ -26,7 +31,15 @@ def _csrf(request: Request, token: str) -> None:
         raise HTTPException(status_code=403, detail="Invalid CSRF token")
 
 
-def _render(request: Request, session: Session, season_id: int, *, errors=None, status_code=200) -> Response:
+def _render(
+    request: Request,
+    session: Session,
+    season_id: int,
+    *,
+    errors=None,
+    saved=False,
+    status_code=200,
+) -> Response:
     season = get_season(session, season_id)
     if season is None:
         raise HTTPException(status_code=404, detail="Not found")
@@ -37,12 +50,41 @@ def _render(request: Request, session: Session, season_id: int, *, errors=None, 
         {
             "season": season,
             "participants": list_participant_views(session, season_id),
+            "season_golfers": list_season_golfers(session, season_id),
             "available_golfers": list_available_golfers(session, season_id),
             "tees": list_course_tees(session, season_id),
             "errors": errors,
+            "roster_saved": saved,
             "csrf_token": generate_csrf_token(seed) if seed else "",
         },
         status_code=status_code,
+    )
+
+
+@router.post("/admin/seasons/{season_id}/participants/roster")
+async def season_roster_save(
+    season_id: int,
+    request: Request,
+    golfer_ids: list[str] = Form(default_factory=list),  # noqa: B008
+    csrf_token: str = Form(""),
+    session: Session = Depends(get_session),  # noqa: B008
+    admin=Depends(require_admin),  # noqa: B008
+) -> Response:
+    _csrf(request, csrf_token)
+    try:
+        save_season_golfers(session, season_id, golfer_ids)
+    except SeasonRosterValidationError as exc:
+        if get_season(session, season_id) is None:
+            raise HTTPException(status_code=404, detail="Not found") from exc
+        return _render(
+            request,
+            session,
+            season_id,
+            errors={"season_roster": str(exc)},
+            status_code=422,
+        )
+    return RedirectResponse(
+        f"/admin/seasons/{season_id}/participants?roster_saved=1", status_code=303
     )
 
 
@@ -50,10 +92,11 @@ def _render(request: Request, session: Session, season_id: int, *, errors=None, 
 async def participants_page(
     season_id: int,
     request: Request,
+    roster_saved: str = "",
     session: Session = Depends(get_session),  # noqa: B008
     admin=Depends(require_admin),  # noqa: B008
 ) -> Response:
-    return _render(request, session, season_id)
+    return _render(request, session, season_id, saved=roster_saved == "1")
 
 
 @router.post("/admin/seasons/{season_id}/participants/add")

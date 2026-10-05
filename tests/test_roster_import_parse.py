@@ -1,8 +1,7 @@
 """Pure tests for `golf_league.domain.roster_import` — no database."""
 
 from golf_league.domain.roster_import import (
-    REGULAR_HEADERS,
-    SUB_HEADERS,
+    ROSTER_HEADERS,
     decode_warnings,
     detect_header_set,
     email_is_wellformed,
@@ -20,15 +19,14 @@ from golf_league.domain.roster_import import (
 
 
 def test_regular_and_sub_header_sets_are_detected():
-    assert detect_header_set(list(REGULAR_HEADERS)) == "summer_regular"
-    assert detect_header_set(list(SUB_HEADERS)) == "summer_sub"
-    assert detect_header_set([f" {h} " for h in REGULAR_HEADERS]) == "summer_regular"
+    assert detect_header_set(list(ROSTER_HEADERS)) == "roster"
+    assert detect_header_set([f" {h} " for h in ROSTER_HEADERS]) == "roster"
 
 
 def test_an_unsupported_header_set_is_not_detected():
     assert detect_header_set(["Full Name", "Team", "Handicap", "Email"]) is None
-    assert detect_header_set(list(REGULAR_HEADERS)[:-1]) is None
-    assert detect_header_set([h.lower() for h in REGULAR_HEADERS]) is None
+    assert detect_header_set(list(ROSTER_HEADERS)[:-1]) is None
+    assert detect_header_set([h.lower() for h in ROSTER_HEADERS]) is None
 
 
 def test_regular_name_splits_on_the_first_comma_only():
@@ -43,10 +41,12 @@ def test_a_name_with_no_comma_or_an_empty_side_does_not_split():
     assert split_regular_name(",") is None
 
 
-def test_status_resolves_gold_and_white_and_rejects_blank_and_unknown():
+def test_tee_resolves_supported_labels_and_rejects_blank_and_unknown():
+    assert resolve_status("Blue") == "Blue"
     assert resolve_status("Gold") == "Gold"
-    assert resolve_status(" gold ") == "Gold"
-    assert resolve_status("WHITE") == "White"
+    assert resolve_status(" White ") == "White"
+    assert resolve_status(" gold ") is None
+    assert resolve_status("WHITE") is None
     assert resolve_status("") is None
     assert resolve_status("   ") is None
     assert resolve_status("Silver") is None

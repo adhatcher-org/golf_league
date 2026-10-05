@@ -6,14 +6,13 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.exc import IntegrityError
 
 from golf_league.migrations import _make_config as make_config
-from golf_league.migrations import upgrade_to_head
 
 
 def test_participant_migration_constraints_upgrade_and_downgrade(tmp_path):
     database_url = f"sqlite:///{tmp_path / 'participants.db'}"
     config = make_config(database_url)
     command.upgrade(config, "d24f7b6c1a9e")
-    upgrade_to_head(database_url)
+    command.upgrade(config, "7a31b6e9c204")
     engine = create_engine(database_url)
     try:
         inspector = inspect(engine)

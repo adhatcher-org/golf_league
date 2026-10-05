@@ -4,8 +4,17 @@
 <h2>{% if season %}Edit season{% else %}New season{% endif %}</h2>
 {% if season %}
 <p>{{ display_name }} — {{ week_count }} weekly date{% if week_count != 1 %}s{% endif %}</p>
-<p><a href="/admin/seasons/{{ season.id }}/participants">Manage participant overrides</a></p>
 {% endif %}
+<nav aria-label="Season navigation">
+    <p>
+        <a href="/admin/seasons">Seasons</a>
+        {% if season %}
+        · <a href="/admin/seasons/{{ season.id }}/participants">Season roster</a>
+        · <a href="/admin/seasons/{{ season.id }}/teams">Teams</a>
+        · <span aria-current="page">Season settings</span>
+        {% endif %}
+    </p>
+</nav>
 {% if errors %}
 <ul class="error">
     {% for field, message in errors.items() %}
