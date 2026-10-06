@@ -75,7 +75,7 @@
         <td>{% if week.makeup_for %}Week {{ week.makeup_for.index }}{% else %}—{% endif %}
             {% for makeup in weeks %}{% if makeup.makeup_for_week_id == week.id and makeup.week_type == 'match' %}<br><a href="#week-{{ makeup.id }}">Makeup: Week {{ makeup.index }}</a>{% endif %}{% endfor %}</td>
         <td>{{ week.notes or '—' }}</td>
-        <td id="week-{{ week.id }}"><a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/edit">Edit</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/matches/new">Matches</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/shift">Shift dates</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/nine">Change nine</a>
+        <td id="week-{{ week.id }}"><a href="/weeks/{{ week.id }}?season_id={{ season.id }}">Details</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/edit">Edit</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/matches/new">Matches</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/shift">Shift dates</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/nine">Change nine</a>
             {% if week.week_type == 'match' and week.status in ['scheduled', 'cancelled'] %}<form method="post" action="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/rain-date/preview" style="display:inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <label class="visually-hidden" for="rain-date-{{ week.id }}">Rain date for Week {{ week.index }}</label>
