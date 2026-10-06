@@ -72,9 +72,20 @@
         <td>{{ week.nine|title if week.nine else 'Reserved' }}</td>
         <td>{{ week.week_type|replace('_', ' ')|title }}</td>
         <td>{{ week.status|title }}</td>
-        <td>{% if week.makeup_for %}Week {{ week.makeup_for.index }}{% else %}—{% endif %}</td>
+        <td>{% if week.makeup_for %}Week {{ week.makeup_for.index }}{% else %}—{% endif %}
+            {% for makeup in weeks %}{% if makeup.makeup_for_week_id == week.id and makeup.week_type == 'match' %}<br><a href="#week-{{ makeup.id }}">Makeup: Week {{ makeup.index }}</a>{% endif %}{% endfor %}</td>
         <td>{{ week.notes or '—' }}</td>
-        <td><a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/edit">Edit</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/matches/new">Matches</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/shift">Shift dates</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/nine">Change nine</a>
+        <td id="week-{{ week.id }}"><a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/edit">Edit</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/matches/new">Matches</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/shift">Shift dates</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/nine">Change nine</a>
+            {% if week.week_type == 'match' and week.status in ['scheduled', 'cancelled'] %}<form method="post" action="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/rain-date/preview" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <label class="visually-hidden" for="rain-date-{{ week.id }}">Rain date for Week {{ week.index }}</label>
+                <select id="rain-date-{{ week.id }}" name="target_week_id" required>
+                    <option value="">Choose rain date</option>
+                    {% for target in weeks %}{% if target.index > week.index and target.week_type == 'rain_date' and target.status != 'played' and target.makeup_for_week_id in [none, week.id] %}
+                    <option value="{{ target.id }}" {% if target.makeup_for_week_id == week.id %}selected{% endif %}>Week {{ target.index }} · {{ target.play_date.strftime('%b %-d, %Y') }}</option>
+                    {% endif %}{% endfor %}
+                </select><button type="submit">Preview rain-date use</button>
+            </form>{% endif %}
             <form method="post" action="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/delete" style="display:inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Delete</button>
             </form></td>

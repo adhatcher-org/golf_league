@@ -19,11 +19,13 @@ from golf_league.services.schedule import (
     build_default_proposal,
     commit_generated_weeks,
     confirm_nine,
+    confirm_rain_date,
     confirm_shift,
     delete_week,
     edit_week,
     list_weeks,
     preview_nine,
+    preview_rain_date,
     preview_shift,
     schedule_fingerprint,
     week_fingerprint,
@@ -191,6 +193,80 @@ async def edit_week_submit(
         )
     except ScheduleConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return RedirectResponse(f"/admin/seasons/{season_id}/weeks", status_code=303)
+
+
+@router.post("/admin/seasons/{season_id}/weeks/{week_id}/rain-date/preview")
+async def rain_date_preview_submit(
+    season_id: int,
+    week_id: int,
+    request: Request,
+    session: Session = Depends(get_session),  # noqa: B008
+    admin=Depends(require_admin),  # noqa: B008
+) -> Response:
+    form = await request.form()
+    _csrf(request, str(form.get("csrf_token", "")))
+    season, source = _change_resources(session, season_id, week_id)
+    target_text = str(form.get("target_week_id", "")).strip()
+    if not target_text.isdecimal():
+        return _render_rain_date(request, session, season, source, None,
+                                 errors={"target_week_id": "Choose a valid rain-date row."}, status_code=422)
+    try:
+        preview = preview_rain_date(session, season_id, week_id, int(target_text))
+    except ScheduleValidationError as exc:
+        return _render_rain_date(request, session, season, source, None, target=target_text,
+                                 errors=exc.errors, status_code=422)
+    except ScheduleConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="Not found") from exc
+    return _render_rain_date(request, session, season, source, preview, target=target_text)
+
+
+def _render_rain_date(request, session, season, source, preview, *, target="", errors=None, status_code=200):
+    signature = ""
+    if preview is not None:
+        signature = _intent_signature(request, season.id, source.id, "rain_date", target, False,
+                                      preview.fingerprint)
+    return request.app.state.templates.TemplateResponse(
+        request, "admin/weeks/rain_date.html",
+        {"season": season, "source": source, "weeks": list_weeks(session, season.id),
+         "preview": preview, "target": target, "signature": signature, "errors": errors or {},
+         "csrf_token": generate_csrf_token(request.cookies.get("session") or "")},
+        status_code=status_code,
+    )
+
+
+@router.post("/admin/seasons/{season_id}/weeks/{week_id}/rain-date/confirm")
+async def rain_date_confirm_submit(
+    season_id: int,
+    week_id: int,
+    request: Request,
+    session: Session = Depends(get_session),  # noqa: B008
+    admin=Depends(require_admin),  # noqa: B008
+) -> Response:
+    form = await request.form()
+    _csrf(request, str(form.get("csrf_token", "")))
+    target = str(form.get("target_week_id", "")).strip()
+    fingerprint = str(form.get("fingerprint", ""))
+    signature = _intent_signature(request, season_id, week_id, "rain_date", target, False, fingerprint)
+    if not hmac.compare_digest(signature, str(form.get("signature", ""))):
+        raise HTTPException(status_code=409, detail="The requested change differs from the preview. Review a fresh preview.")
+    if not target.isdecimal():
+        raise HTTPException(status_code=422, detail="Choose a valid rain-date row.")
+    try:
+        confirm_rain_date(session, season_id, week_id, int(target), expected_fingerprint=fingerprint)
+    except ScheduleValidationError as exc:
+        try:
+            season, source = _change_resources(session, season_id, week_id)
+        except HTTPException:
+            raise
+        return _render_rain_date(request, session, season, source, None, target=target,
+                                 errors=exc.errors, status_code=422)
+    except ScheduleConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="Not found") from exc
     return RedirectResponse(f"/admin/seasons/{season_id}/weeks", status_code=303)
 
 

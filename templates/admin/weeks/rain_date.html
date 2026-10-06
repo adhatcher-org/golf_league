@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Use rain date - Golf League{% endblock %}
+{% block content %}
+<header class="admin-page-heading">
+    <div>
+        <p class="eyebrow">Manage · {{ season.year }} · Week {{ source.index }}</p>
+        <h1>Use rain date</h1>
+        <p>This action moves the matchups and handicap snapshots to a reserved rain-date row. It does not shift dates or printed week numbers.</p>
+    </div>
+</header>
+<nav aria-label="Week navigation"><p><a href="/admin/seasons/{{ season.id }}/weeks">Back to weeks</a></p></nav>
+{% if errors %}<div class="error" role="alert">{% for message in errors.values() %}<p>{{ message }}</p>{% endfor %}</div>{% endif %}
+{% if preview %}
+<section aria-labelledby="rain-date-preview-title">
+    <h2 id="rain-date-preview-title">Review rain-date use</h2>
+    <p>Week {{ preview.source_index }} · {{ preview.source_date.strftime('%b %-d, %Y') }} · {{ preview.source_nine|title }} will be cancelled.</p>
+    <p>Week {{ preview.target_index }} · {{ preview.target_date.strftime('%b %-d, %Y') }} will become the scheduled {{ preview.source_nine|title }} match week.</p>
+    <p>{{ preview.match_count }} team match(es) and {{ preview.snapshot_count }} handicap snapshot(s) will move with their existing IDs and matchups.</p>
+    <form method="post" action="/admin/seasons/{{ season.id }}/weeks/{{ source.id }}/rain-date/confirm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="target_week_id" value="{{ preview.target_id }}">
+        <input type="hidden" name="fingerprint" value="{{ preview.fingerprint }}">
+        <input type="hidden" name="signature" value="{{ signature }}">
+        <button type="submit">Confirm use of rain date</button>
+        <a href="/admin/seasons/{{ season.id }}/weeks">Cancel without changes</a>
+    </form>
+</section>
+{% else %}
+<section aria-labelledby="rain-date-selection-title">
+    <h2 id="rain-date-selection-title">Choose a reserved rain date</h2>
+    <p>Source: Week {{ source.index }} · {{ source.play_date.strftime('%b %-d, %Y') }} · {{ source.nine|title }}.</p>
+    <form method="post" action="/admin/seasons/{{ season.id }}/weeks/{{ source.id }}/rain-date/preview">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label for="rain-date-target">Rain-date row</label>
+        <select id="rain-date-target" name="target_week_id">
+            <option value="">Choose a rain date</option>
+            {% for target_week in weeks %}{% if target_week.index > source.index and target_week.week_type == 'rain_date' and target_week.status != 'played' and target_week.makeup_for_week_id in [none, source.id] %}
+            <option value="{{ target_week.id }}" {% if target == target_week.id|string or target_week.makeup_for_week_id == source.id %}selected{% endif %}>Week {{ target_week.index }} · {{ target_week.play_date.strftime('%b %-d, %Y') }}</option>
+            {% endif %}{% endfor %}
+        </select>
+        <button type="submit">Preview use of rain date</button>
+    </form>
+</section>
+{% endif %}
+{% endblock %}
