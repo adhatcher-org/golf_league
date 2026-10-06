@@ -42,6 +42,9 @@ _NEUTRAL_REGISTRATION_MESSAGE = (
     "If that address is on the league roster, we've sent it a link to finish "
     "creating your account."
 )
+_NEUTRAL_REGISTRATION_MESSAGE_WITHOUT_VERIFICATION = (
+    "If that address is on the league roster, the account is ready to use."
+)
 
 
 def _settings(request: Request):
@@ -320,6 +323,7 @@ async def register_submit(
             email=normalized_email,
             password_hash=password_hash,
             max_users=_settings(request).max_users,
+            email_verification_required=_settings(request).email_verification_required,
         )
 
     if result is not None and result.token is not None and result.email is not None:
@@ -333,4 +337,9 @@ async def register_submit(
             # Delivery is deliberately post-commit; do not log an address or token.
             logging.getLogger(__name__).warning("registration verification email failed")
 
-    return _registration_form(request, message=_NEUTRAL_REGISTRATION_MESSAGE)
+    message = (
+        _NEUTRAL_REGISTRATION_MESSAGE
+        if _settings(request).email_verification_required
+        else _NEUTRAL_REGISTRATION_MESSAGE_WITHOUT_VERIFICATION
+    )
+    return _registration_form(request, message=message)

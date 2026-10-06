@@ -91,10 +91,16 @@ async def require_user(user: User | None = Depends(get_optional_user)) -> User: 
 
 
 async def get_optional_verified_user(
+    request: Request,
     user: User | None = Depends(get_optional_user),  # noqa: B008
 ) -> User | None:
     """Return a verified user or None; reject a valid but unverified session."""
-    if user is not None and user.email_verified_at is None:
+    settings = _current_settings(request)
+    if (
+        settings.email_verification_required
+        and user is not None
+        and user.email_verified_at is None
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Email verification required"
         )

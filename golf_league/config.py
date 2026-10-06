@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     session_secret: str
     max_users: int = 150
     debug: bool = False
+    email_verification_required: bool = True
     seed_course: bool = True
     league_name_template: str = "St. Paul {season} Fall Golf League"
 

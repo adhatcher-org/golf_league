@@ -80,6 +80,25 @@ def test_registered_roster_email_creates_one_unverified_link_and_verifies(client
     assert client.get(f"/verify/{token}").status_code == 200
 
 
+def test_verification_disabled_marks_new_registration_verified_without_email(client):
+    golfer_id = _add_golfer(client)
+    client.app.state.settings.email_verification_required = False
+
+    response = _submit(client, "player@example.test")
+
+    assert response.status_code == 200
+    assert "the account is ready to use" in response.text
+    assert client.app.state.email_sender.sent == []
+    session = Session(bind=client.app.state.engine)
+    try:
+        user = session.execute(select(User).where(User.email == "player@example.test")).scalar_one()
+        assert user.golfer_id == golfer_id
+        assert user.email_verified_at is not None
+        assert session.execute(select(UserToken).where(UserToken.user_id == user.id)).first() is None
+    finally:
+        session.close()
+
+
 def test_unknown_email_is_neutral_hashed_and_has_no_side_effects(client, monkeypatch):
     calls = []
     from golf_league.routers import identity
