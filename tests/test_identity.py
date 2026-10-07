@@ -44,10 +44,14 @@ def make_user(session, *, username=None, email="player@example.com", is_admin=Fa
     return user
 
 
-def build_ladder_app(session):
+def build_ladder_app(session, *, email_verification_required=True):
     """A throwaway app exercising the GL-03 dependency ladder — no GL-04 routes."""
     app = FastAPI()
-    app.state.settings = Settings(session_secret=SECRET, database_url="sqlite://")
+    app.state.settings = Settings(
+        session_secret=SECRET,
+        database_url="sqlite://",
+        email_verification_required=email_verification_required,
+    )
     app.dependency_overrides[get_session] = lambda: session
 
     @app.get("/needs-user")
@@ -184,6 +188,25 @@ def test_ladder_unverified_admin_is_still_rejected_by_require_verified_user(sess
 
     assert client.get("/needs-verified").status_code == 403
     assert client.get("/needs-admin").status_code == 403
+
+
+def test_unverified_user_passes_verified_rung_when_verification_is_disabled(session):
+    user = make_user(session, verified=False)
+    cookie = create_session_cookie(user.id, user.session_version, SECRET)
+    app = build_ladder_app(session, email_verification_required=False)
+    client = TestClient(app)
+    client.cookies.set(SESSION_COOKIE_NAME, cookie)
+
+    assert client.get("/needs-verified").status_code == 200
+    assert client.get("/needs-admin").status_code == 403
+
+
+def test_email_verification_setting_defaults_to_required_and_reads_environment(monkeypatch):
+    monkeypatch.delenv("EMAIL_VERIFICATION_REQUIRED", raising=False)
+    assert Settings(session_secret=SECRET).email_verification_required is True
+
+    monkeypatch.setenv("EMAIL_VERIFICATION_REQUIRED", "false")
+    assert Settings(session_secret=SECRET).email_verification_required is False
 
 
 def test_ladder_verified_admin_passes_every_rung(session):

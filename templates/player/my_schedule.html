@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}My Schedule - Golf League{% endblock %}
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title">
+    <p class="eyebrow">Player workspace</p>
+    <h1 id="page-title">My Schedule</h1>
+    <p>Your season weeks and generated matchups.</p>
+</section>
+{% if projection.seasons %}
+<form method="get" action="/my/schedule">
+    <label for="season-id">Season</label>
+    <select id="season-id" name="season_id" onchange="this.form.submit()">
+        {% for choice in projection.seasons %}<option value="{{ choice.id }}" {% if projection.season and choice.id == projection.season.id %}selected{% endif %}>{{ choice.name_override or choice.year }}</option>{% endfor %}
+    </select>
+    <button type="submit">View season</button>
+</form>
+{% endif %}
+{% if projection.season %}
+<h2>{{ projection.season.name_override or projection.season.year }}</h2>
+{% if projection.weeks %}
+<div class="table-wrap"><table>
+    <caption class="visually-hidden">My schedule for {{ projection.season.year }}</caption>
+    <thead><tr><th scope="col">Week</th><th scope="col">Date</th><th scope="col">Nine</th><th scope="col">Status</th><th scope="col">Matchup</th><th scope="col">Details</th></tr></thead>
+    <tbody>{% for item in projection.weeks %}{% set week = item.week %}<tr>
+        <th scope="row">{{ week.index }}</th>
+        <td>{{ week.play_date.strftime('%b %-d, %Y') }}</td>
+        <td>{% if week.nine %}{{ week.nine|title }}{% else %}—{% endif %}</td>
+        <td>
+            {% if item.state == 'cancelled' %}Cancelled
+                {% if item.makeup_week %} · Makeup: <a href="/weeks/{{ item.makeup_week.id }}?season_id={{ projection.season.id }}">Week {{ item.makeup_week.index }}</a>{% endif %}
+            {% elif item.state == 'reserved' %}Reserved rain date{% if item.source_week %} for <a href="/weeks/{{ item.source_week.id }}?season_id={{ projection.season.id }}">Week {{ item.source_week.index }}</a>{% endif %}
+            {% elif item.state == 'play_with_team' %}Play with team
+            {% elif item.state == 'makeup' %}Makeup for <a href="/weeks/{{ item.source_week.id }}?season_id={{ projection.season.id }}">Week {{ item.source_week.index }}</a>
+            {% elif item.state == 'awaiting_pairing' %}Scheduled · awaiting pairing
+            {% elif item.state == 'no_participation' %}No participation
+            {% else %}{{ week.status|title }}{% endif %}
+        </td>
+        <td>
+            {% if item.state == 'match' %}
+                {% for match in item.matches %}<div>
+                    {% if match.pairing.is_self_match %}<span>Self-match: both sides play against their own handicap.</span>{% endif %}
+                    {% for a, b in match.slots %}<span>{{ a.golfer.first_name }} {{ a.golfer.last_name }}{% if a.is_sub %} (sub){% endif %} ({{ a.handicap if a.handicap is not none else 'not recorded' }}) vs {{ b.golfer.first_name }} {{ b.golfer.last_name }}{% if b.is_sub %} (sub){% endif %} ({{ b.handicap if b.handicap is not none else 'not recorded' }}){% if a.vs_own_handicap %} · against own handicap{% endif %}</span>{% if not loop.last %}<br>{% endif %}{% endfor %}
+                </div>{% endfor %}
+            {% else %}—{% endif %}
+        </td>
+        <td><a href="/weeks/{{ week.id }}?season_id={{ projection.season.id }}">Week details</a></td>
+    </tr>{% endfor %}</tbody>
+</table></div>
+{% else %}<p class="empty-state">No weeks are scheduled for this season yet.</p>{% endif %}
+{% elif projection.seasons %}
+<p class="empty-state">No season is available yet.</p>
+{% else %}
+<p class="empty-state">No seasons are available yet.</p>
+{% endif %}
+{% endblock %}

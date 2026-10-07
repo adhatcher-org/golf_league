@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Golf League{% endblock %}</title>
-    <link rel="stylesheet" href="/static/app.css?v=20261005-week-preview-2">
+    <link rel="stylesheet" href="/static/app.css?v=20261006-role-navigation-1">
 </head>
 <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
@@ -16,7 +16,11 @@
             </a>
             <nav class="site-nav" aria-label="Main navigation">
                 <a href="/">Home</a>
+                {% if request.state.can_view_player_pages %}
                 <a href="/roster">Player roster</a>
+                <a href="/my/schedule">My Schedule</a>
+                {% endif %}
+                {% if request.state.can_view_player_pages and request.state.current_user.is_admin %}
                 <details class="nav-menu">
                     <summary>Manage</summary>
                     <div class="nav-menu__panel">
@@ -27,7 +31,15 @@
                         <a href="/admin/seasons/new">New season</a>
                     </div>
                 </details>
+                {% endif %}
+                {% if request.state.current_user %}
+                <form class="site-nav__logout" method="post" action="/logout">
+                    <input type="hidden" name="csrf" value="{{ request.state.nav_csrf_token }}">
+                    <button type="submit">Log out</button>
+                </form>
+                {% else %}
                 <a class="site-nav__login" href="/login">Log in</a>
+                {% endif %}
             </nav>
         </div>
     </header>

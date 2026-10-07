@@ -24,7 +24,13 @@ from golf_league.routers.admin_seasons import router as admin_seasons_router
 from golf_league.routers.admin_teams import router as admin_teams_router
 from golf_league.routers.admin_weeks import router as admin_weeks_router
 from golf_league.routers.identity import router as identity_router
+from golf_league.routers.player_schedule import router as player_schedule_router
 from golf_league.routers.roster import router as roster_router
+from golf_league.security import (
+    SESSION_COOKIE_NAME,
+    generate_csrf_token,
+    get_optional_user,
+)
 from golf_league.services.course_seed import seed_wyandot
 from golf_league.services.email import FakeEmailSender
 
@@ -38,6 +44,38 @@ LOGIN_RATE_LIMIT = 5
 LOGIN_RATE_WINDOW_SECONDS = 15 * 60
 REGISTRATION_RATE_LIMIT = 3
 REGISTRATION_RATE_WINDOW_SECONDS = 15 * 60
+
+
+async def _navigation_user(request: Request, call_next):
+    """Provide verified session identity to the shared navigation template."""
+    request.state.current_user = None
+    request.state.can_view_player_pages = False
+    request.state.nav_csrf_token = ""
+
+    is_page_request = (
+        request.url.path not in {"/healthz", "/readyz"}
+        and not request.url.path.startswith("/static/")
+    )
+    cookie_value = request.cookies.get(SESSION_COOKIE_NAME)
+    engine = getattr(request.app.state, "engine", None)
+    if is_page_request and cookie_value and engine is not None:
+        try:
+            with Session(bind=engine) as nav_session:
+                user = await get_optional_user(request, nav_session)
+            if user is not None:
+                current_settings = getattr(request.app.state, "settings", None)
+                if current_settings is None:
+                    current_settings = get_settings()
+                request.state.current_user = user
+                request.state.can_view_player_pages = (
+                    user.email_verified_at is not None
+                    or not current_settings.email_verification_required
+                )
+                request.state.nav_csrf_token = generate_csrf_token(cookie_value)
+        except Exception:
+            logger.warning("navigation identity lookup failed")
+
+    return await call_next(request)
 
 
 @asynccontextmanager
@@ -112,8 +150,11 @@ def create_app(settings=None) -> FastAPI:
     # a safe in-memory placeholder so /reset always has something to call.
     app.state.email_sender = FakeEmailSender()
 
+    app.middleware("http")(_navigation_user)
+
     app.include_router(identity_router)
     app.include_router(roster_router)
+    app.include_router(player_schedule_router)
     app.include_router(admin_courses_router)
     app.include_router(admin_roster_router)
     app.include_router(admin_imports_router)

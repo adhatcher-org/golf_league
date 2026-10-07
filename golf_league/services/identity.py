@@ -1,6 +1,7 @@
 """Session-taking registration policy; HTTP and email delivery stay in routers."""
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
@@ -21,7 +22,12 @@ class RegistrationResult:
 
 
 def register_roster_user(
-    session: Session, *, email: str, password_hash: str, max_users: int
+    session: Session,
+    *,
+    email: str,
+    password_hash: str,
+    max_users: int,
+    email_verification_required: bool = True,
 ) -> RegistrationResult:
     """Atomically create or retry a roster-linked unverified account.
 
@@ -43,6 +49,10 @@ def register_roster_user(
                 and existing_email.golfer_id == golfer.id
                 and existing_email.email_verified_at is None
             ):
+                if not email_verification_required:
+                    existing_email.email_verified_at = datetime.now(UTC).replace(tzinfo=None)
+                    session.commit()
+                    return RegistrationResult()
                 token = issue_token(
                     session,
                     existing_email.id,
@@ -72,21 +82,27 @@ def register_roster_user(
             email=email,
             display_name=f"{golfer.first_name} {golfer.last_name}",
             password_hash=password_hash,
-            email_verified_at=None,
+            email_verified_at=(
+                None
+                if email_verification_required
+                else datetime.now(UTC).replace(tzinfo=None)
+            ),
             is_admin=False,
             golfer_id=golfer.id,
         )
         session.add(user)
         session.flush()
-        token = issue_token(
-            session,
-            user.id,
-            "verify_email",
-            VERIFY_TOKEN_TTL_SECONDS,
-            commit=False,
-        )
+        token = None
+        if email_verification_required:
+            token = issue_token(
+                session,
+                user.id,
+                "verify_email",
+                VERIFY_TOKEN_TTL_SECONDS,
+                commit=False,
+            )
         session.commit()
-        return RegistrationResult(email=email, token=token)
+        return RegistrationResult(email=email if token is not None else None, token=token)
     except IntegrityError:
         session.rollback()
         return RegistrationResult()
