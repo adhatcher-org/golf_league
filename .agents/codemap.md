@@ -913,6 +913,14 @@ Private data, ignored files, and source contents are excluded.
 - function `_handicap_imports` (line 407)
 - function `test_gl22_math_and_live_application_isolation` (line 424)
 
+### `tests/milestones/M6/test_M6_exit_criteria.py`
+
+- function `test_three_player_personas_use_actual_generated_matchups` (line 17)
+- function `test_unused_substitute_and_unlinked_user_have_graceful_schedule` (line 48)
+- function `test_cancelled_origin_and_activated_makeup_keep_navigation` (line 70)
+- function `test_week_and_home_show_all_league_matches_without_initial_contacts` (line 92)
+- function `test_authentication_and_verification_guard_player_journeys` (line 125)
+
 ### `tests/test_admin_courses.py`
 
 - function `_extract_csrf` (line 15)
