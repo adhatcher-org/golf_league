@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ golfer.first_name }} {{ golfer.last_name }} - Opponent contact{% endblock %}
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title">
+    <p class="eyebrow">Week {{ week.index }} · {{ week.play_date.strftime('%b %-d, %Y') }}</p>
+    <h1 id="page-title">{{ golfer.first_name }} {{ golfer.last_name }}</h1>
+    <p>Opponent contact information</p>
+</section>
+<dl>
+    <dt>Email</dt>
+    <dd>{% if golfer.email %}<a href="mailto:{{ golfer.email }}">{{ golfer.email }}</a>{% else %}Not recorded{% endif %}</dd>
+    <dt>Phone</dt>
+    <dd>
+        {% if golfer.phone %}
+            <a href="tel:{{ golfer.phone }}">{{ golfer.phone }}</a>
+            · <a href="tel:{{ golfer.phone }}">Call</a>
+            · <a href="sms:{{ golfer.phone }}">Text</a>
+        {% else %}Not recorded{% endif %}
+    </dd>
+</dl>
+<p><a href="/my/schedule?season_id={{ week.season_id }}">Back to My Schedule</a></p>
+{% endblock %}

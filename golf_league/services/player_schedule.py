@@ -1,8 +1,9 @@
 """Read-only projections for a verified player's schedule and weekly matchups."""
 
 from dataclasses import dataclass
+from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from golf_league.models import (
@@ -171,3 +172,57 @@ def get_week_detail(session: Session, week_id: int):
     return season, tuple(list_seasons(session)), WeekView(
         week, state, source, makeup, bool(all_matches.get(week.id)), all_matches.get(week.id, ()),
     )
+
+
+def get_home_view(session: Session, today: date) -> tuple[Season | None, WeekView | None]:
+    """Project the selected season's next scheduled week without reading the clock."""
+    season = select_player_season(session)
+    if season is None:
+        return None, None
+    has_matches = select(TeamMatch.id).where(TeamMatch.week_id == Week.id).exists()
+    week = session.scalar(
+        select(Week).where(
+            Week.season_id == season.id,
+            Week.play_date >= today,
+            Week.status == "scheduled",
+            or_(Week.week_type != "rain_date", has_matches),
+        ).order_by(Week.play_date, Week.index).limit(1)
+    )
+    if week is None:
+        return season, None
+    return season, get_week_detail(session, week.id)[2]
+
+
+def get_opponent_contact(
+    session: Session,
+    viewer_golfer_id: int | None,
+    week_id: int,
+    opponent_golfer_id: int,
+) -> tuple[Week, Golfer] | None:
+    """Return contact details only for a scheduled direct opponent."""
+    if (viewer_golfer_id is None or viewer_golfer_id == opponent_golfer_id
+            or any(not 0 < value < 2**63
+                   for value in (viewer_golfer_id, week_id, opponent_golfer_id))):
+        return None
+
+    week = session.scalar(
+        select(Week)
+        .join(TeamMatch, TeamMatch.week_id == Week.id)
+        .join(PlayerMatch, PlayerMatch.team_match_id == TeamMatch.id)
+        .where(
+            Week.id == week_id,
+            Week.status == "scheduled",
+            or_(
+                (PlayerMatch.a_golfer_id == viewer_golfer_id)
+                & (PlayerMatch.b_golfer_id == opponent_golfer_id),
+                (PlayerMatch.b_golfer_id == viewer_golfer_id)
+                & (PlayerMatch.a_golfer_id == opponent_golfer_id),
+            ),
+        )
+        .limit(1)
+    )
+    if week is None:
+        return None
+
+    golfer = session.get(Golfer, opponent_golfer_id)
+    return (week, golfer) if golfer is not None else None

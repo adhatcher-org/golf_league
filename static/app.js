@@ -4,6 +4,98 @@ document.addEventListener('DOMContentLoaded', function() {
     // Application initialization code
     console.log('Golf League application loaded');
 
+    const contactDialog = document.getElementById('opponent-contact-dialog');
+    if (contactDialog && typeof contactDialog.showModal === 'function') {
+        const contactName = document.getElementById('opponent-contact-name');
+        const contactWeek = document.getElementById('opponent-contact-week');
+        const contactEmail = document.getElementById('opponent-contact-email');
+        const noEmail = document.getElementById('opponent-contact-no-email');
+        const contactPhone = document.getElementById('opponent-contact-phone');
+        const noPhone = document.getElementById('opponent-contact-no-phone');
+        const contactCall = document.getElementById('opponent-contact-call');
+        const contactText = document.getElementById('opponent-contact-text');
+        const contactStatus = document.getElementById('opponent-contact-status');
+        let contactRequest = 0;
+
+        const clearContactLinks = () => {
+            [contactEmail, contactPhone, contactCall, contactText].forEach((anchor) => {
+                anchor.hidden = true;
+                anchor.removeAttribute('href');
+            });
+            contactEmail.textContent = '';
+            contactPhone.textContent = '';
+        };
+
+        // A closed dialog must never be updated by an earlier request.
+        contactDialog.addEventListener('close', () => {
+            // Native close events may arrive after another opponent was opened.
+            if (!contactDialog.open) {
+                contactRequest += 1;
+                clearContactLinks();
+            }
+        });
+
+        document.querySelectorAll('[data-opponent-contact]').forEach((link) => {
+            link.addEventListener('click', async (event) => {
+                event.preventDefault();
+                const request = ++contactRequest;
+                contactDialog.showModal();
+                contactName.textContent = 'Loading contact details…';
+                contactWeek.textContent = '';
+                contactStatus.textContent = '';
+                clearContactLinks();
+                noEmail.hidden = true;
+                noPhone.hidden = true;
+
+                try {
+                    const response = await fetch(link.href, {
+                        headers: { Accept: 'application/json' },
+                        credentials: 'same-origin',
+                    });
+                    if (!response.ok) throw new Error('Contact details unavailable');
+                    const details = await response.json();
+                    if (request !== contactRequest || !contactDialog.open) return;
+
+                    contactName.textContent = details.name;
+                    contactWeek.textContent = `Week ${details.week_index} · ${details.week_date}`;
+                    if (details.email) {
+                        contactEmail.textContent = details.email;
+                        contactEmail.href = `mailto:${details.email}`;
+                        contactEmail.hidden = false;
+                    } else {
+                        noEmail.hidden = false;
+                    }
+                    if (details.phone) {
+                        const dialable = details.phone.replace(/[^0-9+*#,;]/g, '');
+                        contactPhone.textContent = details.phone;
+                        contactPhone.href = `tel:${dialable}`;
+                        contactPhone.hidden = false;
+                        if (dialable) {
+                            contactCall.href = `tel:${dialable}`;
+                            contactCall.hidden = false;
+                            contactText.href = `sms:${dialable}`;
+                            contactText.hidden = false;
+                        }
+                    } else {
+                        noPhone.hidden = false;
+                    }
+                } catch (error) {
+                    if (request !== contactRequest || !contactDialog.open) return;
+                    contactName.textContent = 'Contact details unavailable';
+                    contactStatus.textContent = 'Contact details could not be loaded. Open the contact page: ';
+                    const fallback = document.createElement('a');
+                    fallback.href = link.href;
+                    fallback.textContent = 'Open contact page';
+                    contactStatus.append(fallback);
+                }
+            });
+        });
+
+        contactDialog.addEventListener('click', (event) => {
+            if (event.target === contactDialog) contactDialog.close();
+        });
+    }
+
     const seasonRoster = document.getElementById('season-roster-form');
     if (seasonRoster) {
         const golfers = Array.from(seasonRoster.querySelectorAll('.season-golfer-checkbox'));

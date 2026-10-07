@@ -18,9 +18,12 @@ orchestrator repo next door.
 
 ## Commands
 - Install: `uv sync --frozen --extra dev`
-- Test: `uv run pytest <paths> -q` (full suite ~20s, 434 tests)
-- Full gate: `make check` = `lint test test-with-cov security dependency-check`; requires >=80%
-  branch coverage on `golf_league`. This is exactly what CI runs on `main` and `reset/**`.
+- Test: `uv run pytest <paths> -q` for the files you touched (serial, no xdist). Full suite:
+  `uv run pytest -n auto -q` (~637 tests, ~40s with `pytest-xdist`; ~90s serial).
+- Full gate: `make check` = `lint test-with-cov security dependency-check` (the coverage run is the
+  only full-suite run, parallel via `-n auto`); requires >=80% branch coverage on `golf_league`.
+  This is exactly what CI runs on `main` and `reset/**`. During development run only the tests for
+  what you changed; leave the full gate to `gl fresh-check` or CI.
 - Run locally: `SESSION_SECRET=dev uv run uvicorn golf_league.app:app --reload`
 - Only `ruff check` is wired in. Do not run `ruff format` -- it would rewrite ~63 files.
   Formatting repairs are explicit edits, never a hidden side effect of `make check`.
@@ -40,6 +43,15 @@ orchestrator repo next door.
   that points at another repository is a defect -- the contract gets written out inline instead.
 - Stale, ignore: `.clinerules` describes the Cline/CrewAI workflow removed on 2026-09-14.
 
+## Map
+- `.agents/codemap.md` is the committed source-file manifest and Python symbol index.
+- Regenerate with `uv run python scripts/generate_codemap.py` after adding, moving, renaming,
+  or deleting source files. The stdlib generator indexes existing tracked and nonignored source
+  files, excludes private data, and does not claim to describe runtime call paths.
+- Player home and contact entry points are `golf_league/routers/home.py` and
+  `golf_league/routers/player_schedule.py`; projections are in
+  `golf_league/services/player_schedule.py`, with markup in `templates/player/`.
+
 ## Invariants
 - Server-side validation of IDs and season/course relationships; SQLite FKs, uniqueness
   constraints, atomic transactions for multi-record changes.
@@ -58,9 +70,11 @@ orchestrator repo next door.
 - Identity: Argon2 password hashing, signed cookies, `session_version`, hashed single-use tokens,
   `MAX_USERS=150`, an authorization ladder. Every POST (including anonymous forms) requires CSRF.
   GETs never mutate state.
-- Admin-only: contacts, import staging, raw imported rows. Use synthetic fixtures in tests -- never
-  real roster data, secrets, tokens, or complete token URLs in code, logs, or evidence. Never open
-  or modify real `.env` files.
+- Admin-only: roster-wide contacts, import staging, raw imported rows. A verified player may view
+  the contact details of their direct opponent in a scheduled generated player match, through a
+  match-scoped lookup that does not expose arbitrary golfers. Use synthetic fixtures in tests --
+  never real roster data, secrets, tokens, or complete token URLs in code, logs, or evidence. Never
+  open or modify real `.env` files.
 - Runtime: single non-root container, SQLite persistence under `/data`, startup migrations,
   redacted stdout/stderr logs.
 - Out of scope unless a work item explicitly adds it: scoring, rounds, results, standings, scoring
