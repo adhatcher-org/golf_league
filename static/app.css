@@ -118,6 +118,7 @@ a:hover {
 }
 
 .site-nav > a,
+.site-nav__logout button,
 .nav-menu > summary {
     min-height: 2.75rem;
     padding: 0.65rem 0.85rem;
@@ -133,6 +134,7 @@ a:hover {
 }
 
 .site-nav > a:hover,
+.site-nav__logout button:hover,
 .nav-menu > summary:hover,
 .nav-menu[open] > summary {
     background: rgb(255 255 255 / 10%);
@@ -140,6 +142,7 @@ a:hover {
 }
 
 .site-nav > a:active,
+.site-nav__logout button:active,
 .nav-menu > summary:active {
     transform: translateY(1px);
 }
@@ -202,6 +205,17 @@ a:hover {
 .site-nav__login {
     margin-left: 0.35rem;
     border: 1px solid rgb(255 255 255 / 28%);
+}
+
+.site-nav__logout {
+    margin-left: 0.35rem;
+}
+
+.site-nav__logout button {
+    border: 1px solid rgb(255 255 255 / 28%);
+    background: transparent;
+    font-family: inherit;
+    cursor: pointer;
 }
 
 .page-shell {
@@ -514,6 +528,7 @@ tbody tr:hover {
     }
 
     .site-nav > a,
+    .site-nav__logout button,
     .nav-menu > summary {
         min-height: 2.5rem;
         padding: 0.5rem 0.65rem;
@@ -521,6 +536,10 @@ tbody tr:hover {
     }
 
     .site-nav__login {
+        margin-left: auto;
+    }
+
+    .site-nav__logout {
         margin-left: auto;
     }
 
