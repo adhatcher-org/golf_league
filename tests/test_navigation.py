@@ -21,6 +21,20 @@ def test_anonymous_navigation_has_no_player_or_admin_links(client):
     assert "Manage" not in nav
 
 
+def test_health_check_does_not_resolve_navigation_identity(client, monkeypatch):
+    from golf_league import app as app_module
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("health checks must not resolve a user")
+
+    monkeypatch.setattr(app_module, "get_optional_user", fail_if_called)
+    client.cookies.set("session", "synthetic-session-cookie")
+
+    response = client.get("/healthz", headers={"accept": "text/html"})
+
+    assert response.status_code == 200
+
+
 def test_normal_user_sees_schedule_and_logout_but_no_admin_menu(client):
     _seed(client)
 

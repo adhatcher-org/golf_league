@@ -52,10 +52,14 @@ async def _navigation_user(request: Request, call_next):
     request.state.can_view_player_pages = False
     request.state.nav_csrf_token = ""
 
-    accepts_html = "text/html" in request.headers.get("accept", "")
+    is_html_page = (
+        "text/html" in request.headers.get("accept", "")
+        and request.url.path not in {"/healthz", "/readyz"}
+        and not request.url.path.startswith("/static/")
+    )
     cookie_value = request.cookies.get(SESSION_COOKIE_NAME)
     engine = getattr(request.app.state, "engine", None)
-    if accepts_html and cookie_value and engine is not None:
+    if is_html_page and cookie_value and engine is not None:
         try:
             with Session(bind=engine) as nav_session:
                 user = await get_optional_user(request, nav_session)
