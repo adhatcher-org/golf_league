@@ -44,6 +44,8 @@ orchestrator repo next door.
 - Stale, ignore: `.clinerules` describes the Cline/CrewAI workflow removed on 2026-09-14.
 
 ## Map
+- `tests/milestones/M6/test_M6_exit_criteria.py` is the aggregate player-view gate for
+  regular, substitute, self-match, unused and unlinked personas, makeup navigation, and privacy.
 - `.agents/codemap.md` is the committed source-file manifest and Python symbol index.
 - Regenerate with `uv run python scripts/generate_codemap.py` after adding, moving, renaming,
   or deleting source files. The stdlib generator indexes existing tracked and nonignored source
