@@ -40,10 +40,10 @@
                 {% for match in item.matches %}<div>
                     {% if match.pairing.is_self_match %}<span>Self-match: both sides play against their own handicap.</span>{% endif %}
                     {% for a, b in match.slots %}<span>
-                        {% if user_golfer_id == a.golfer.id and b.golfer.id != a.golfer.id %}
+                        {% if week.status == 'scheduled' and user_golfer_id == a.golfer.id and b.golfer.id != a.golfer.id %}
                             {{ a.golfer.first_name }} {{ a.golfer.last_name }}{% if a.is_sub %} (sub){% endif %} ({{ a.handicap if a.handicap is not none else 'not recorded' }}) vs
                             <a href="/weeks/{{ week.id }}/opponents/{{ b.golfer.id }}" data-opponent-contact>{{ b.golfer.first_name }} {{ b.golfer.last_name }}</a>{% if b.is_sub %} (sub){% endif %} ({{ b.handicap if b.handicap is not none else 'not recorded' }})
-                        {% elif user_golfer_id == b.golfer.id and a.golfer.id != b.golfer.id %}
+                        {% elif week.status == 'scheduled' and user_golfer_id == b.golfer.id and a.golfer.id != b.golfer.id %}
                             <a href="/weeks/{{ week.id }}/opponents/{{ a.golfer.id }}" data-opponent-contact>{{ a.golfer.first_name }} {{ a.golfer.last_name }}</a>{% if a.is_sub %} (sub){% endif %} ({{ a.handicap if a.handicap is not none else 'not recorded' }}) vs
                             {{ b.golfer.first_name }} {{ b.golfer.last_name }}{% if b.is_sub %} (sub){% endif %} ({{ b.handicap if b.handicap is not none else 'not recorded' }})
                         {% else %}

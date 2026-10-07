@@ -43,6 +43,15 @@ orchestrator repo next door.
   that points at another repository is a defect -- the contract gets written out inline instead.
 - Stale, ignore: `.clinerules` describes the Cline/CrewAI workflow removed on 2026-09-14.
 
+## Map
+- `.agents/codemap.md` is the committed source-file manifest and Python symbol index.
+- Regenerate with `uv run python scripts/generate_codemap.py` after adding, moving, renaming,
+  or deleting source files. The stdlib generator indexes existing tracked and nonignored source
+  files, excludes private data, and does not claim to describe runtime call paths.
+- Player home and contact entry points are `golf_league/routers/home.py` and
+  `golf_league/routers/player_schedule.py`; projections are in
+  `golf_league/services/player_schedule.py`, with markup in `templates/player/`.
+
 ## Invariants
 - Server-side validation of IDs and season/course relationships; SQLite FKs, uniqueness
   constraints, atomic transactions for multi-record changes.

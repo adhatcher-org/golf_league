@@ -98,6 +98,18 @@ def test_schedule_auth_and_identity_come_from_verified_session(client):
     assert client.get("/my/schedule").status_code == 403
 
 
+def test_played_week_retains_matchup_without_opponent_contact_link(client):
+    ids = _seed(client)
+    contact_url = f"/weeks/{ids['weeks'][0]}/opponents/{ids['golfers'][4]}"
+    assert f'href="{contact_url}"' in client.get("/my/schedule").text
+    with Session(client.app.state.engine) as session:
+        session.get(Week, ids["weeks"][0]).status = "played"
+        session.commit()
+    page = client.get("/my/schedule")
+    assert "B1 Example" in page.text
+    assert f'href="{contact_url}"' not in page.text
+
+
 def test_selected_season_is_validated_and_reserved_makeup_is_distinguished(client):
     ids = _seed(client)
     assert client.get("/my/schedule?season_id=99999").status_code == 404

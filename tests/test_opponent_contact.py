@@ -8,6 +8,7 @@ from test_my_schedule import _seed
 
 from golf_league.models import Golfer, PlayerMatch, User, Week
 from golf_league.services.matchups import substitute_player
+from golf_league.services.player_schedule import get_opponent_contact
 
 
 @pytest.fixture(params=["text/html", "application/json"])
@@ -48,6 +49,23 @@ def test_contact_requires_verified_session(client, accept):
         ))
         session.commit()
     assert client.get(_url(ids), headers=accept).status_code == 403
+
+
+@pytest.mark.parametrize("position", ["week", "golfer"])
+@pytest.mark.parametrize("value", ["0", "-1", str(2**63), "9" * 100, "9" * 5000, "²"])
+def test_contact_invalid_ids_are_neutral_not_found(client, accept, position, value):
+    ids = _contact_fixture(client)
+    response = client.get(_url(
+        ids, week_id=value if position == "week" else None,
+        golfer_id=value if position == "golfer" else None,
+    ), headers=accept)
+    assert response.status_code == 404
+    assert "opponent@example.test" not in response.text
+
+
+@pytest.mark.parametrize("ids", [(1, 2**63, 2), (1, 1, 2**63), (1, 0, 2), (1, 1, -1)])
+def test_contact_service_rejects_ids_before_sqlite_binding(session, ids):
+    assert get_opponent_contact(session, *ids) is None
 
 
 def test_direct_opponent_contact_and_html_communication_links(client, accept):

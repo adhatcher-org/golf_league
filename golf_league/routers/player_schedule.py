@@ -35,13 +35,21 @@ async def my_schedule(
 
 @router.get("/weeks/{week_id}/opponents/{golfer_id}")
 async def opponent_contact(
-    week_id: int,
-    golfer_id: int,
+    week_id: str,
+    golfer_id: str,
     request: Request,
     session: Session = Depends(get_session),  # noqa: B008
     user: User = Depends(require_verified_user),  # noqa: B008
 ) -> Response:
-    contact = get_opponent_contact(session, user.golfer_id, week_id, golfer_id)
+    ids = []
+    for value in (week_id, golfer_id):
+        # Bound the text before conversion, including arbitrarily long decimals.
+        normalized = value.lstrip("0")
+        if (not value.isascii() or not value.isdecimal()
+                or not normalized or len(normalized) > 19):
+            raise HTTPException(status_code=404, detail="Opponent not found")
+        ids.append(int(normalized))
+    contact = get_opponent_contact(session, user.golfer_id, *ids)
     if contact is None:
         raise HTTPException(status_code=404, detail="Opponent not found")
     week, golfer = contact

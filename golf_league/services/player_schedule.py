@@ -200,7 +200,9 @@ def get_opponent_contact(
     opponent_golfer_id: int,
 ) -> tuple[Week, Golfer] | None:
     """Return contact details only for a scheduled direct opponent."""
-    if viewer_golfer_id is None or viewer_golfer_id == opponent_golfer_id:
+    if (viewer_golfer_id is None or viewer_golfer_id == opponent_golfer_id
+            or any(not 0 < value < 2**63
+                   for value in (viewer_golfer_id, week_id, opponent_golfer_id))):
         return None
 
     week = session.scalar(
