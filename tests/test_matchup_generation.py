@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from golf_league.database import make_engine
 from golf_league.domain.matchups import pairing_shape, validate_team_once_per_week
 from golf_league.migrations import _make_config as make_config
+from golf_league.migrations import current_revision
 from golf_league.models import (
     Base,
     Course,
@@ -42,7 +43,6 @@ from golf_league.services.roster import RosterValidationError, delete_golfer
 from golf_league.services.schedule import ScheduleConflict, delete_week
 
 NOW = datetime(2026, 10, 5, 12, tzinfo=UTC)
-HEAD = "6a2e9d4b7c31"
 
 
 def clock():
@@ -430,7 +430,8 @@ def test_generation_clock_validation_and_timestamp_type(matchup_db):
 def test_fresh_and_prior_head_migration_preserves_data_and_one_head(tmp_path, prior):
     url = f"sqlite:///{tmp_path / 'migration.db'}"
     config = make_config(url)
-    assert ScriptDirectory.from_config(config).get_heads() == [HEAD]
+    heads = ScriptDirectory.from_config(config).get_heads()
+    assert len(heads) == 1
     engine = None
     ids = None
     if prior:
@@ -440,6 +441,7 @@ def test_fresh_and_prior_head_migration_preserves_data_and_one_head(tmp_path, pr
             ids = seed_fixture(session)
         engine.dispose()
     command.upgrade(config, "head")
+    assert current_revision(url) == heads[0]
     command.upgrade(config, "head")
     engine = make_engine(url)
     try:

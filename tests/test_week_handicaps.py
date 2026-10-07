@@ -165,7 +165,7 @@ def test_snapshot_only_references_guard_week_golfer_and_tee_deletion(matchup_db)
 def test_snapshot_migration_fresh_and_prior_data_preserved(tmp_path, prior):
     url = f"sqlite:///{tmp_path / 'snapshot-migration.db'}"
     config = make_config(url)
-    assert ScriptDirectory.from_config(config).get_heads() == ["6a2e9d4b7c31"]
+    assert len(ScriptDirectory.from_config(config).get_heads()) == 1
     ids = None
     player_ids = None
     if prior:
