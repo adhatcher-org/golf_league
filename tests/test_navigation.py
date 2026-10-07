@@ -48,8 +48,8 @@ def test_normal_user_sees_schedule_and_logout_but_no_admin_menu(client):
     assert "Log out" in nav
     assert 'href="/login"' not in nav
 
-    token = re.search(r'name="csrf_token" value="([^"]+)"', nav).group(1)
-    response = client.post("/logout", data={"csrf_token": token}, follow_redirects=False)
+    token = re.search(r'name="csrf" value="([^"]+)"', nav).group(1)
+    response = client.post("/logout", data={"csrf": token}, follow_redirects=False)
     assert response.status_code == 303
     assert 'session=""' in response.headers["set-cookie"]
 

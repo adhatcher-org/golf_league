@@ -34,7 +34,7 @@
                 {% endif %}
                 {% if request.state.current_user %}
                 <form class="site-nav__logout" method="post" action="/logout">
-                    <input type="hidden" name="csrf_token" value="{{ request.state.nav_csrf_token }}">
+                    <input type="hidden" name="csrf" value="{{ request.state.nav_csrf_token }}">
                     <button type="submit">Log out</button>
                 </form>
                 {% else %}

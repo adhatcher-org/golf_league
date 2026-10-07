@@ -141,9 +141,10 @@ async def login_submit(
 async def logout(
     request: Request,
     csrf_token: str = Form(""),
+    csrf: str = Form(""),
 ) -> Response:
     session_cookie = request.cookies.get(SESSION_COOKIE_NAME, "")
-    _require_csrf(session_cookie, csrf_token)
+    _require_csrf(session_cookie, csrf_token or csrf)
 
     redirect = RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     redirect.delete_cookie(SESSION_COOKIE_NAME)
