@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Upcoming matches - Golf League{% endblock %}
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title">
+    <p class="eyebrow">Golf League</p>
+    <h1 id="page-title">Upcoming matches</h1>
+</section>
+<nav aria-label="Schedule navigation"><p><a href="/my/schedule">My Schedule</a></p></nav>
+{% if season is none %}
+<p class="empty-state">No season is available yet.</p>
+{% elif week_view is none %}
+<p class="empty-state">No upcoming scheduled week.</p>
+{% else %}
+{% set week = week_view.week %}
+<section aria-labelledby="next-week-title">
+    <p class="eyebrow">{{ season.name_override or season.year }} · {{ week.play_date.strftime('%b %-d, %Y') }}</p>
+    <h2 id="next-week-title">Week {{ week.index }}</h2>
+    <p>{% if week.nine %}{{ week.nine|title }} nine{% else %}Rain date{% endif %}</p>
+    <p><a href="/weeks/{{ week.id }}">Full week details</a></p>
+</section>
+{% include "player/_matchups.html" %}
+{% endif %}
+{% endblock %}

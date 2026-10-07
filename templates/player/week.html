@@ -18,33 +18,5 @@
     {% elif week_view.state == 'makeup' %}Makeup for <a href="/weeks/{{ week_view.source_week.id }}?season_id={{ season.id }}">Week {{ week_view.source_week.index }}</a>
     {% else %}{{ week.status|title }}{% endif %}
 </p>
-{% if week_view.matches %}
-<section aria-labelledby="matchups-title">
-    <h2 id="matchups-title">Matchups</h2>
-    {% for match in week_view.matches %}
-    <article>
-        <h3>{{ match.pairing.home_team.name }} vs {{ match.pairing.away_team.name }}</h3>
-        {% if match.pairing.is_self_match %}<p>This self-match is played against each golfer's own handicap.</p>{% endif %}
-        {% if not match.slots %}<p>Player match slots have not been generated.</p>{% endif %}
-        {% if match.slots %}
-        <div class="table-wrap"><table>
-            <thead><tr><th scope="col">Slot</th><th scope="col">Home player</th><th scope="col">Home handicap</th><th scope="col">Away player</th><th scope="col">Away handicap</th><th scope="col">Format</th></tr></thead>
-            <tbody>{% for a, b in match.slots %}<tr>
-                <th scope="row">{{ a.label }}</th>
-                <td>{{ a.golfer.first_name }} {{ a.golfer.last_name }}{% if a.is_sub %} <span>(substitute)</span>{% endif %}</td>
-                <td>{% if a.handicap is none %}Not recorded{% else %}{{ a.handicap }}{% endif %}</td>
-                <td>{{ b.golfer.first_name }} {{ b.golfer.last_name }}{% if b.is_sub %} <span>(substitute)</span>{% endif %}</td>
-                <td>{% if b.handicap is none %}Not recorded{% else %}{{ b.handicap }}{% endif %}</td>
-                <td>{% if a.vs_own_handicap %}Against own handicap{% else %}Head to head{% endif %}</td>
-            </tr>{% endfor %}</tbody>
-        </table></div>
-        {% endif %}
-    </article>
-    {% endfor %}
-</section>
-{% elif week_view.state == 'reserved' or week_view.state == 'play_with_team' or week_view.state == 'cancelled' %}
-<p class="empty-state">No matchups are published for this week.</p>
-{% else %}
-<p class="empty-state">Matchups have not been generated yet.</p>
-{% endif %}
+{% include "player/_matchups.html" %}
 {% endblock %}

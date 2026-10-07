@@ -36,10 +36,22 @@
             {% else %}{{ week.status|title }}{% endif %}
         </td>
         <td>
-            {% if item.state == 'match' %}
+            {% if item.state in ('match', 'makeup') %}
                 {% for match in item.matches %}<div>
                     {% if match.pairing.is_self_match %}<span>Self-match: both sides play against their own handicap.</span>{% endif %}
-                    {% for a, b in match.slots %}<span>{{ a.golfer.first_name }} {{ a.golfer.last_name }}{% if a.is_sub %} (sub){% endif %} ({{ a.handicap if a.handicap is not none else 'not recorded' }}) vs {{ b.golfer.first_name }} {{ b.golfer.last_name }}{% if b.is_sub %} (sub){% endif %} ({{ b.handicap if b.handicap is not none else 'not recorded' }}){% if a.vs_own_handicap %} · against own handicap{% endif %}</span>{% if not loop.last %}<br>{% endif %}{% endfor %}
+                    {% for a, b in match.slots %}<span>
+                        {% if user_golfer_id == a.golfer.id and b.golfer.id != a.golfer.id %}
+                            {{ a.golfer.first_name }} {{ a.golfer.last_name }}{% if a.is_sub %} (sub){% endif %} ({{ a.handicap if a.handicap is not none else 'not recorded' }}) vs
+                            <a href="/weeks/{{ week.id }}/opponents/{{ b.golfer.id }}" data-opponent-contact>{{ b.golfer.first_name }} {{ b.golfer.last_name }}</a>{% if b.is_sub %} (sub){% endif %} ({{ b.handicap if b.handicap is not none else 'not recorded' }})
+                        {% elif user_golfer_id == b.golfer.id and a.golfer.id != b.golfer.id %}
+                            <a href="/weeks/{{ week.id }}/opponents/{{ a.golfer.id }}" data-opponent-contact>{{ a.golfer.first_name }} {{ a.golfer.last_name }}</a>{% if a.is_sub %} (sub){% endif %} ({{ a.handicap if a.handicap is not none else 'not recorded' }}) vs
+                            {{ b.golfer.first_name }} {{ b.golfer.last_name }}{% if b.is_sub %} (sub){% endif %} ({{ b.handicap if b.handicap is not none else 'not recorded' }})
+                        {% else %}
+                            {{ a.golfer.first_name }} {{ a.golfer.last_name }}{% if a.is_sub %} (sub){% endif %} ({{ a.handicap if a.handicap is not none else 'not recorded' }}) vs
+                            {{ b.golfer.first_name }} {{ b.golfer.last_name }}{% if b.is_sub %} (sub){% endif %} ({{ b.handicap if b.handicap is not none else 'not recorded' }})
+                        {% endif %}
+                        {% if a.vs_own_handicap %} · against own handicap{% endif %}
+                    </span>{% if not loop.last %}<br>{% endif %}{% endfor %}
                 </div>{% endfor %}
             {% else %}—{% endif %}
         </td>
@@ -52,4 +64,23 @@
 {% else %}
 <p class="empty-state">No seasons are available yet.</p>
 {% endif %}
+<dialog class="opponent-dialog" id="opponent-contact-dialog" aria-labelledby="opponent-contact-name">
+    <div class="opponent-dialog__content">
+        <form method="dialog"><button class="opponent-dialog__close" aria-label="Close contact details">×</button></form>
+        <p class="eyebrow" id="opponent-contact-week"></p>
+        <h2 id="opponent-contact-name">Opponent contact</h2>
+        <dl class="opponent-dialog__details">
+            <dt>Email</dt>
+            <dd><a id="opponent-contact-email" hidden></a><span id="opponent-contact-no-email">Not recorded</span></dd>
+            <dt>Phone</dt>
+            <dd>
+                <a id="opponent-contact-phone" hidden></a>
+                <span id="opponent-contact-no-phone">Not recorded</span>
+                <a id="opponent-contact-call" class="button-link button-link--secondary" hidden>Call</a>
+                <a id="opponent-contact-text" class="button-link button-link--secondary" hidden>Text</a>
+            </dd>
+        </dl>
+        <p class="opponent-dialog__status" id="opponent-contact-status" role="status" aria-live="polite"></p>
+    </div>
+</dialog>
 {% endblock %}

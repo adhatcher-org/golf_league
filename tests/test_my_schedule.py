@@ -7,7 +7,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from test_matchup_generation import clock, seed_fixture
 
-from golf_league.models import Golfer, PlayerMatch, Season, User, Week
+from golf_league.models import (
+    Golfer,
+    PlayerMatch,
+    RosterImportBatch,
+    RosterImportRow,
+    Season,
+    User,
+    Week,
+)
 from golf_league.services.auth import create_session_cookie, hash_password
 from golf_league.services.matchups import (
     create_team_match,
@@ -51,6 +59,23 @@ def test_schedule_shows_match_snapshot_and_all_week_states_without_private_field
         rain.week_type = "rain_date"
         rain.nine = None
         rain.makeup_for_week_id = ids["weeks"][1]
+        private_values = ["viewer@example.test", "private-notes-marker", "raw-import-marker"]
+        for index, golfer in enumerate(session.scalars(select(Golfer))):
+            golfer.email = f"private-golfer-{index}@example.test"
+            golfer.phone = f"555-010-{index:04d}"
+            golfer.notes = "private-notes-marker"
+            private_values.extend((golfer.email, golfer.phone))
+        user = session.scalar(select(User))
+        batch = RosterImportBatch(
+            created_by_user_id=user.id, source_display_name="synthetic.csv",
+            expires_at=datetime(2027, 1, 1),
+        )
+        session.add(batch)
+        session.flush()
+        session.add(RosterImportRow(
+            batch_id=batch.id, position=1, source_role="player",
+            source_file="synthetic.csv", source_row=1, raw_line="raw-import-marker",
+        ))
         session.commit()
     response = client.get("/my/schedule")
     assert response.status_code == 200, response.text
@@ -59,8 +84,8 @@ def test_schedule_shows_match_snapshot_and_all_week_states_without_private_field
     assert "Cancelled" in response.text and "Reserved rain date for" in response.text
     assert "awaiting pairing" in response.text
     assert f"/weeks/{ids['weeks'][0]}?season_id={ids['season']}" in response.text
-    for private in ("viewer@example.test", "email", "phone", "555-"):
-        assert private not in response.text.lower()
+    for private in private_values:
+        assert private not in response.text
 
 
 def test_schedule_auth_and_identity_come_from_verified_session(client):

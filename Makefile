@@ -26,10 +26,10 @@ lint:
 	uv run ruff check .
 
 test:
-	uv run pytest tests/ -v
+	uv run pytest tests/ -v -n auto
 
 test-with-cov:
-	uv run pytest tests/ --cov=golf_league --cov-branch --cov-report=term-missing --cov-fail-under=80 -v
+	uv run pytest tests/ -n auto --cov=golf_league --cov-branch --cov-report=term-missing --cov-fail-under=80 -v
 
 coverage:
 	uv run coverage run -m pytest tests/
@@ -42,4 +42,5 @@ security:
 dependency-check:
 	uv pip list --outdated
 
-check: lint test test-with-cov security dependency-check
+# test-with-cov runs the whole suite, so `test` is not repeated here.
+check: lint test-with-cov security dependency-check

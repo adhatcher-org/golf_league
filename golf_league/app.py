@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
@@ -23,6 +23,7 @@ from golf_league.routers.admin_roster import router as admin_roster_router
 from golf_league.routers.admin_seasons import router as admin_seasons_router
 from golf_league.routers.admin_teams import router as admin_teams_router
 from golf_league.routers.admin_weeks import router as admin_weeks_router
+from golf_league.routers.home import router as home_router
 from golf_league.routers.identity import router as identity_router
 from golf_league.routers.player_schedule import router as player_schedule_router
 from golf_league.routers.roster import router as roster_router
@@ -153,6 +154,7 @@ def create_app(settings=None) -> FastAPI:
     app.middleware("http")(_navigation_user)
 
     app.include_router(identity_router)
+    app.include_router(home_router)
     app.include_router(roster_router)
     app.include_router(player_schedule_router)
     app.include_router(admin_courses_router)
@@ -165,10 +167,6 @@ def create_app(settings=None) -> FastAPI:
     app.include_router(admin_matches_router)
 
     # Health endpoints
-    @app.get("/")
-    async def home() -> RedirectResponse:
-        return RedirectResponse(url="/roster", status_code=303)
-
     @app.get("/healthz")
     async def healthz() -> JSONResponse:
         return JSONResponse({"status": "ok"})
