@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from golf_league.config import get_settings
@@ -18,7 +19,7 @@ from golf_league.domain.tokens import generate_token
 from golf_league.security import SESSION_COOKIE_NAME, generate_csrf_token, validate_csrf
 from golf_league.services.auth import (
     authenticate_user,
-    complete_password_reset,
+    complete_reset_token,
     consume_token,
     create_session_cookie,
     get_user_by_email,
@@ -218,7 +219,7 @@ async def reset_form(
 ) -> Response:
     user_id = peek_token(session, token, "reset_password")
     if user_id is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found") from None
 
     seed = request.cookies.get(CSRF_COOKIE_NAME) or generate_token()
     response = _templates(request).TemplateResponse(
@@ -253,11 +254,23 @@ async def reset_submit(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
 
-    user_id = consume_token(session, token, "reset_password")
-    if user_id is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-
-    complete_password_reset(session, user_id, password)
+    password_hash = hash_password(password)
+    try:
+        session.rollback()
+        session.execute(text("BEGIN IMMEDIATE"))
+        result = complete_reset_token(
+            session, raw_token=token, password_hash=password_hash, now=datetime.now(UTC)
+        )
+        if result is None:
+            session.rollback()
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+        session.commit()
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        logging.getLogger(__name__).warning("password reset completion failed")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found") from None
 
     redirect = RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     redirect.delete_cookie(SESSION_COOKIE_NAME)

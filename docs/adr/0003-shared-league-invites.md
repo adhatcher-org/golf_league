@@ -1,7 +1,8 @@
 # ADR 0003: Shared invitations authorize roster-bound credentials
 
-Status: Accepted for GL-42 (R-SHARED-LINK v2). Anonymous HTTP, transport and
-credential completion are implemented and verified separately in GL-43.
+Status: Accepted for GL-42 (R-SHARED-LINK v2). GL-43 anonymous HTTP,
+transport and credential completion are implemented; focused validation passed
+on 2026-10-07. The committed-candidate fresh-check remains the release gate.
 
 A shared invitation is a reusable, digest-only parent authorization, not an
 account or reset token. Its raw URL uses EXTERNAL_BASE_URL, never inbound Host or
@@ -72,3 +73,37 @@ processing, never arbitrary forwarded-header parsing. GL-43/GL-71 own proxy
 verification. Before real mail deployment, SPF, DKIM and DMARC must be correct;
 real transport and deployment retain their authorization gates. GL-42 uses only
 synthetic fixtures and sends no real mail.
+
+## GL-43 implementation and verification (2026-10-07)
+
+The public `/join/{token}` and `/set-password/{token}` routes use standalone
+anonymous templates, `csrf_seed`, no-store/no-referrer headers and the configured
+external origin. Join admission starts with `BEGIN IMMEDIATE` and commits its
+reservation before the response callback invokes the fake email sender. The
+callback records success or failure using a fresh session. Sender errors and
+outcome-recording errors are logged as separate generic messages; a recording
+failure after a successful send does not retry the sender or claim delivery
+failure. The response floor is measured against injected monotonic time and uses
+an async sleeper.
+
+Shared completion and ordinary reset each conditionally consume their own
+credential and update the password, session version and sibling revocations in
+one caller-owned serialized transaction. Ordinary reset remains logged out;
+shared completion establishes the new signed session only after commit. Both
+paths revoke outstanding password-changing credentials and applicable
+verification credentials without clearing the consumed token timestamp.
+Uvicorn access-record arguments are filtered for credential-bearing route paths
+without rewriting the ASGI request scope.
+
+ASGI frame samples used the local TestClient, SQLite temp database, configured
+synthetic roster, and a recorder around `http.response.start` plus the final
+`http.response.body`. Ten invalid-parent samples ranged 101.549–103.593 ms
+(median 103.054 ms); ten suppressed valid-invite samples ranged 101.476–103.306
+ms (median 102.960 ms). Every observed sample exceeded 100 ms by about 1.5–3.6
+ms; the branch medians differed by 0.094 ms. A separate blocked fake sender test
+observed the final response body before sender dispatch. These small local
+samples show no reproducible branch-correlated overrun, but they do not prove
+equal timing under other database or host load. Capacity, delivery and ordinary
+database paths that exceed the floor remain a release-time disclosure risk.
+Browser journey and real mail were not run; neither is configured/authorized in
+this task. Full `make check` is left to the committed-candidate fresh-check.

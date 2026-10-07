@@ -23,6 +23,7 @@ from golf_league.models import (
     InviteRateWindow,
     LeagueInviteLink,
     User,
+    UserToken,
 )
 
 QUOTAS = {"email": (3, 900), "ip": (10, 3600), "invite": (40, 3600), "global": (100, 3600)}
@@ -49,6 +50,16 @@ class SetPasswordSubject:
     invite_id: int
     email_snapshot: str = field(repr=False)
     expected_user_id: int | None
+
+
+@dataclass(frozen=True)
+class CompletedCredential:
+    user_id: int
+    session_version: int
+
+
+class AccountCapacityReached(ValueError):
+    """A new account was refused because the configured account cap is full."""
 
 
 class InviteValidationError(ValueError):
@@ -256,6 +267,70 @@ def peek_set_password_token(session: Session, *, raw_token: str, now: datetime) 
     if not matches or user_id != token.expected_user_id:
         return None
     return SetPasswordSubject(token.id, token.golfer_id, token.invite_link_id, token.email_snapshot, user_id)
+
+
+def complete_set_password(
+    session: Session, *, raw_token: str, password_hash: str, now: datetime,
+) -> CompletedCredential | None:
+    """Complete a roster credential atomically; caller owns BEGIN IMMEDIATE/commit."""
+    now = _utc(now)
+    subject = peek_set_password_token(session, raw_token=raw_token, now=now)
+    if subject is None:
+        return None
+
+    # Re-read the roster row after acquiring the caller's write reservation.
+    golfer = session.get(Golfer, subject.golfer_id)
+    if golfer is None:
+        return None
+    user = session.get(User, subject.expected_user_id) if subject.expected_user_id is not None else None
+    if subject.expected_user_id is not None and user is None:
+        return None
+    if subject.expected_user_id is None:
+        if (session.scalar(select(func.count()).select_from(User)) or 0) >= 150:
+            raise AccountCapacityReached()
+        user = User(
+            username=subject.email_snapshot,
+            email=subject.email_snapshot,
+            display_name=f"{golfer.first_name} {golfer.last_name}",
+            password_hash=password_hash,
+            email_verified_at=now.replace(tzinfo=None),
+            is_admin=False,
+            golfer_id=golfer.id,
+            session_version=1,
+        )
+        session.add(user)
+        session.flush()
+    else:
+        user.password_hash = password_hash
+        user.email_verified_at = now.replace(tzinfo=None)
+        user.session_version += 1
+
+    token_result = session.execute(
+        update(GolferSetPasswordToken)
+        .where(
+            GolferSetPasswordToken.token_digest == digest(raw_token),
+            GolferSetPasswordToken.expires_at > now,
+            GolferSetPasswordToken.consumed_at.is_(None),
+            GolferSetPasswordToken.revoked_at.is_(None),
+        )
+        .values(consumed_at=now)
+        .returning(GolferSetPasswordToken.id)
+    ).first()
+    if token_result is None:
+        return None
+
+    session.execute(update(GolferSetPasswordToken).where(
+        GolferSetPasswordToken.golfer_id == golfer.id,
+        GolferSetPasswordToken.consumed_at.is_(None),
+        GolferSetPasswordToken.revoked_at.is_(None),
+    ).values(revoked_at=now))
+    session.execute(update(UserToken).where(
+        UserToken.user_id == user.id,
+        UserToken.purpose.in_(("reset_password", "set_password", "verify_email")),
+        UserToken.consumed_at.is_(None), UserToken.revoked_at.is_(None),
+    ).values(revoked_at=now.replace(tzinfo=None)))
+    session.flush()
+    return CompletedCredential(user.id, user.session_version)
 
 
 def record_send_success(session: Session, *, token_id: int, now: datetime) -> None:

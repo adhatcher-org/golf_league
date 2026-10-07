@@ -1,6 +1,8 @@
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
@@ -14,6 +16,7 @@ from golf_league.admin_config import bootstrap_admin
 from golf_league.config import get_settings
 from golf_league.database import make_engine
 from golf_league.domain.rate_limit import RateLimiter
+from golf_league.logging_config import install_access_log_filter
 from golf_league.migrations import upgrade_to_head
 from golf_league.routers.admin_courses import router as admin_courses_router
 from golf_league.routers.admin_imports import router as admin_imports_router
@@ -27,6 +30,7 @@ from golf_league.routers.admin_teams import router as admin_teams_router
 from golf_league.routers.admin_weeks import router as admin_weeks_router
 from golf_league.routers.home import router as home_router
 from golf_league.routers.identity import router as identity_router
+from golf_league.routers.join import router as join_router
 from golf_league.routers.player_schedule import router as player_schedule_router
 from golf_league.routers.roster import router as roster_router
 from golf_league.security import (
@@ -126,6 +130,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app(settings=None) -> FastAPI:
+    install_access_log_filter()
     app = FastAPI(lifespan=lifespan)
 
     # Store settings on app state if provided
@@ -153,10 +158,14 @@ def create_app(settings=None) -> FastAPI:
     # a safe in-memory placeholder so /reset always has something to call.
     app.state.email_sender = FakeEmailSender()
     app.state.invite_receipts = InviteReceiptStore()
+    app.state.join_monotonic = time.monotonic
+    app.state.join_sleep = asyncio.sleep
+    app.state.join_utc_now = lambda: datetime.now(UTC)
 
     app.middleware("http")(_navigation_user)
 
     app.include_router(identity_router)
+    app.include_router(join_router)
     app.include_router(home_router)
     app.include_router(roster_router)
     app.include_router(player_schedule_router)
