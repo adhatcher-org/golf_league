@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Create league invite - Golf League{% endblock %}
+{% block content %}
+<h1>Create league invite</h1>
+<p>The URL will appear once. Only active golfers already on the roster can request a personal link.</p>
+<form method="post" action="/admin/invites/new">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label for="label">Label</label><input id="label" name="label" value="" maxlength="120" aria-describedby="label-error">
+<p id="label-error" role="alert">{{ errors.get('label', '') }}</p>
+<label for="expiry_days">Expires after (days)</label><input id="expiry_days" name="expiry_days" inputmode="numeric" value="{{ default_days }}" aria-describedby="expiry-error expiry-help">
+<p id="expiry-help">Leave blank for 30 days.</p><p id="expiry-error" role="alert">{{ errors.get('expiry_days', '') }}</p>
+<button type="submit">Create invite</button> <a href="/admin/invites">Cancel</a>
+</form>
+{% endblock %}

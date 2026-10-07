@@ -69,3 +69,14 @@ def test_rate_limiter_zero_limit_always_blocks():
     limiter = RateLimiter(limit=0, window_seconds=10, clock=clock)
 
     assert limiter.check("k") is False
+
+
+def test_pure_window_checker_snapshot_and_exact_boundary():
+    from golf_league.domain.rate_limit import check_window
+
+    snapshot = (10.0, 3)
+    assert check_window(snapshot, now=909.9, limit=3, window_seconds=900) == (False, snapshot)
+    assert snapshot == (10.0, 3)
+    assert check_window(snapshot, now=910.0, limit=3, window_seconds=900) == (True, (910.0, 1))
+    assert check_window(None, now=20.0, limit=3, window_seconds=900) == (True, (20.0, 1))
+    assert check_window(None, now=20.0, limit=0, window_seconds=900) == (False, (20.0, 0))

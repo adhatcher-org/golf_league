@@ -5,6 +5,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     ForeignKeyConstraint,
     Integer,
@@ -581,3 +582,58 @@ class WeekHandicap(Base):
     week: Mapped["Week"] = relationship()
     golfer: Mapped["Golfer"] = relationship()
     tee_set: Mapped["TeeSet"] = relationship()
+
+
+class LeagueInviteLink(Base):
+    """Shared invitation; only its irreversible digest is persisted."""
+
+    __tablename__ = "league_invite_links"
+    __table_args__ = tuple(
+        CheckConstraint(f"{name} >= 0", name=f"ck_invite_{name}_nonnegative")
+        for name in ("send_count", "suppressed_count", "failed_send_count")
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    label: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    send_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    suppressed_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    failed_send_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    last_sent_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    require_phone_last_four: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+
+
+class GolferSetPasswordToken(Base):
+    """Single-purpose credential for a roster subject, never a user-token alias."""
+
+    __tablename__ = "golfer_set_password_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    golfer_id: Mapped[int] = mapped_column(ForeignKey("golfers.id"), nullable=False)
+    invite_link_id: Mapped[int] = mapped_column(ForeignKey("league_invite_links.id"), nullable=False)
+    email_snapshot: Mapped[str] = mapped_column(String(254), nullable=False)
+    expected_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    token_digest: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+
+
+class InviteRateWindow(Base):
+    """Persisted fixed windows with purpose-separated HMAC keys."""
+
+    __tablename__ = "invite_rate_windows"
+    __table_args__ = (
+        CheckConstraint("count >= 0", name="ck_invite_window_count_nonnegative"),
+        CheckConstraint("tier IN ('email', 'ip', 'invite', 'global')", name="ck_invite_window_tier"),
+    )
+
+    tier: Mapped[str] = mapped_column(String(16), primary_key=True)
+    key_digest: Mapped[str] = mapped_column(String(64), primary_key=True)
+    window_start: Mapped[float] = mapped_column(Float, nullable=False)
+    count: Mapped[int] = mapped_column(Integer, nullable=False)

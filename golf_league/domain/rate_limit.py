@@ -24,18 +24,21 @@ class RateLimiter:
 
     def check(self, key: str) -> bool:
         """Record an attempt for `key` and return True if it is allowed."""
-        now = self._clock()
-        window_start, count = self._windows.get(key, (now, 0))
+        allowed, state = check_window(
+            self._windows.get(key), now=self._clock(),
+            limit=self._limit, window_seconds=self._window_seconds,
+        )
+        self._windows[key] = state
+        return allowed
 
-        if now - window_start >= self._window_seconds:
-            # Outside the current window: start a fresh one.
-            window_start = now
-            count = 0
 
-        if count >= self._limit:
-            # Still record the window state; do not reset the count.
-            self._windows[key] = (window_start, count)
-            return False
-
-        self._windows[key] = (window_start, count + 1)
-        return True
+def check_window(
+    state: tuple[float, int] | None, *, now: float, limit: int, window_seconds: int,
+) -> tuple[bool, tuple[float, int]]:
+    """Check one immutable half-open window, returning its prospective state."""
+    start, count = state if state is not None else (now, 0)
+    if now - start >= window_seconds:
+        start, count = now, 0
+    if count >= limit:
+        return False, (start, count)
+    return True, (start, count + 1)

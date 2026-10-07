@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}League invites - Golf League{% endblock %}
+{% block content %}
+<header class="admin-page-heading">
+    <div><p class="eyebrow">Manage · League invites</p><h1>League invites</h1>
+    <p>Shared links admit only existing, active roster members. URLs appear once after creation or rotation.</p></div>
+    <a class="button-link" href="/admin/invites/new">Create invite</a>
+</header>
+<p>If the one-time display is lost, rotate a live invite to get a replacement URL. Rotation invalidates the old shared and personal links.</p>
+{% if invites %}
+<div class="table-wrap"><table>
+<caption class="visually-hidden">League invitation lifecycle and mail handoff counts</caption>
+<thead><tr><th scope="col">Label</th><th scope="col">Created</th><th scope="col">Expires</th><th scope="col">Status</th><th scope="col">Successful handoffs</th><th scope="col">Failed handoffs</th><th scope="col">Rate suppressed</th><th scope="col">Last successful handoff</th><th scope="col">Actions</th></tr></thead>
+<tbody>{% for invite in invites %}<tr>
+<th scope="row">{{ invite.label }}</th><td>{{ invite.created_at.isoformat() }}</td><td>{{ invite.expires_at.isoformat() }}</td><td>{{ states[invite.id] }}</td>
+<td>{{ invite.send_count }}</td><td>{{ invite.failed_send_count }}</td><td>{{ invite.suppressed_count }}</td><td>{{ invite.last_sent_at.isoformat() if invite.last_sent_at else 'None' }}</td>
+<td>
+{% if states[invite.id] == 'live' %}
+<form method="post" action="/admin/invites/{{ invite.id }}/rotate"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" aria-label="Rotate {{ invite.label }}">Rotate</button></form>
+{% endif %}
+{% if states[invite.id] != 'revoked' %}
+<form method="post" action="/admin/invites/{{ invite.id }}/revoke"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" aria-label="Revoke {{ invite.label }}">Revoke</button></form>
+{% endif %}
+</td></tr>{% endfor %}</tbody>
+</table></div>
+{% else %}<section class="empty-state"><h2>No invites yet</h2><p>Create an invite to share with the league.</p></section>{% endif %}
+{% endblock %}

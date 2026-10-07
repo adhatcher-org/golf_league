@@ -28,6 +28,9 @@ Private data, ignored files, and source contents are excluded.
 ### `docs/adr/0002-handicap-representation.md`
 
 
+### `docs/adr/0003-shared-league-invites.md`
+
+
 ### `docs/architecture/C1-context.md`
 
 
@@ -52,15 +55,16 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/app.py`
 
-- function `_navigation_user` (line 50)
-- function `lifespan` (line 83)
-- function `create_app` (line 126)
+- function `_navigation_user` (line 52)
+- function `lifespan` (line 85)
+- function `create_app` (line 128)
 
 ### `golf_league/config.py`
 
-- class `Settings` (line 7)
-  - method `league_name_template_must_support_season` (line 18)
-- function `get_settings` (line 30)
+- class `Settings` (line 8)
+  - method `external_origin_must_be_absolute` (line 20)
+  - method `league_name_template_must_support_season` (line 39)
+- function `get_settings` (line 51)
 
 ### `golf_league/database.py`
 
@@ -101,6 +105,7 @@ Private data, ignored files, and source contents are excluded.
 - class `RateLimiter` (line 6)
   - method `__init__` (line 18)
   - method `check` (line 25)
+- function `check_window` (line 35)
 
 ### `golf_league/domain/roster.py`
 
@@ -159,29 +164,32 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/models.py`
 
-- class `Base` (line 21)
-- class `UTCDateTime` (line 25)
-  - method `process_bind_param` (line 31)
-  - method `process_result_value` (line 38)
-- class `User` (line 44)
-- class `Course` (line 83)
-- class `TeeSet` (line 104)
-- class `TeeRating` (line 134)
-- class `Hole` (line 154)
-- class `HoleYardage` (line 172)
-- class `Season` (line 187)
-- class `SeasonGolfer` (line 228)
-- class `SeasonParticipant` (line 244)
-- class `Golfer` (line 264)
-- class `Team` (line 307)
-- class `TeamMember` (line 328)
-- class `Week` (line 356)
-- class `RosterImportBatch` (line 388)
-- class `RosterImportRow` (line 435)
-- class `UserToken` (line 484)
-- class `TeamMatch` (line 512)
-- class `PlayerMatch` (line 538)
-- class `WeekHandicap` (line 563)
+- class `Base` (line 22)
+- class `UTCDateTime` (line 26)
+  - method `process_bind_param` (line 32)
+  - method `process_result_value` (line 39)
+- class `User` (line 45)
+- class `Course` (line 84)
+- class `TeeSet` (line 105)
+- class `TeeRating` (line 135)
+- class `Hole` (line 155)
+- class `HoleYardage` (line 173)
+- class `Season` (line 188)
+- class `SeasonGolfer` (line 229)
+- class `SeasonParticipant` (line 245)
+- class `Golfer` (line 265)
+- class `Team` (line 308)
+- class `TeamMember` (line 329)
+- class `Week` (line 357)
+- class `RosterImportBatch` (line 389)
+- class `RosterImportRow` (line 436)
+- class `UserToken` (line 485)
+- class `TeamMatch` (line 513)
+- class `PlayerMatch` (line 539)
+- class `WeekHandicap` (line 564)
+- class `LeagueInviteLink` (line 587)
+- class `GolferSetPasswordToken` (line 610)
+- class `InviteRateWindow` (line 627)
 
 ### `golf_league/routers/__init__.py`
 
@@ -222,6 +230,25 @@ Private data, ignored files, and source contents are excluded.
 - function `discard_import` (line 171)
 - function `apply_import` (line 185)
 - function `purge_import` (line 203)
+
+### `golf_league/routers/admin_invites.py`
+
+- class `_Receipt` (line 40)
+- class `InviteReceiptStore` (line 47)
+  - method `__init__` (line 50)
+  - method `put` (line 55)
+  - method `pop` (line 63)
+- function `_csrf` (line 77)
+- function `_csrf_value` (line 82)
+- function `_id` (line 86)
+- function `_begin` (line 95)
+- function `_receipt_redirect` (line 102)
+- function `invite_list` (line 117)
+- function `invite_form` (line 131)
+- function `invite_create` (line 138)
+- function `invite_created` (line 161)
+- function `invite_revoke` (line 177)
+- function `invite_rotate` (line 196)
 
 ### `golf_league/routers/admin_matches.py`
 
@@ -409,6 +436,28 @@ Private data, ignored files, and source contents are excluded.
 
 - class `RegistrationResult` (line 17)
 - function `register_roster_user` (line 24)
+
+### `golf_league/services/invites.py`
+
+- class `CreatedInvite` (line 32)
+- class `InviteDelivery` (line 38)
+- class `SetPasswordSubject` (line 46)
+- class `InviteValidationError` (line 54)
+  - method `__init__` (line 55)
+- class `InviteNotFound` (line 60)
+- class `InviteConflict` (line 64)
+- function `_utc` (line 68)
+- function `_live` (line 74)
+- function `create_invite` (line 78)
+- function `revoke_invite` (line 110)
+- function `rotate_invite` (line 128)
+- function `get_valid_invite` (line 142)
+- function `_matching_identity` (line 150)
+- function `_key` (line 165)
+- function `admit_join_send` (line 169)
+- function `peek_set_password_token` (line 238)
+- function `record_send_success` (line 261)
+- function `record_send_failure` (line 270)
 
 ### `golf_league/services/matchups.py`
 
@@ -643,6 +692,11 @@ Private data, ignored files, and source contents are excluded.
 - function `upgrade` (line 20)
 - function `downgrade` (line 78)
 
+### `migrations/versions/ab42c7d9e013_shared_league_invites.py`
+
+- function `upgrade` (line 16)
+- function `downgrade` (line 60)
+
 ### `migrations/versions/b8d4c0e2f671_manual_teams.py`
 
 - function `upgrade` (line 17)
@@ -702,6 +756,15 @@ Private data, ignored files, and source contents are excluded.
 
 
 ### `templates/admin/imports/review.html`
+
+
+### `templates/admin/invites/created.html`
+
+
+### `templates/admin/invites/form.html`
+
+
+### `templates/admin/invites/list.html`
 
 
 ### `templates/admin/matches/substitute.html`
@@ -1102,6 +1165,12 @@ Private data, ignored files, and source contents are excluded.
 - function `test_missing_admin_password_creates_no_user_and_logs_clearly` (line 89)
 - function `test_non_empty_database_leaves_existing_admin_unchanged` (line 103)
 
+### `tests/test_config.py`
+
+- function `test_default_external_origin` (line 9)
+- function `test_custom_external_origin` (line 14)
+- function `test_invalid_external_origins` (line 19)
+
 ### `tests/test_course_migration.py`
 
 - function `test_upgrade_to_head_creates_courses_tee_sets_and_tee_ratings` (line 9)
@@ -1251,6 +1320,54 @@ Private data, ignored files, and source contents are excluded.
 - function `test_short_password_re_renders_the_reset_form_with_422` (line 325)
 - function `test_fake_email_sender_records_only_on_a_matched_reset` (line 357)
 
+### `tests/test_invite_limits.py`
+
+- function `env` (line 22)
+- function `windows` (line 26)
+- function `test_each_tier_nth_allowed_next_refused_with_no_partial_debit` (line 32)
+- function `test_exact_rollover_uses_fresh_window` (line 56)
+- function `test_unknown_does_not_start_window_but_can_be_suppressed` (line 72)
+- function `test_rotation_keeps_email_ip_global_and_restarts_only_invite` (line 87)
+- function `test_hmac_keys_hide_cleartext_and_purpose_separate` (line 107)
+- function `test_rollback_leaves_no_partial_quota_token_revocation_or_counter` (line 118)
+- function `test_invalid_parent_has_no_effect` (line 134)
+- function `test_independent_engines_recreation_and_concurrent_final_reservation` (line 142)
+- function `test_concurrent_callbacks_do_not_lose_counts` (line 178)
+
+### `tests/test_invite_migration.py`
+
+- function `_engine` (line 13)
+- function `_assert_invite_schema` (line 25)
+- function `test_fresh_upgrade_has_invite_tables_one_head_and_defaults` (line 43)
+- function `test_upgrade_from_prior_head_preserves_existing_identity_and_repeats_cleanly` (line 62)
+
+### `tests/test_invites.py`
+
+- function `seed_environment` (line 40)
+- function `admission` (line 53)
+- function `invite_env` (line 65)
+- function `test_creation_digest_default_explicit_and_uniqueness` (line 69)
+- function `test_invalid_expiry_never_converts_unsafe_input` (line 90)
+- function `test_naive_now_rejected` (line 98)
+- function `test_rotation_revoke_and_rollback` (line 104)
+- function `test_issue_peek_prior_revocation_and_no_identity_creation` (line 136)
+- function `test_peek_rejects_subject_and_parent_drift` (line 164)
+- function `test_existing_user_subject_must_still_match` (line 184)
+- function `test_issue_refusals_do_not_reserve_or_create` (line 211)
+- function `test_existing_account_can_issue_at_cap` (line 244)
+- function `test_send_callbacks_increment_and_failure_revokes_without_refund` (line 258)
+- function `csrf` (line 280)
+- function `create_admin_invite` (line 284)
+- function `test_admin_receipt_once_privacy_and_host_spoof` (line 288)
+- function `test_receipt_foreign_admin_session_and_exact_expiry` (line 313)
+- function `test_receipt_foreign_session_http_and_expiry` (line 330)
+- function `test_admin_validation_html_blank_values` (line 351)
+- function `test_admin_new_default_and_explicit_366` (line 361)
+- function `test_admin_missing_or_foreign_csrf` (line 368)
+- function `test_admin_auth_ladder` (line 377)
+- function `test_admin_malformed_missing_ids_404` (line 394)
+- function `test_admin_revoke_rotate_codes_and_statuses` (line 398)
+
 ### `tests/test_logging_config.py`
 
 - function `test_redact_hides_an_email_address` (line 4)
@@ -1364,6 +1481,7 @@ Private data, ignored files, and source contents are excluded.
 - function `test_rate_limiter_boundary_is_half_open_not_closed` (line 37)
 - function `test_rate_limiter_independent_keys_do_not_interfere` (line 51)
 - function `test_rate_limiter_zero_limit_always_blocks` (line 67)
+- function `test_pure_window_checker_snapshot_and_exact_boundary` (line 74)
 
 ### `tests/test_registration.py`
 
