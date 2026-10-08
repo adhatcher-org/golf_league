@@ -1,20 +1,22 @@
 """Tests for `golf_league.routers.identity`."""
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import Depends
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from golf_league.domain.rate_limit import RateLimiter
-from golf_league.models import User
+from golf_league.domain.tokens import digest
+from golf_league.models import GolferSetPasswordToken, LeagueInviteLink, User, UserToken
 from golf_league.security import (
     generate_csrf_token,
     require_admin,
     require_user,
     require_verified_user,
 )
-from golf_league.services.auth import hash_password
+from golf_league.services.auth import hash_password, issue_token, verify_password
 
 CSRF_RE = re.compile(r'name="csrf_token" value="([^"]*)"')
 
@@ -370,3 +372,110 @@ def test_fake_email_sender_records_only_on_a_matched_reset(client):
     assert matched.status_code == unmatched.status_code == 200
     assert matched.text == unmatched.text
     assert len(client.app.state.email_sender.sent) == 1
+
+
+def test_reset_commit_failure_rolls_back_password_and_token(client, monkeypatch):
+    user_id = _make_user(
+        client, email="atomic-reset@example.test", password="original-password-1"
+    )
+    with Session(bind=client.app.state.engine) as session:
+        raw = issue_token(session, user_id, "reset_password", 3600)
+        session_version = session.get(User, user_id).session_version
+
+    page = client.get(f"/reset/{raw}")
+    csrf = _extract_csrf(page.text)
+    original_commit = Session.commit
+
+    def fail_commit(_session):
+        raise RuntimeError("synthetic database failure")
+
+    monkeypatch.setattr(Session, "commit", fail_commit)
+    response = client.post(
+        f"/reset/{raw}",
+        data={"password": "replacement-password-2", "csrf_token": csrf},
+        follow_redirects=False,
+    )
+    monkeypatch.setattr(Session, "commit", original_commit)
+    assert response.status_code == 404
+    with Session(bind=client.app.state.engine) as session:
+        user = session.get(User, user_id)
+        token = session.scalar(select(UserToken).where(UserToken.purpose == "reset_password"))
+        assert verify_password("original-password-1", user.password_hash)
+        assert user.session_version == session_version
+        assert token.consumed_at is None and token.revoked_at is None
+
+
+def test_ordinary_reset_preserves_account_and_revokes_other_credentials(client):
+    with Session(bind=client.app.state.engine) as session:
+        from golf_league.models import Golfer, TeeSet
+
+        golfer = Golfer(
+            first_name="Reset", last_name="Player", email="preserve-reset@example.test",
+            default_tee_set_id=session.scalar(select(TeeSet.id).limit(1)),
+            handicap_source="self_reported", handicap_status="ok",
+        )
+        session.add(golfer)
+        session.flush()
+        user = User(
+            username="preserve-username", email="preserve-reset@example.test",
+            display_name="Preserve Name", password_hash=hash_password("before-reset-password"),
+            email_verified_at=datetime(2020, 1, 1), is_admin=True, golfer_id=golfer.id,
+        )
+        session.add(user)
+        session.flush()
+        user_id, golfer_id = user.id, golfer.id
+        reset_raw = issue_token(session, user.id, "reset_password", 3600, commit=False)
+        sibling = issue_token(session, user.id, "verify_email", 3600, commit=False)
+        invite = LeagueInviteLink(
+            token_hash="a" * 64, label="Synthetic", created_by_user_id=user.id,
+            created_at=datetime.now(UTC), expires_at=datetime.now(UTC) + timedelta(days=2),
+        )
+        session.add(invite)
+        session.flush()
+        child = GolferSetPasswordToken(
+            golfer_id=golfer.id, invite_link_id=invite.id, email_snapshot=user.email,
+            expected_user_id=user.id, token_digest="b" * 64,
+            expires_at=datetime.now(UTC) + timedelta(hours=1), created_at=datetime.now(UTC),
+        )
+        session.add(child)
+        session.commit()
+        child_id = child.id
+
+    page = client.get(f"/reset/{reset_raw}")
+    response = client.post(
+        f"/reset/{reset_raw}",
+        data={"password": "after-reset-password", "csrf_token": _extract_csrf(page.text)},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"
+    assert "session" not in response.cookies
+    with Session(bind=client.app.state.engine) as session:
+        user = session.get(User, user_id)
+        assert user.username == "preserve-username" and user.email == "preserve-reset@example.test"
+        assert user.display_name == "Preserve Name" and user.is_admin and user.golfer_id == golfer_id
+        assert verify_password("after-reset-password", user.password_hash)
+        reset_token = session.scalar(select(UserToken).where(UserToken.token_digest == digest(reset_raw)))
+        assert reset_token.consumed_at is not None
+        other = session.scalar(select(UserToken).where(UserToken.token_digest == digest(sibling)))
+        assert other.revoked_at is not None
+        assert session.get(GolferSetPasswordToken, child_id).revoked_at is not None
+
+
+def test_reset_csrf_and_short_password_leave_token_usable(client):
+    user_id = _make_user(client, email="reset-errors@example.test", password="original-reset-password")
+    with Session(bind=client.app.state.engine) as session:
+        raw = issue_token(session, user_id, "reset_password", 3600)
+    page = client.get(f"/reset/{raw}")
+    missing_csrf = client.post(
+        f"/reset/{raw}", data={"password": "replacement-reset-password"}, follow_redirects=False,
+    )
+    assert missing_csrf.status_code == 403
+    short = client.post(
+        f"/reset/{raw}", data={"password": "short", "csrf_token": _extract_csrf(page.text)},
+        follow_redirects=False,
+    )
+    assert short.status_code == 422
+    with Session(bind=client.app.state.engine) as session:
+        token = session.scalar(select(UserToken).where(UserToken.user_id == user_id))
+        assert token.consumed_at is None and token.revoked_at is None

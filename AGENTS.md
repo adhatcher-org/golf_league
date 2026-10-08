@@ -50,6 +50,10 @@ orchestrator repo next door.
 - Regenerate with `uv run python scripts/generate_codemap.py` after adding, moving, renaming,
   or deleting source files. The stdlib generator indexes existing tracked and nonignored source
   files, excludes private data, and does not claim to describe runtime call paths.
+- Admin invitation lifecycle routes are in `golf_league/routers/admin_invites.py`; shared join
+  and set-password routes are in `golf_league/routers/join.py`. Their invite and credential
+  operations are in `golf_league/services/invites.py`, with password-reset completion in
+  `golf_league/services/auth.py`.
 - Player home and contact entry points are `golf_league/routers/home.py` and
   `golf_league/routers/player_schedule.py`; projections are in
   `golf_league/services/player_schedule.py`, with markup in `templates/player/`.

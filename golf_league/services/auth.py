@@ -7,6 +7,7 @@ in golf_league/security.py.
 
 import hashlib
 import hmac
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from argon2 import PasswordHasher
@@ -16,7 +17,13 @@ from sqlalchemy.orm import Session
 
 from golf_league.domain.identity import normalize_email
 from golf_league.domain.tokens import digest, generate_token
-from golf_league.models import User, UserToken
+from golf_league.models import GolferSetPasswordToken, User, UserToken
+
+
+@dataclass(frozen=True)
+class CompletedCredential:
+    user_id: int
+    session_version: int
 
 _hasher = PasswordHasher()
 
@@ -216,6 +223,54 @@ def complete_password_reset(session: Session, user_id: int, new_password: str) -
     session.commit()
 
 
+def complete_reset_token(
+    session: Session, *, raw_token: str, password_hash: str, now: datetime,
+) -> CompletedCredential | None:
+    """Consume and apply a reset in the caller's serialized transaction."""
+    now = now.astimezone(UTC).replace(tzinfo=None)
+    token_digest = digest(raw_token)
+    row = session.execute(
+        select(UserToken.id, UserToken.user_id).where(
+            UserToken.token_digest == token_digest,
+            UserToken.purpose == "reset_password",
+            UserToken.expires_at > now,
+            UserToken.consumed_at.is_(None),
+            UserToken.revoked_at.is_(None),
+        )
+    ).first()
+    if row is None:
+        return None
+    user = session.get(User, row.user_id)
+    if user is None:
+        return None
+    consumed = session.execute(
+        update(UserToken).where(
+            UserToken.id == row.id,
+            UserToken.purpose == "reset_password",
+            UserToken.expires_at > now,
+            UserToken.consumed_at.is_(None),
+            UserToken.revoked_at.is_(None),
+        ).values(consumed_at=now).returning(UserToken.id)
+    ).first()
+    if consumed is None:
+        return None
+    user.password_hash = password_hash
+    user.session_version += 1
+    session.execute(update(UserToken).where(
+        UserToken.user_id == user.id,
+        UserToken.purpose.in_(("reset_password", "set_password", "verify_email")),
+        UserToken.consumed_at.is_(None), UserToken.revoked_at.is_(None),
+    ).values(revoked_at=now))
+    if user.golfer_id is not None:
+        session.execute(update(GolferSetPasswordToken).where(
+            GolferSetPasswordToken.golfer_id == user.golfer_id,
+            GolferSetPasswordToken.consumed_at.is_(None),
+            GolferSetPasswordToken.revoked_at.is_(None),
+        ).values(revoked_at=now.replace(tzinfo=UTC)))
+    session.flush()
+    return CompletedCredential(user.id, user.session_version)
+
+
 __all__ = [
     "hash_password",
     "verify_password",
@@ -228,4 +283,6 @@ __all__ = [
     "authenticate_user",
     "mark_email_verified",
     "complete_password_reset",
+    "complete_reset_token",
+    "CompletedCredential",
 ]

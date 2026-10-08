@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Invite created - Golf League{% endblock %}
+{% block content %}
+<h1>Invite created</h1><p>Copy this URL now. It appears only once and cannot be recovered.</p>
+<label for="shared_url">Shared league URL</label><input id="shared_url" type="url" readonly value="{{ shared_url }}" autocomplete="off">
+<p>If this display is lost, rotate the live invitation to get a replacement. Rotation invalidates earlier links.</p>
+<a href="/admin/invites">Back to league invites</a>
+{% endblock %}
