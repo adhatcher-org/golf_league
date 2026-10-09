@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - Golf League{% endblock %}
+{% block content %}
+<section class="error-page" aria-labelledby="error-title">
+    <p class="eyebrow">Error {{ status_code }}</p>
+    <h1 id="error-title">{{ title }}</h1>
+    <p>{{ message }}</p>
+    <p class="error-page__actions">
+        {% for link in links %}<a class="button-link{% if not loop.first %} button-link--secondary{% endif %}" href="{{ link.href }}">{{ link.label }}</a>{% endfor %}
+    </p>
+</section>
+{% endblock %}

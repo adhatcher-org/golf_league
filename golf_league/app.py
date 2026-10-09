@@ -16,6 +16,7 @@ from golf_league.admin_config import bootstrap_admin
 from golf_league.config import get_settings
 from golf_league.database import make_engine
 from golf_league.domain.rate_limit import RateLimiter
+from golf_league.error_pages import install_error_pages
 from golf_league.logging_config import apply_log_level, install_access_log_filter
 from golf_league.migrations import upgrade_to_head
 from golf_league.routers.admin_config import router as admin_config_router
@@ -182,6 +183,7 @@ def create_app(settings=None) -> FastAPI:
     app.state.join_utc_now = lambda: datetime.now(UTC)
 
     app.middleware("http")(_navigation_user)
+    install_error_pages(app)
 
     app.include_router(identity_router)
     app.include_router(join_router)
