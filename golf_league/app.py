@@ -21,7 +21,7 @@ from golf_league.migrations import upgrade_to_head
 from golf_league.routers.admin_config import router as admin_config_router
 from golf_league.routers.admin_courses import router as admin_courses_router
 from golf_league.routers.admin_imports import router as admin_imports_router
-from golf_league.routers.admin_invites import InviteReceiptStore
+from golf_league.routers.admin_invites import InviteFormNonceStore, InviteReceiptStore
 from golf_league.routers.admin_invites import router as admin_invites_router
 from golf_league.routers.admin_matches import router as admin_matches_router
 from golf_league.routers.admin_participants import router as admin_participants_router
@@ -176,6 +176,7 @@ def create_app(settings=None) -> FastAPI:
     # when the resolved settings name an SMTP_HOST.
     app.state.email_sender = FakeEmailSender()
     app.state.invite_receipts = InviteReceiptStore()
+    app.state.invite_form_nonces = InviteFormNonceStore()
     app.state.join_monotonic = time.monotonic
     app.state.join_sleep = asyncio.sleep
     app.state.join_utc_now = lambda: datetime.now(UTC)

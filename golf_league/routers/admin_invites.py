@@ -75,6 +75,52 @@ class InviteReceiptStore:
             return receipt.url
 
 
+class InviteFormNonceStore:
+    """One-time submission tokens for the create-invite form (single worker).
+
+    The form carries a nonce bound to the admin and session. A POST consumes
+    it atomically, so a double click or replay of the same form cannot create
+    a second invite. Nonces are process-local, like the receipts above; an
+    unknown or expired nonce (for example after a restart) asks the admin to
+    reload the form rather than creating anything.
+    """
+
+    TTL_SECONDS = 3600
+
+    def __init__(self, clock: Callable[[], float] = time.monotonic):
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._nonces: dict[str, tuple[int, str, float, bool]] = {}
+
+    def issue(self, *, admin_id: int, session_cookie: str) -> str:
+        with self._lock:
+            now = self._clock()
+            self._nonces = {key: row for key, row in self._nonces.items() if row[2] > now}
+            nonce = generate_token()
+            self._nonces[nonce] = (admin_id, digest(session_cookie), now + self.TTL_SECONDS, False)
+            return nonce
+
+    def consume(self, *, nonce: str, admin_id: int, session_cookie: str) -> str:
+        """Return "fresh" (now used), "used" (seen before) or "unknown"."""
+        with self._lock:
+            row = self._nonces.get(nonce) if nonce else None
+            if row is None or row[2] <= self._clock():
+                return "unknown"
+            if row[0] != admin_id or row[1] != digest(session_cookie):
+                return "unknown"
+            if row[3]:
+                return "used"
+            self._nonces[nonce] = (row[0], row[1], row[2], True)
+            return "fresh"
+
+    def release(self, nonce: str) -> None:
+        """Make a consumed nonce usable again after a failed, uncommitted create."""
+        with self._lock:
+            row = self._nonces.get(nonce)
+            if row is not None:
+                self._nonces[nonce] = (row[0], row[1], row[2], False)
+
+
 def _csrf(request: Request, submitted: str) -> None:
     if not validate_csrf(request.cookies.get(SESSION_COOKIE_NAME, ""), submitted):
         raise HTTPException(403, "Invalid CSRF token")
@@ -125,35 +171,56 @@ async def invite_list(
     states = {row.id: "revoked" if row.revoked_at else "expired" if row.expires_at <= now else "live" for row in invites}
     return request.app.state.templates.TemplateResponse(request, "admin/invites/list.html", {
         "invites": invites, "states": states, "csrf_token": _csrf_value(request),
+        "already_submitted": request.query_params.get("submitted") == "again",
     })
+
+
+def _invite_form(request: Request, admin_id: int, *, errors: dict, default_days: str,
+                 status_code: int = 200) -> Response:
+    nonce = request.app.state.invite_form_nonces.issue(
+        admin_id=admin_id, session_cookie=request.cookies.get(SESSION_COOKIE_NAME, ""),
+    )
+    return request.app.state.templates.TemplateResponse(request, "admin/invites/form.html", {
+        "csrf_token": _csrf_value(request), "errors": errors, "default_days": default_days,
+        "form_nonce": nonce,
+    }, status_code=status_code)
 
 
 @router.get("/admin/invites/new")
 async def invite_form(request: Request, admin=Depends(require_admin)) -> Response:  # noqa: B008
-    return request.app.state.templates.TemplateResponse(request, "admin/invites/form.html", {
-        "csrf_token": _csrf_value(request), "errors": {}, "default_days": "30",
-    })
+    return _invite_form(request, admin.id, errors={}, default_days="30")
 
 
 @router.post("/admin/invites/new")
 async def invite_create(
     request: Request, label: str = Form(""), expiry_days: str = Form(""), csrf_token: str = Form(""),
+    form_nonce: str = Form(""),
     session: Session = Depends(get_session),  # noqa: B008
     admin=Depends(require_admin),  # noqa: B008
 ) -> Response:
     _csrf(request, csrf_token)
     admin_id = admin.id
+    nonces = request.app.state.invite_form_nonces
+    state = nonces.consume(nonce=form_nonce, admin_id=admin_id,
+                           session_cookie=request.cookies.get(SESSION_COOKIE_NAME, ""))
+    if state == "used":
+        # A double click or replay of a form that already created an invite.
+        return RedirectResponse("/admin/invites?submitted=again", status_code=303, headers=PRIVATE_HEADERS)
+    if state == "unknown":
+        return _invite_form(request, admin_id, default_days="", status_code=422, errors={
+            "form": "This form has expired. Check the invite list before creating another invite.",
+        })
     try:
         _begin(session)
         created = create_invite(session, created_by_user_id=admin_id, label=label, expiry_days=expiry_days, now=datetime.now(UTC))
         session.commit()
     except InviteValidationError as exc:
         session.rollback()
-        return request.app.state.templates.TemplateResponse(request, "admin/invites/form.html", {
-            "csrf_token": _csrf_value(request), "errors": exc.errors, "default_days": "",
-        }, status_code=422)
+        nonces.release(form_nonce)  # nothing was created; a retry of this form may proceed
+        return _invite_form(request, admin_id, errors=exc.errors, default_days="", status_code=422)
     except Exception:
         session.rollback()
+        nonces.release(form_nonce)
         raise
     return _receipt_redirect(request, admin_id, created.raw_token)
 

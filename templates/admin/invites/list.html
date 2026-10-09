@@ -6,6 +6,7 @@
     <p>Shared links admit only existing, active roster members. URLs appear once after creation or rotation.</p></div>
     <a class="button-link" href="/admin/invites/new">Create invite</a>
 </header>
+{% if already_submitted %}<p class="notice" role="status">That form was already submitted, so no second invite was created. If the new invite's URL was not shown, rotate it to get a replacement.</p>{% endif %}
 <p>If the one-time display is lost, rotate a live invite to get a replacement URL. Rotation invalidates the old shared and personal links.</p>
 {% if invites %}
 <div class="table-wrap"><table>
