@@ -55,6 +55,9 @@ Private data, ignored files, and source contents are excluded.
 ### `docs/implementation-decisions.md`
 
 
+### `docs/validation/browser-journeys.md`
+
+
 ### `golf_league/__init__.py`
 
 
@@ -295,22 +298,22 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/routers/admin_invites.py`
 
-- class `_Receipt` (line 40)
-- class `InviteReceiptStore` (line 47)
-  - method `__init__` (line 50)
-  - method `put` (line 55)
-  - method `pop` (line 63)
-- function `_csrf` (line 77)
-- function `_csrf_value` (line 82)
-- function `_id` (line 86)
-- function `_begin` (line 95)
-- function `_receipt_redirect` (line 102)
-- function `invite_list` (line 117)
-- function `invite_form` (line 131)
-- function `invite_create` (line 138)
-- function `invite_created` (line 161)
-- function `invite_revoke` (line 177)
-- function `invite_rotate` (line 196)
+- class `_Receipt` (line 41)
+- class `InviteReceiptStore` (line 48)
+  - method `__init__` (line 51)
+  - method `put` (line 56)
+  - method `pop` (line 64)
+- function `_csrf` (line 78)
+- function `_csrf_value` (line 83)
+- function `_id` (line 87)
+- function `_begin` (line 96)
+- function `_receipt_redirect` (line 103)
+- function `invite_list` (line 118)
+- function `invite_form` (line 132)
+- function `invite_create` (line 139)
+- function `invite_created` (line 162)
+- function `invite_revoke` (line 178)
+- function `invite_rotate` (line 197)
 
 ### `golf_league/routers/admin_matches.py`
 
@@ -403,41 +406,41 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/routers/identity.py`
 
-- function `_settings` (line 53)
-- function `_templates` (line 58)
-- function `_csrf_seed` (line 62)
-- function `_require_csrf` (line 72)
-- function `_send_reset_email` (line 79)
-- function `_send_verification_email` (line 87)
-- function `_login_destination` (line 95)
-- function `login_form` (line 102)
-- function `login_submit` (line 118)
-- function `logout` (line 160)
-- function `verify_email` (line 174)
-- function `reset_request_form` (line 194)
-- function `reset_request_submit` (line 206)
-- function `reset_form` (line 237)
-- function `reset_submit` (line 257)
-- function `_registration_form` (line 302)
-- function `register_form` (line 318)
-- function `register_submit` (line 330)
+- function `_settings` (line 58)
+- function `_templates` (line 63)
+- function `_csrf_seed` (line 67)
+- function `_require_csrf` (line 77)
+- function `_send_reset_email` (line 84)
+- function `_send_verification_email` (line 92)
+- function `_login_destination` (line 100)
+- function `login_form` (line 107)
+- function `login_submit` (line 125)
+- function `logout` (line 169)
+- function `verify_email` (line 185)
+- function `reset_request_form` (line 205)
+- function `reset_request_submit` (line 219)
+- function `reset_form` (line 250)
+- function `reset_submit` (line 272)
+- function `_registration_form` (line 319)
+- function `register_form` (line 335)
+- function `register_submit` (line 349)
 
 ### `golf_league/routers/join.py`
 
-- function `_settings` (line 48)
-- function `_now` (line 52)
-- function `_seed` (line 57)
-- function `_private_error` (line 61)
-- function `_private_csrf` (line 65)
-- function `_set_private` (line 72)
-- function `_begin` (line 77)
-- function `_sleep_floor` (line 82)
-- function `_neutral_join` (line 90)
-- function `_dispatch_email` (line 102)
-- function `join_form` (line 135)
-- function `join_submit` (line 150)
-- function `set_password_form` (line 186)
-- function `set_password_submit` (line 201)
+- function `_settings` (line 52)
+- function `_now` (line 56)
+- function `_seed` (line 61)
+- function `_private_error` (line 65)
+- function `_private_csrf` (line 69)
+- function `_set_private` (line 76)
+- function `_begin` (line 81)
+- function `_sleep_floor` (line 86)
+- function `_neutral_join` (line 94)
+- function `_dispatch_email` (line 106)
+- function `join_form` (line 139)
+- function `join_submit` (line 156)
+- function `set_password_form` (line 192)
+- function `set_password_submit` (line 209)
 
 ### `golf_league/routers/player_schedule.py`
 
@@ -452,13 +455,14 @@ Private data, ignored files, and source contents are excluded.
 ### `golf_league/security.py`
 
 - function `_current_settings` (line 27)
-- function `generate_csrf_token` (line 34)
-- function `validate_csrf` (line 47)
-- function `get_optional_user` (line 58)
-- function `require_user` (line 78)
-- function `get_optional_verified_user` (line 93)
-- function `require_verified_user` (line 110)
-- function `require_admin` (line 121)
+- function `cookie_is_secure` (line 34)
+- function `generate_csrf_token` (line 45)
+- function `validate_csrf` (line 58)
+- function `get_optional_user` (line 69)
+- function `require_user` (line 89)
+- function `get_optional_verified_user` (line 104)
+- function `require_verified_user` (line 121)
+- function `require_admin` (line 132)
 
 ### `golf_league/services/__init__.py`
 
@@ -824,6 +828,16 @@ Private data, ignored files, and source contents are excluded.
 
 - function `generate` (line 14)
 
+### `scripts/run_local.py`
+
+- class `FileMailSender` (line 40)
+  - method `__init__` (line 43)
+  - method `send` (line 48)
+- function `prepare_environment` (line 58)
+- function `_demo_weeks` (line 80)
+- function `seed_demo` (line 99)
+- function `main` (line 206)
+
 ### `static/app.css`
 
 
@@ -943,17 +957,17 @@ Private data, ignored files, and source contents are excluded.
 
 ### `tests/conftest.py`
 
-- function `_extract_csrf` (line 17)
-- function `_make_admin_client` (line 24)
-- function `_isolated_managed_config` (line 61)
-- function `engine` (line 74)
-- function `session` (line 94)
-- function `client` (line 108)
-- function `empty_client` (line 128)
-- function `wyandot_course` (line 152)
-- function `golfer` (line 171)
-- function `admin_client` (line 198)
-- function `empty_admin_client` (line 209)
+- function `_extract_csrf` (line 21)
+- function `_make_admin_client` (line 28)
+- function `_isolated_managed_config` (line 65)
+- function `engine` (line 78)
+- function `session` (line 98)
+- function `client` (line 112)
+- function `empty_client` (line 132)
+- function `wyandot_course` (line 156)
+- function `golfer` (line 175)
+- function `admin_client` (line 202)
+- function `empty_admin_client` (line 213)
 
 ### `tests/fixtures/roster/bad_encoding.csv`
 
@@ -1349,6 +1363,14 @@ Private data, ignored files, and source contents are excluded.
 - function `test_default_external_origin` (line 9)
 - function `test_custom_external_origin` (line 14)
 - function `test_invalid_external_origins` (line 19)
+
+### `tests/test_contract_regressions.py`
+
+- function `_clock` (line 50)
+- function `test_migrated_schema_has_no_role_columns_or_tee_handicap_table` (line 54)
+- function `test_negative_and_zero_handicaps_import_without_errors_or_warnings` (line 72)
+- function `_round_robin` (line 97)
+- function `test_eight_teams_seven_match_weeks_form_exactly_28_unique_pairings` (line 109)
 
 ### `tests/test_course_migration.py`
 
@@ -1840,6 +1862,15 @@ Private data, ignored files, and source contents are excluded.
 - function `_login_as` (line 22)
 - function `test_roster_requires_verified_user_and_exposes_only_projection` (line 35)
 
+### `tests/test_run_local.py`
+
+- function `_module` (line 18)
+- function `test_refuses_a_data_dir_inside_the_repository` (line 26)
+- function `test_refuses_to_run_with_a_relay_configured` (line 31)
+- function `test_environment_is_local_http_with_a_private_generated_secret` (line 37)
+- function `test_file_mail_sender_writes_private_files` (line 52)
+- function `test_demo_seed_creates_personas_admin_and_pairings_once` (line 60)
+
 ### `tests/test_season_migration.py`
 
 - function `_fk_engine` (line 12)
@@ -1866,6 +1897,18 @@ Private data, ignored files, and source contents are excluded.
 - function `test_season_index_empty_state_and_global_navigation` (line 251)
 - function `test_season_index_lists_every_season_in_recent_order` (line 259)
 - function `test_season_index_rejects_anonymous_and_non_admin` (line 283)
+
+### `tests/test_secure_cookies.py`
+
+- function `_client` (line 24)
+- function `_add_admin` (line 30)
+- function `_cookie_header` (line 38)
+- function `_is_secure` (line 44)
+- function `_login` (line 48)
+- function `test_https_origin_marks_csrf_session_and_logout_cookies_secure` (line 56)
+- function `test_https_origin_marks_anonymous_form_seed_cookies_secure` (line 74)
+- function `test_https_origin_is_secure_even_when_the_proxy_hop_is_plain_http` (line 79)
+- function `test_http_origin_keeps_plain_cookies_for_local_development` (line 85)
 
 ### `tests/test_set_password.py`
 
