@@ -60,7 +60,8 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/admin_config.py`
 
-- function `bootstrap_admin` (line 24)
+- function `_first_admin_credentials` (line 26)
+- function `bootstrap_admin` (line 37)
 
 ### `golf_league/app.py`
 
@@ -70,17 +71,21 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/config.py`
 
-- class `_ManagedFileSource` (line 18)
-  - method `__init__` (line 21)
-  - method `get_field_value` (line 25)
-  - method `__call__` (line 28)
-- class `Settings` (line 33)
-  - method `settings_customise_sources` (line 57)
-  - method `tls_mode_is_case_insensitive` (line 82)
-  - method `log_level_is_case_insensitive` (line 87)
-  - method `external_origin_must_be_absolute` (line 92)
-  - method `league_name_template_must_support_season` (line 111)
-- function `get_settings` (line 123)
+- function `_managed_path` (line 24)
+- class `_ManagedFileSource` (line 29)
+  - method `__init__` (line 32)
+  - method `get_field_value` (line 36)
+  - method `__call__` (line 39)
+- class `_DeployFileSource` (line 44)
+  - method `__call__` (line 47)
+- class `Settings` (line 56)
+  - method `settings_customise_sources` (line 86)
+  - method `session_secret_is_required` (line 112)
+  - method `tls_mode_is_case_insensitive` (line 125)
+  - method `log_level_is_case_insensitive` (line 130)
+  - method `external_origin_must_be_absolute` (line 135)
+  - method `league_name_template_must_support_season` (line 154)
+- function `get_settings` (line 166)
 
 ### `golf_league/database.py`
 
@@ -185,21 +190,23 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/managed_config.py`
 
-- class `ManagedKey` (line 38)
-  - method `is_secret` (line 51)
-- function `_has_control_characters` (line 83)
-- function `_validate_host` (line 87)
-- function `_validate_port` (line 96)
-- function `_validate_email` (line 102)
-- function `_validate_choice` (line 108)
-- function `validate_value` (line 123)
-- function `_decode` (line 141)
-- function `_encode` (line 150)
-- function `read_managed_values` (line 155)
-- function `_check_updates` (line 185)
-- function `_merge` (line 195)
-- function `write_managed_values` (line 212)
-- function `_fsync_directory` (line 248)
+- class `ManagedKey` (line 43)
+  - method `is_secret` (line 56)
+- function `_has_control_characters` (line 103)
+- function `_validate_host` (line 107)
+- function `_validate_port` (line 116)
+- function `_validate_email` (line 122)
+- function `_validate_choice` (line 128)
+- function `validate_value` (line 143)
+- function `_decode` (line 161)
+- function `_encode` (line 170)
+- function `_read_assignments` (line 175)
+- function `read_managed_values` (line 197)
+- function `read_deploy_values` (line 217)
+- function `_check_updates` (line 232)
+- function `_merge` (line 242)
+- function `write_managed_values` (line 259)
+- function `_fsync_directory` (line 295)
 
 ### `golf_league/migrations.py`
 
@@ -1128,21 +1135,29 @@ Private data, ignored files, and source contents are excluded.
 - function `test_interrupted_write_leaves_previous_file_intact` (line 217)
 - function `test_settings_defaults_match_the_ruling` (line 235)
 - function `test_managed_file_outranks_environment_which_outranks_default` (line 244)
-- function `test_managed_file_cannot_set_fixed_deploy_time_settings` (line 260)
-- function `test_smtp_password_is_not_in_settings_repr` (line 277)
-- function `_player_client` (line 286)
-- function `test_anonymous_and_nonadmin_are_refused` (line 301)
-- function `test_admin_sees_allowlisted_fields_without_secret_values` (line 312)
-- function `test_csrf_is_required` (line 328)
-- function `test_unknown_keys_are_rejected_and_nothing_is_written` (line 345)
-- function `test_duplicate_fields_are_rejected` (line 353)
-- function `test_invalid_values_rerender_stored_values_with_error_summary` (line 363)
-- function `test_success_writes_only_changed_keys_and_is_restart_required` (line 375)
-- function `test_saved_setting_survives_restart` (line 401)
-- function `test_unchanged_form_writes_nothing` (line 411)
-- function `test_blank_secret_keeps_and_clear_empties` (line 417)
-- function `test_write_failure_keeps_file_and_reports_without_values` (line 439)
-- function `test_lifespan_applies_managed_log_level` (line 459)
+- function `_deploy_file` (line 266)
+- function `test_deploy_keys_fall_back_to_the_managed_file` (line 275)
+- function `test_environment_overrides_file_for_deploy_keys_but_not_managed_keys` (line 289)
+- function `test_empty_file_values_count_as_unset` (line 301)
+- function `test_missing_session_secret_names_key_and_file` (line 318)
+- function `test_app_starts_from_the_file_alone_and_bootstraps_admin` (line 328)
+- function `test_environment_admin_credentials_win_over_file` (line 351)
+- function `test_empty_admin_password_in_file_skips_bootstrap` (line 363)
+- function `test_smtp_password_is_not_in_settings_repr` (line 374)
+- function `_player_client` (line 383)
+- function `test_anonymous_and_nonadmin_are_refused` (line 398)
+- function `test_admin_sees_allowlisted_fields_without_secret_values` (line 409)
+- function `test_csrf_is_required` (line 425)
+- function `test_unknown_keys_are_rejected_and_nothing_is_written` (line 442)
+- function `test_duplicate_fields_are_rejected` (line 450)
+- function `test_invalid_values_rerender_stored_values_with_error_summary` (line 460)
+- function `test_success_writes_only_changed_keys_and_is_restart_required` (line 472)
+- function `test_saved_setting_survives_restart` (line 498)
+- function `test_unchanged_form_writes_nothing` (line 508)
+- function `test_blank_secret_keeps_and_clear_empties` (line 514)
+- function `test_write_failure_keeps_file_and_reports_without_values` (line 536)
+- function `test_lifespan_applies_managed_log_level` (line 556)
+- function `test_admin_form_leaves_deploy_key_lines_intact` (line 570)
 
 ### `tests/test_admin_courses.py`
 

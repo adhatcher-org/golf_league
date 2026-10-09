@@ -28,12 +28,17 @@ services:
       # (/app/data/.env) is replaced atomically, which cannot cross a file mount.
       - ${GOLF_LEAGUE_DATA_DIR:?set GOLF_LEAGUE_DATA_DIR to the Unraid data directory, e.g. /mnt/user/appdata/golf-league}:/app/data
     environment:
-      # Fixed at deploy time (R-DEPLOYMENT); never editable from the app.
+      # Deploy-time (R-DEPLOYMENT); never editable from the app. Each of these
+      # may instead live in ${GOLF_LEAGUE_DATA_DIR}/.env (mode 0600, owned by
+      # PUID:PGID): the environment wins, the file is the fallback, and an empty
+      # value (here or there) counts as unset. If you keep SESSION_SECRET only
+      # in that file, delete its line here (the :? guard would otherwise refuse).
       DATABASE_URL: sqlite:///./data/golf_league.db
-      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET privately; rotating it signs everyone out}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET privately (or remove this line and keep it in the data-dir .env); rotating it signs everyone out}
       EXTERNAL_BASE_URL: ${EXTERNAL_BASE_URL:-https://golfleague.aaronhatcher.com}
       MAX_USERS: "150"
       EMAIL_VERIFICATION_REQUIRED: "true"
+      # Environment-only: never read from the file it points at.
       MANAGED_ENV_PATH: /app/data/.env
       # First boot only (ignored once any user exists). Remove after first login.
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}

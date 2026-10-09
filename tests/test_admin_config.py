@@ -257,21 +257,118 @@ def test_managed_file_outranks_environment_which_outranks_default(tmp_path, monk
     assert settings.smtp_from_name == "St. Paul Golf League"  # code default
 
 
-def test_managed_file_cannot_set_fixed_deploy_time_settings(tmp_path, monkeypatch):
+_DEPLOY_ENV = ("SESSION_SECRET", "DATABASE_URL", "EXTERNAL_BASE_URL", "MAX_USERS",
+               "EMAIL_VERIFICATION_REQUIRED", "ADMIN_EMAIL", "ADMIN_PASSWORD")
+FILE_SECRET = "synthetic-file-session-secret-4b1d"
+FILE_ADMIN_PASSWORD = "synthetic-file-admin-password-8e2"
+
+
+def _deploy_file(tmp_path, monkeypatch, text: str) -> Path:
+    for name in _DEPLOY_ENV:
+        monkeypatch.delenv(name, raising=False)
     path = tmp_path / ".env"
-    path.write_text(
-        "DATABASE_URL=sqlite:////tmp/evil.db\nSESSION_SECRET=from-file\n"
-        "EXTERNAL_BASE_URL=https://evil.example.test\nMAX_USERS=9999\n"
-        "MANAGED_ENV_PATH=/tmp/other.env\n",
-        encoding="utf-8",
-    )
+    path.write_text(text, encoding="utf-8")
     monkeypatch.setenv("MANAGED_ENV_PATH", str(path))
-    settings = Settings(session_secret="synthetic")
-    assert settings.database_url == "sqlite:///./data/golf_league.db"
-    assert settings.session_secret == "synthetic"
-    assert settings.external_base_url == "https://golfleague.aaronhatcher.com"
+    return path
+
+
+def test_deploy_keys_fall_back_to_the_managed_file(tmp_path, monkeypatch):
+    _deploy_file(tmp_path, monkeypatch,
+                 f'SESSION_SECRET="{FILE_SECRET}"\nDATABASE_URL=sqlite:///{tmp_path / "f.db"}\n'
+                 "EXTERNAL_BASE_URL='https://league.example.test'\nMAX_USERS=120\n"
+                 "EMAIL_VERIFICATION_REQUIRED=false\nMANAGED_ENV_PATH=/tmp/other.env\n")
+    settings = Settings()
+    assert settings.session_secret == FILE_SECRET
+    assert settings.database_url == f"sqlite:///{tmp_path / 'f.db'}"
+    assert settings.external_base_url == "https://league.example.test"
+    assert settings.max_users == 120
+    assert settings.email_verification_required is False
+    assert settings.managed_env_path == str(tmp_path / ".env")  # never read from the file
+
+
+def test_environment_overrides_file_for_deploy_keys_but_not_managed_keys(tmp_path, monkeypatch):
+    _deploy_file(tmp_path, monkeypatch,
+                 f"SESSION_SECRET={FILE_SECRET}\nMAX_USERS=120\nSMTP_HOST=file.example.test\n")
+    monkeypatch.setenv("SESSION_SECRET", "synthetic-env-secret")
+    monkeypatch.setenv("MAX_USERS", "150")
+    monkeypatch.setenv("SMTP_HOST", "env.example.test")
+    settings = Settings()
+    assert settings.session_secret == "synthetic-env-secret"
     assert settings.max_users == 150
-    assert settings.managed_env_path == str(path)
+    assert settings.smtp_host == "file.example.test"
+
+
+def test_empty_file_values_count_as_unset(tmp_path, monkeypatch):
+    path = _deploy_file(tmp_path, monkeypatch,
+                        'SESSION_SECRET=""\nMAX_USERS=\nEXTERNAL_BASE_URL=\nSMTP_PASSWORD=leak-check-value\n')
+    with pytest.raises(ValueError) as raised:
+        Settings()
+    message = str(raised.value)
+    assert "SESSION_SECRET" in message and str(path) in message
+    assert "leak-check-value" not in message
+
+    path.write_text(f"SESSION_SECRET={FILE_SECRET}\nMAX_USERS=\nEXTERNAL_BASE_URL=\n", encoding="utf-8")
+    monkeypatch.setenv("SESSION_SECRET", "")  # an empty environment value does not mask the file
+    settings = Settings()
+    assert settings.session_secret == FILE_SECRET
+    assert settings.max_users == 150
+    assert settings.external_base_url == "https://golfleague.aaronhatcher.com"
+
+
+def test_missing_session_secret_names_key_and_file(tmp_path, monkeypatch):
+    path = _deploy_file(tmp_path, monkeypatch, "LOG_LEVEL=INFO\n")
+    with pytest.raises(ValueError, match="SESSION_SECRET is not set") as raised:
+        Settings()
+    assert str(path) in str(raised.value)
+    monkeypatch.setenv("SESSION_SECRET", "   ")
+    with pytest.raises(ValueError, match="SESSION_SECRET is not set"):
+        Settings()
+
+
+def test_app_starts_from_the_file_alone_and_bootstraps_admin(tmp_path, monkeypatch, caplog):
+    from golf_league.app import create_app
+
+    _deploy_file(tmp_path, monkeypatch,
+                 f"SESSION_SECRET={FILE_SECRET}\nDATABASE_URL=sqlite:///{tmp_path / 'app.db'}\n"
+                 "ADMIN_EMAIL=file-admin@example.test\n"
+                 f"ADMIN_PASSWORD='{FILE_ADMIN_PASSWORD}'\nEMAIL_VERIFICATION_REQUIRED=true\n")
+    with caplog.at_level(logging.DEBUG), TestClient(create_app()) as client:
+        assert client.get("/readyz").status_code == 200
+        page = client.get("/login")
+        response = client.post("/login", data={
+            "email": "file-admin@example.test", "password": FILE_ADMIN_PASSWORD,
+            "csrf_token": _extract_csrf(page.text),
+        }, follow_redirects=False)
+        assert response.status_code == 303
+        config_page = client.get("/admin/config").text
+        assert repr(client.app.state.settings).count(FILE_SECRET) == 0
+    for private in (FILE_SECRET, FILE_ADMIN_PASSWORD):
+        assert private not in caplog.text
+        assert private not in config_page
+    assert "SESSION_SECRET" not in config_page and "ADMIN_PASSWORD" not in config_page
+
+
+def test_environment_admin_credentials_win_over_file(tmp_path, monkeypatch, engine):
+    from golf_league.admin_config import bootstrap_admin
+
+    path = _deploy_file(tmp_path, monkeypatch,
+                        "ADMIN_EMAIL=file-admin@example.test\nADMIN_PASSWORD=synthetic-file-pw\n")
+    monkeypatch.setenv("ADMIN_EMAIL", "env-admin@example.test")
+    with Session(bind=engine) as session:
+        bootstrap_admin(session, managed_env_path=str(path))
+    with Session(bind=engine) as session:
+        assert [user.email for user in session.query(User).all()] == ["env-admin@example.test"]
+
+
+def test_empty_admin_password_in_file_skips_bootstrap(tmp_path, monkeypatch, engine, caplog):
+    from golf_league.admin_config import bootstrap_admin
+
+    path = _deploy_file(tmp_path, monkeypatch, "ADMIN_EMAIL=file-admin@example.test\nADMIN_PASSWORD=\n")
+    with caplog.at_level(logging.WARNING), Session(bind=engine) as session:
+        bootstrap_admin(session, managed_env_path=str(path))
+    with Session(bind=engine) as session:
+        assert session.query(User).count() == 0
+    assert "admin bootstrap skipped" in caplog.text
 
 
 def test_smtp_password_is_not_in_settings_repr(tmp_path):
@@ -468,3 +565,27 @@ def test_lifespan_applies_managed_log_level(tmp_path):
             assert app_logger.level == logging.ERROR
     finally:
         app_logger.setLevel(previous)
+
+
+def test_admin_form_leaves_deploy_key_lines_intact(admin_client):
+    path = _managed_path(admin_client)
+    deploy_lines = (
+        f"SESSION_SECRET={FILE_SECRET}\n"
+        "# operator note\n"
+        "ADMIN_EMAIL=file-admin@example.test\n"
+        f"ADMIN_PASSWORD='{FILE_ADMIN_PASSWORD}'\n"
+        "EMAIL_VERIFICATION_REQUIRED=true\n"
+    )
+    path.write_text(deploy_lines, encoding="utf-8")
+
+    page = admin_client.get("/admin/config")
+    assert FILE_SECRET not in page.text and FILE_ADMIN_PASSWORD not in page.text
+    assert 'name="SESSION_SECRET"' not in page.text and 'name="ADMIN_PASSWORD"' not in page.text
+
+    data = _form(admin_client, SMTP_HOST="relay.example.test")
+    assert admin_client.post("/admin/config", data=data, follow_redirects=False).status_code == 303
+    assert path.read_text(encoding="utf-8") == deploy_lines + 'SMTP_HOST="relay.example.test"\n'
+
+    refused = _form(admin_client, SESSION_SECRET="synthetic-overwrite-attempt")
+    assert admin_client.post("/admin/config", data=refused, follow_redirects=False).status_code == 422
+    assert FILE_SECRET in path.read_text(encoding="utf-8")

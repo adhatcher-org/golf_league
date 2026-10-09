@@ -23,12 +23,24 @@ DNS, SWAG or sending real mail needs the owner's explicit authorization (GL-72).
 | `GOLF_LEAGUE_IMAGE` | `ghcr.io/adhatcher-org/golf_league@sha256:<digest>` (or a release tag). Record the digest you deploy; never use a moving `latest`. |
 | `GOLF_LEAGUE_DATA_DIR` | Host directory, e.g. `/mnt/user/appdata/golf-league`. Mounted as a directory. |
 | `PUID` / `PGID` | Owner of that directory. The image user is `1000:1000`; either `chown 1000:1000` the directory or set these to its owner. |
-| `SESSION_SECRET` | Long random value. Rotating it signs everyone out and resets the invite-quota keys. |
+| `SESSION_SECRET` | Long random value. Rotating it signs everyone out and resets the invite-quota keys. Set in the container environment or in `/app/data/.env` (see below). |
 | `EXTERNAL_BASE_URL` | `https://golfleague.aaronhatcher.com`. Every emailed link and invite URL is built from it. |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | First boot only; ignored once any user exists. Remove after the first admin logs in. |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | First boot only; ignored once any user exists. Environment or `/app/data/.env`. Remove after the first admin logs in. |
 | `PROXY_NETWORK` | The user-defined Docker network SWAG is attached to. |
 | `SWAG_IP` | SWAG's fixed address on that network (see "Client IP" below). |
 | SMTP relay values | Entered at `/admin/config` after first login (stored in `/app/data/.env`, mode 0600), or as `SMTP_*` environment variables. |
+
+### Where the deploy-time values may live
+
+`SESSION_SECRET`, `DATABASE_URL`, `EXTERNAL_BASE_URL`, `MAX_USERS`,
+`EMAIL_VERIFICATION_REQUIRED`, `ADMIN_EMAIL` and `ADMIN_PASSWORD` may be set either in the
+container environment or in the managed file `/app/data/.env` (`MANAGED_ENV_PATH`) in the data
+directory. The environment wins; the file is the fallback; an empty value counts as unset.
+Keeping them in the data-dir file (mode `0600`, owned by the container user) keeps the secret
+out of the Unraid container template. The app never shows or rewrites these lines; saving
+`/admin/config` only changes the eight managed keys. `MANAGED_ENV_PATH` itself must come from
+the environment. Without `SESSION_SECRET` in either place the container fails to start with
+"SESSION_SECRET is not set" and the path it checked.
 
 ## Client IP and HTTPS behind the proxy
 

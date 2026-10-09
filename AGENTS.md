@@ -59,7 +59,9 @@ orchestrator repo next door.
   `golf_league/services/player_schedule.py`, with markup in `templates/player/`.
 - Managed configuration (the R-DEPLOYMENT eight-key allowlist, the atomic managed `.env`
   file and its validation) is `golf_league/managed_config.py`; `Settings` in
-  `golf_league/config.py` reads that file above the environment. The admin form is
+  `golf_league/config.py` reads the eight managed keys from that file above the environment,
+  and the deploy-time keys (`DEPLOY_FILE_KEYS`, incl. `SESSION_SECRET`) from it below the
+  environment; `bootstrap_admin` reads `ADMIN_*` the same way. The admin form is
   `golf_league/routers/admin_config.py` with `templates/admin/config.html`; behaviour is
   documented in `docs/configuration.md`. Tests point `MANAGED_ENV_PATH` at a temporary file
   through an autouse fixture in `tests/conftest.py`.

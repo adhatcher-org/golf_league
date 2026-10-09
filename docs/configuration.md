@@ -5,9 +5,12 @@ the code does; the ruling is the authority for what it must do.
 
 ## Two kinds of setting
 
-**Fixed at deploy time.** Read from the container environment only and never editable from
-the application: `DATABASE_URL`, `SESSION_SECRET`, `EXTERNAL_BASE_URL`, `MAX_USERS`,
-`ADMIN_EMAIL`, `ADMIN_PASSWORD` and `MANAGED_ENV_PATH`.
+**Deploy-time.** Never editable or displayed by the application: `SESSION_SECRET`,
+`DATABASE_URL`, `EXTERNAL_BASE_URL`, `MAX_USERS`, `EMAIL_VERIFICATION_REQUIRED`, `ADMIN_EMAIL`
+and `ADMIN_PASSWORD` (`DEPLOY_FILE_KEYS`). Each is read from the container environment and,
+when the environment does not set it, from the managed file (below). `MANAGED_ENV_PATH` is
+read from the environment only. `SESSION_SECRET` has no default: if neither the environment
+nor the file sets it, startup fails with "SESSION_SECRET is not set" and the file path checked.
 
 **Managed.** Exactly eight keys an administrator may change at `/admin/config`
 (`golf_league/managed_config.py`, `MANAGED_KEYS`):
@@ -52,17 +55,25 @@ retries and no outbox; a user whose mail failed simply asks again.
 - Mount the **directory**, never the single file: the application replaces the file
   atomically (temporary file in the same directory, `fsync`, rename), and a rename cannot
   cross a single-file bind mount.
-- Precedence: a value in the file outranks the container environment, which outranks the
-  code default. Arguments passed to `Settings(...)` directly (tests only) outrank all three.
-- Only the eight managed keys are read from the file. Any other key in it has no effect, so
-  the file can never change the database location, session secret or public address.
+- Precedence, highest first: arguments passed to `Settings(...)` directly (tests only); the
+  eight **managed** keys from the file; the container environment; the **deploy-time** keys
+  from the file; the code default. So the file overrides the environment for the eight managed
+  keys, while the environment overrides the file for the deploy-time keys.
+- On Unraid the deploy-time values (including `SESSION_SECRET` and the first-admin values) may
+  therefore live in this file in the data directory instead of the container template. Keep it
+  mode `0600` and owned by the container user; it is part of the private backup.
+- `ADMIN_EMAIL` and `ADMIN_PASSWORD` reach the first-boot admin bootstrap the same way:
+  environment first, then the file.
+- An empty value (`ADMIN_PASSWORD=`), in the file or in the environment, counts as unset. Any key outside the eight managed keys
+  and the seven deploy-time keys has no effect; `MANAGED_ENV_PATH` in the file has no effect.
 - A managed value in the file that fails validation (for example a hand-edited
   `SMTP_PORT=abc`) is ignored and logged by key name only; the environment or default value
   applies. An unreadable file is ignored the same way. Neither stops the application starting.
 - Format: one `KEY=value` per line. The application writes `KEY="value"` with `\` and `"`
   escaped. It reads double-quoted, single-quoted and bare values; there are no inline
   comments, no variable expansion and no shell evaluation.
-- Writes keep every line the application does not own (comments, other keys), replace a
+- Writes keep every line the application does not own (comments, deploy-time keys, other
+  keys) byte for byte, replace a
   managed key in place, drop later duplicates of that key, and append new keys. The file is
   written with mode `0600`. A failed write removes its temporary file and leaves the previous
   file unchanged; the form reports "Nothing was changed" with status 503.

@@ -128,7 +128,7 @@ async def lifespan(app: FastAPI):
         # after migrations so the tables it needs are guaranteed to exist.
         bootstrap_session = Session(bind=engine)
         try:
-            bootstrap_admin(bootstrap_session)
+            bootstrap_admin(bootstrap_session, managed_env_path=settings.managed_env_path)
             if settings.seed_course:
                 seed_wyandot(bootstrap_session)
         finally:

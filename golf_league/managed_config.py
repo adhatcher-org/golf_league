@@ -9,9 +9,14 @@ outranks the code default; `golf_league.config.Settings` wires that order.
 Every managed setting is restart-required: the running process reads the
 file once, at startup, and the application never restarts itself.
 
+The same file may also carry the deploy-time keys in `DEPLOY_FILE_KEYS`
+(for example `SESSION_SECRET` on an Unraid data directory). Those rank
+below the container environment, are never editable or displayed, and the
+writer preserves their lines untouched.
+
 This module is standard library plus the pure domain email check. It never
-evaluates the file as shell, never expands variables, and never reads or
-writes a key outside the allowlist. Writes are atomic (temporary file in the
+evaluates the file as shell, never expands variables, and never writes a key
+outside the allowlist. Writes are atomic (temporary file in the
 same directory, fsync, `os.replace`), mode 0600, and keep every line the
 application does not own. A failed write leaves the previous file intact.
 """
@@ -71,6 +76,21 @@ MANAGED_KEYS: tuple[ManagedKey, ...] = (
 )
 
 MANAGED_KEYS_BY_NAME: dict[str, ManagedKey] = {key.name: key for key in MANAGED_KEYS}
+
+# Deploy-time keys the same file may also carry, as a fallback below the
+# container environment (environment wins; code default last). Not editable
+# from the application, never displayed, and never rewritten by the form.
+# MANAGED_ENV_PATH itself is environment-only and is not in this set.
+DEPLOY_FILE_KEYS: dict[str, str | None] = {
+    "SESSION_SECRET": "session_secret",
+    "DATABASE_URL": "database_url",
+    "EXTERNAL_BASE_URL": "external_base_url",
+    "MAX_USERS": "max_users",
+    "EMAIL_VERIFICATION_REQUIRED": "email_verification_required",
+    # First-boot only; read by `bootstrap_admin`, not a `Settings` field.
+    "ADMIN_EMAIL": None,
+    "ADMIN_PASSWORD": None,
+}
 
 _HOST_LABEL = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
 _HOST_RE = re.compile(rf"^{_HOST_LABEL}(?:\.{_HOST_LABEL})*\.?$")
@@ -152,13 +172,12 @@ def _encode(name: str, value: str) -> str:
     return f'{name}="{escaped}"\n'
 
 
-def read_managed_values(path: Path | str) -> dict[str, str]:
-    """Return the valid allowlisted values stored in the managed file.
+def _read_assignments(path: Path | str) -> dict[str, str]:
+    """Parse every `KEY=value` line of the file; the last assignment wins.
 
-    A missing file is empty. An unreadable file, a key outside the allowlist
-    and an invalid value are ignored (an invalid value is logged by key name
-    only), so a hand-edited file can never stop the application starting.
-    The last assignment of a key wins.
+    Values are decoded literally (quotes removed, no expansion, no shell).
+    A missing file is empty; an unreadable file is logged and treated as
+    empty, so it can never stop the application starting.
     """
     try:
         text = Path(path).read_text(encoding="utf-8")
@@ -167,19 +186,47 @@ def read_managed_values(path: Path | str) -> dict[str, str]:
     except (OSError, UnicodeDecodeError):
         logger.warning("managed configuration file could not be read; using environment values")
         return {}
-
-    values: dict[str, str] = {}
+    assignments: dict[str, str] = {}
     for line in text.splitlines():
         match = _ASSIGNMENT_RE.match(line)
-        if match is None or match.group(1) not in MANAGED_KEYS_BY_NAME:
+        if match is not None:
+            assignments[match.group(1)] = _decode(match.group(2))
+    return assignments
+
+
+def read_managed_values(path: Path | str) -> dict[str, str]:
+    """Return the valid allowlisted (managed) values stored in the file.
+
+    A key outside the allowlist and an invalid value are ignored (an invalid
+    value is logged by key name only), so a hand-edited file can never stop
+    the application starting.
+    """
+    values: dict[str, str] = {}
+    for name, raw in _read_assignments(path).items():
+        key = MANAGED_KEYS_BY_NAME.get(name)
+        if key is None:
             continue
-        key = MANAGED_KEYS_BY_NAME[match.group(1)]
-        normalized, error = validate_value(key, _decode(match.group(2)))
+        normalized, error = validate_value(key, raw)
         if error is not None:
             logger.warning("managed configuration value ignored: %s", key.name)
             continue
         values[key.name] = normalized
     return values
+
+
+def read_deploy_values(path: Path | str) -> dict[str, str]:
+    """Return the deploy-time fallback values stored in the same file.
+
+    Only `DEPLOY_FILE_KEYS` are returned. They rank *below* the container
+    environment (the caller applies that order) and are never editable from
+    the application. An empty value counts as unset. Values are returned
+    raw for `Settings` to validate and are never logged.
+    """
+    return {
+        name: value
+        for name, value in _read_assignments(path).items()
+        if name in DEPLOY_FILE_KEYS and value.strip()
+    }
 
 
 def _check_updates(updates: Mapping[str, str]) -> None:
