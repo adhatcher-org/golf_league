@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from starlette.background import BackgroundTask
 
 from golf_league.config import get_settings
 from golf_league.database import get_session
@@ -31,6 +32,7 @@ from golf_league.services.auth import (
 from golf_league.services.identity import register_roster_user
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 CSRF_COOKIE_NAME = "csrf_seed"
 
@@ -72,6 +74,22 @@ def _require_csrf(seed: str, submitted: str) -> None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Invalid CSRF token"
         )
+
+
+def _send_reset_email(sender, to: str, subject: str, body: str) -> None:
+    """Background delivery of a reset link; failure never reaches the response."""
+    try:
+        sender.send(to=to, subject=subject, body=body)
+    except Exception:
+        logger.warning("password reset email send failed")
+
+
+def _send_verification_email(sender, to: str, subject: str, body: str) -> None:
+    """Background delivery of a verification link; failure never reaches the response."""
+    try:
+        sender.send(to=to, subject=subject, body=body)
+    except Exception:
+        logger.warning("verification email send failed")
 
 
 def _login_destination(requested: str | None) -> str:
@@ -194,20 +212,24 @@ async def reset_request_submit(
     seed = _csrf_seed(request)
     _require_csrf(seed, csrf_token)
 
+    background = None
     user = get_user_by_email(session, email)
     if user is not None:
         raw_token = issue_token(session, user.id, "reset_password", RESET_TOKEN_TTL_SECONDS)
-        sender = request.app.state.email_sender
-        sender.send(
-            to=user.email,
-            subject="Reset your password",
-            body=f"Use this link to set a new password: /reset/{raw_token}",
+        origin = _settings(request).external_base_url
+        background = BackgroundTask(
+            _send_reset_email,
+            request.app.state.email_sender,
+            user.email,
+            "Reset your password",
+            f"Use this link to set a new password: {origin}/reset/{raw_token}",
         )
 
     return _templates(request).TemplateResponse(
         request,
         "identity/reset_request.html",
         {"errors": None, "csrf_token": generate_csrf_token(seed), "message": _NEUTRAL_RESET_MESSAGE},
+        background=background,
     )
 
 
@@ -340,20 +362,20 @@ async def register_submit(
             email_verification_required=_settings(request).email_verification_required,
         )
 
-    if result is not None and result.token is not None and result.email is not None:
-        try:
-            request.app.state.email_sender.send(
-                to=result.email,
-                subject="Verify your Golf League account",
-                body=f"Use this link to verify your email: /verify/{result.token}",
-            )
-        except Exception:
-            # Delivery is deliberately post-commit; do not log an address or token.
-            logging.getLogger(__name__).warning("registration verification email failed")
-
     message = (
         _NEUTRAL_REGISTRATION_MESSAGE
         if _settings(request).email_verification_required
         else _NEUTRAL_REGISTRATION_MESSAGE_WITHOUT_VERIFICATION
     )
-    return _registration_form(request, message=message)
+    response = _registration_form(request, message=message)
+    if result is not None and result.token is not None and result.email is not None:
+        # Delivery is post-commit and after the response; never log an address or token.
+        origin = _settings(request).external_base_url
+        response.background = BackgroundTask(
+            _send_verification_email,
+            request.app.state.email_sender,
+            result.email,
+            "Verify your Golf League account",
+            f"Use this link to verify your email: {origin}/verify/{result.token}",
+        )
+    return response

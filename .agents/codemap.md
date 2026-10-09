@@ -60,7 +60,7 @@ Private data, ignored files, and source contents are excluded.
 
 - function `_navigation_user` (line 57)
 - function `lifespan` (line 90)
-- function `create_app` (line 137)
+- function `create_app` (line 150)
 
 ### `golf_league/config.py`
 
@@ -390,22 +390,24 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/routers/identity.py`
 
-- function `_settings` (line 51)
-- function `_templates` (line 56)
-- function `_csrf_seed` (line 60)
-- function `_require_csrf` (line 70)
-- function `_login_destination` (line 77)
-- function `login_form` (line 84)
-- function `login_submit` (line 100)
-- function `logout` (line 142)
-- function `verify_email` (line 156)
-- function `reset_request_form` (line 176)
-- function `reset_request_submit` (line 188)
-- function `reset_form` (line 215)
-- function `reset_submit` (line 235)
-- function `_registration_form` (line 280)
-- function `register_form` (line 296)
-- function `register_submit` (line 308)
+- function `_settings` (line 53)
+- function `_templates` (line 58)
+- function `_csrf_seed` (line 62)
+- function `_require_csrf` (line 72)
+- function `_send_reset_email` (line 79)
+- function `_send_verification_email` (line 87)
+- function `_login_destination` (line 95)
+- function `login_form` (line 102)
+- function `login_submit` (line 118)
+- function `logout` (line 160)
+- function `verify_email` (line 174)
+- function `reset_request_form` (line 194)
+- function `reset_request_submit` (line 206)
+- function `reset_form` (line 237)
+- function `reset_submit` (line 257)
+- function `_registration_form` (line 302)
+- function `register_form` (line 318)
+- function `register_submit` (line 330)
 
 ### `golf_league/routers/join.py`
 
@@ -489,11 +491,15 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/services/email.py`
 
-- class `EmailSender` (line 11)
-  - method `send` (line 14)
-- class `FakeEmailSender` (line 19)
-  - method `__init__` (line 26)
+- class `EmailSender` (line 26)
   - method `send` (line 29)
+- class `SmtpEmailSender` (line 34)
+  - method `__init__` (line 42)
+  - method `__repr__` (line 61)
+  - method `send` (line 64)
+- class `FakeEmailSender` (line 86)
+  - method `__init__` (line 93)
+  - method `send` (line 96)
 
 ### `golf_league/services/handicaps.py`
 
@@ -1281,7 +1287,11 @@ Private data, ignored files, and source contents are excluded.
 
 ### `tests/test_app.py`
 
-- function `test_create_app_uses_the_settings_it_is_given` (line 3)
+- function `test_create_app_uses_the_settings_it_is_given` (line 4)
+- function `_client_with` (line 19)
+- function `test_smtp_host_installs_the_smtp_sender_at_startup` (line 28)
+- function `test_without_smtp_host_the_fake_sender_stays` (line 39)
+- function `test_importing_the_app_needs_no_session_secret` (line 46)
 
 ### `tests/test_app_endpoints.py`
 
@@ -1368,9 +1378,31 @@ Private data, ignored files, and source contents are excluded.
 
 ### `tests/test_email.py`
 
-- function `test_fake_email_sender_records_messages_in_memory` (line 6)
-- function `test_fake_email_sender_starts_empty` (line 21)
-- function `test_fake_email_sender_satisfies_the_email_sender_protocol` (line 26)
+- function `test_fake_email_sender_records_messages_in_memory` (line 17)
+- function `test_fake_email_sender_starts_empty` (line 32)
+- function `test_fake_email_sender_satisfies_the_email_sender_protocol` (line 37)
+- class `_FakeSMTP` (line 48)
+  - method `__init__` (line 54)
+  - method `__enter__` (line 60)
+  - method `__exit__` (line 63)
+  - method `_record` (line 67)
+  - method `starttls` (line 72)
+  - method `login` (line 76)
+  - method `send_message` (line 79)
+- class `_FakeSMTPSSL` (line 84)
+- function `fake_smtp` (line 89)
+- function `_sender` (line 97)
+- function `_names` (line 107)
+- function `test_starttls_mode_upgrades_then_logs_in_then_sends` (line 111)
+- function `test_ssl_mode_uses_the_ssl_class_and_never_starttls` (line 124)
+- function `test_none_mode_neither_upgrades_nor_uses_ssl` (line 136)
+- function `test_no_username_means_no_login` (line 146)
+- function `test_login_with_username_but_no_password_sends_empty_password` (line 152)
+- function `test_message_headers_and_body` (line 158)
+- function `test_awkward_from_name_still_produces_one_valid_address` (line 171)
+- function `test_repr_carries_no_credentials_or_addresses` (line 180)
+- function `test_transport_errors_propagate` (line 188)
+- function `test_smtp_sender_satisfies_the_email_sender_protocol` (line 196)
 
 ### `tests/test_handicap_isolation.py`
 
@@ -1470,6 +1502,14 @@ Private data, ignored files, and source contents are excluded.
 - function `test_reset_commit_failure_rolls_back_password_and_token` (line 377)
 - function `test_ordinary_reset_preserves_account_and_revokes_other_credentials` (line 408)
 - function `test_reset_csrf_and_short_password_leave_token_usable` (line 465)
+- class `_RaisingSender` (line 489)
+  - method `__init__` (line 490)
+  - method `send` (line 493)
+- function `_use_origin` (line 498)
+- function `_request_reset` (line 504)
+- function `test_reset_email_link_uses_configured_origin_not_host_header` (line 510)
+- function `test_reset_send_failure_keeps_the_neutral_response_and_logs_fixed_text` (line 528)
+- function `test_reset_for_unknown_address_attaches_no_send` (line 545)
 
 ### `tests/test_invite_limits.py`
 
@@ -1674,6 +1714,11 @@ Private data, ignored files, and source contents are excluded.
 - function `test_email_failure_commits_and_later_retry_recovers` (line 164)
 - function `test_account_cap_allows_user_150_then_neutrally_refuses_user_151` (line 184)
 - function `test_concurrent_duplicate_registration_creates_at_most_one_user_and_link` (line 206)
+- class `_RaisingSender` (line 244)
+  - method `__init__` (line 245)
+  - method `send` (line 248)
+- function `test_verification_email_link_uses_configured_origin` (line 253)
+- function `test_verification_send_failure_does_not_change_the_response` (line 273)
 
 ### `tests/test_roster.py`
 

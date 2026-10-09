@@ -479,3 +479,73 @@ def test_reset_csrf_and_short_password_leave_token_usable(client):
     with Session(bind=client.app.state.engine) as session:
         token = session.scalar(select(UserToken).where(UserToken.user_id == user_id))
         assert token.consumed_at is None and token.revoked_at is None
+
+
+# --- GL-45: absolute reset links, sent after the response ---------------------
+
+SYNTHETIC_ORIGIN = "https://league.example.test"
+
+
+class _RaisingSender:
+    def __init__(self):
+        self.attempts = 0
+
+    def send(self, to, subject, body):
+        self.attempts += 1
+        raise OSError("simulated relay outage for reset@example.test")
+
+
+def _use_origin(client):
+    client.app.state.settings = client.app.state.settings.model_copy(
+        update={"external_base_url": SYNTHETIC_ORIGIN}
+    )
+
+
+def _request_reset(client, email, headers=None):
+    page = client.get("/reset")
+    return client.post("/reset", data={"email": email, "csrf_token": _extract_csrf(page.text)},
+                       headers=headers or {})
+
+
+def test_reset_email_link_uses_configured_origin_not_host_header(client):
+    _use_origin(client)
+    _make_user(client, email="reset@example.test", password="old-password-1")
+
+    response = _request_reset(
+        client, "reset@example.test",
+        headers={"host": "attacker.example.test", "x-forwarded-host": "attacker.example.test",
+                 "x-forwarded-proto": "http"},
+    )
+
+    assert response.status_code == 200
+    (message,) = client.app.state.email_sender.sent
+    assert f"{SYNTHETIC_ORIGIN}/reset/" in message["body"]
+    assert "attacker" not in message["body"]
+    token = message["body"].rsplit("/reset/", 1)[1]
+    assert client.get(f"/reset/{token}").status_code == 200
+
+
+def test_reset_send_failure_keeps_the_neutral_response_and_logs_fixed_text(client, caplog):
+    _make_user(client, email="reset@example.test", password="old-password-1")
+    succeeded = _request_reset(client, "reset@example.test")
+
+    raising = _RaisingSender()
+    client.app.state.email_sender = raising
+    with caplog.at_level("WARNING"):
+        failed = _request_reset(client, "reset@example.test")
+
+    assert raising.attempts == 1
+    assert (failed.status_code, failed.text) == (succeeded.status_code, succeeded.text)
+    assert "password reset email send failed" in caplog.text
+    assert "reset@example.test" not in caplog.text
+    assert "simulated relay outage" not in caplog.text
+    assert "/reset/" not in caplog.text
+
+
+def test_reset_for_unknown_address_attaches_no_send(client):
+    known_page = client.get("/reset")
+    response = client.post("/reset", data={"email": "nobody@example.test",
+                                           "csrf_token": _extract_csrf(known_page.text)})
+    assert response.status_code == 200
+    assert "If that address has an account" in response.text
+    assert client.app.state.email_sender.sent == []

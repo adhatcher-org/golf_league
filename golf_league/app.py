@@ -40,7 +40,7 @@ from golf_league.security import (
     get_optional_user,
 )
 from golf_league.services.course_seed import seed_wyandot
-from golf_league.services.email import FakeEmailSender
+from golf_league.services.email import FakeEmailSender, SmtpEmailSender
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +96,19 @@ async def lifespan(app: FastAPI):
     # and every managed setting is restart-required (R-DEPLOYMENT).
     app.state.settings = settings
     apply_log_level(settings.log_level)
+    # The mail transport is chosen once, here: a relay when SMTP_HOST is set,
+    # otherwise the in-memory sender create_app installed. Changing it needs
+    # a restart, like every managed setting.
+    if settings.smtp_host:
+        app.state.email_sender = SmtpEmailSender(
+            host=settings.smtp_host,
+            port=settings.smtp_port,
+            username=settings.smtp_username,
+            password=settings.smtp_password,
+            from_email=settings.smtp_from_email,
+            from_name=settings.smtp_from_name,
+            tls_mode=settings.smtp_tls_mode,
+        )
     database_url = settings.database_url
 
     app.state.ready = False
@@ -159,8 +172,8 @@ def create_app(settings=None) -> FastAPI:
         clock=time.time,
     )
 
-    # No SMTP exists until M7 (see golf_league/services/email.py); this is
-    # a safe in-memory placeholder so /reset always has something to call.
+    # In-memory sender by default; lifespan replaces it with SmtpEmailSender
+    # when the resolved settings name an SMTP_HOST.
     app.state.email_sender = FakeEmailSender()
     app.state.invite_receipts = InviteReceiptStore()
     app.state.join_monotonic = time.monotonic

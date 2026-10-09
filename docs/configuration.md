@@ -26,8 +26,24 @@ the application: `DATABASE_URL`, `SESSION_SECRET`, `EXTERNAL_BASE_URL`, `MAX_USE
 `LOG_LEVEL` sets the level of the application's own `golf_league` loggers, which write
 redacted lines to stdout. Uvicorn's own loggers are not affected.
 
-The SMTP settings are stored and validated, but no mail transport reads them yet: mail is
-still captured in memory.
+## Mail transport
+
+Mail is sent through SMTP (`SmtpEmailSender` in `golf_league/services/email.py`, standard
+library only) when `SMTP_HOST` is set, and captured in memory (`FakeEmailSender`) otherwise.
+The choice is made once, at startup, so changing it — like any SMTP setting — needs a restart.
+Each message opens one connection with a 15-second timeout. The three `SMTP_TLS_MODE` values:
+
+- `starttls` (default, port 587): connect in plain text, then upgrade with STARTTLS using a
+  certificate-verifying default TLS context, before logging in.
+- `ssl` (usually port 465): TLS from the first byte, also with a certificate-verifying context.
+- `none`: no encryption at all; only for a relay on a trusted local network.
+
+The sender logs in only when `SMTP_USERNAME` is set. Every emailed link (password reset, email
+verification, shared-invite set-password) is built from `EXTERNAL_BASE_URL`, never from the
+request's `Host` or forwarded headers. Mail is sent after the HTTP response has been produced,
+in a background task: a slow or failing relay cannot delay or change the response, and a
+failure is logged as one fixed line without the address, link or error text. There are no
+retries and no outbox; a user whose mail failed simply asks again.
 
 ## The managed file
 
