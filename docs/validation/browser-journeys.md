@@ -57,8 +57,9 @@ For the container check use the image instead: `make build`, then the M0 procedu
 - CSRF: every form posts a token; a POST without it is 403.
 - Tampered IDs and cross-season IDs answer 404, never another season's data.
 - Player pages and server logs contain no roster contact data, tokens or passwords.
-- Token pages (`/join/…`, `/set-password/…`, `/admin/invites/created`) send
-  `Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
+- Token pages (`/join/…`, `/set-password/…`, `/verify/…`, `/reset/…`, and
+  `/admin/invites/created`) send `Cache-Control: no-store` and `Referrer-Policy: no-referrer`,
+  including their 404 and validation-error responses.
 - Long synthetic names (the demo subs) wrap; markup typed into names is shown as text.
 - Keyboard only: skip link first, visible focus, every control labelled, menus reachable.
 - Touch targets at least 44 px; no page scrolls sideways at 390 px; wide tables scroll inside

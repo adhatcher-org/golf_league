@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    <title>{% block title %}Golf League{% endblock %}</title>
+    <link rel="stylesheet" href="/static/app.css?v=20261009-release-fixes-1">
+</head>
+<body>
+    {#- Token-bearing public pages (join, set-password, verify). The header is
+        identical for every visitor: no session-dependent navigation, so the
+        shared-link responses stay byte-for-byte neutral (R-SHARED-LINK). -#}
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="site-header">
+        <div class="site-header__inner">
+            <a class="brand" href="/" aria-label="Golf League home">
+                <span class="brand__mark" aria-hidden="true">G</span>
+                <span class="brand__name">Golf League</span>
+            </a>
+            <nav class="site-nav" aria-label="Main navigation">
+                <a class="site-nav__login" href="/login">Log in</a>
+            </nav>
+        </div>
+    </header>
+
+    <main id="main-content" class="page-shell">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+        <p>Golf League <span aria-hidden="true">·</span> Season workspace</p>
+    </footer>
+</body>
+</html>

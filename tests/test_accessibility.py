@@ -42,6 +42,9 @@ class _Audit(HTMLParser):
         self.headings = 0
         self.skip_link = False
         self.main_ids: list[str] = []
+        self.h1 = 0
+        self.lang = ""
+        self.stylesheets: list[str] = []
 
     def handle_starttag(self, tag, attrs):
         attr = {name: (value or "") for name, value in attrs}
@@ -84,6 +87,17 @@ class _Audit(HTMLParser):
         if attr.get("href") == "#main-content":
             self.skip_link = True
 
+    def _start_h1(self, attr):
+        self.h1 += 1
+        self.headings += 1
+
+    def _start_html(self, attr):
+        self.lang = attr.get("lang", "")
+
+    def _start_link(self, attr):
+        if attr.get("rel") == "stylesheet":
+            self.stylesheets.append(attr.get("href", ""))
+
     def _start_main(self, attr):
         self.main_ids.append(attr.get("id", ""))
 
@@ -110,6 +124,9 @@ def _assert_accessible(path: str, html: str) -> None:
     assert audit.skip_link, f"{path}: no skip link"
     assert audit.main_ids == ["main-content"], f"{path}: main landmark"
     assert audit.headings, f"{path}: no h1/h2"
+    assert audit.h1 == 1, f"{path}: expected exactly one h1, found {audit.h1}"
+    assert audit.lang == "en", f"{path}: <html> has no lang"
+    assert any(href.startswith("/static/app.css") for href in audit.stylesheets), f"{path}: no stylesheet"
     duplicates = {item for item in audit.ids if audit.ids.count(item) > 1}
     assert not duplicates, f"{path}: duplicate ids {duplicates}"
     for control in audit.controls:
@@ -250,3 +267,34 @@ def test_wide_tables_scroll_inside_their_own_region():
     assert re.search(r"\.table-wrap\s*\{[^}]*overflow-x:\s*auto", CSS)
     assert ".golfer-table-wrap { overflow-x: auto; }" in CSS
     assert "min-width: 320px" in CSS
+
+
+def test_public_token_pages_use_the_styled_layout_and_private_headers(client):
+    from test_join import _golfer, _invite
+
+    from golf_league.services.auth import issue_token
+
+    invite = _invite(client)
+    _golfer(client)
+    join = client.get(f"/join/{invite}")
+    client.post(f"/join/{invite}", data={"email": "player@example.test", "csrf_token": _extract_csrf(join.text)})
+    body = client.app.state.email_sender.sent[-1]["body"]
+    set_password_path = "/set-password/" + body.rsplit("/set-password/", 1)[1]
+
+    with Session(client.app.state.engine) as session:
+        from golf_league.models import User
+
+        user_id = session.scalar(select(User.id).where(User.email == "admin@example.test"))
+        reset_token = issue_token(session, user_id, "reset_password", 3600)
+
+    for path in (f"/join/{invite}", set_password_path, "/verify/not-a-real-token", f"/reset/{reset_token}"):
+        response = client.get(path)
+        assert response.status_code == 200, path
+        assert response.headers["cache-control"] == "no-store", path
+        assert response.headers["referrer-policy"] == "no-referrer", path
+        _assert_accessible(path, response.text)
+        assert 'href="/login"' in response.text, path
+    missing = client.get("/reset/not-a-real-token")
+    assert missing.status_code == 404
+    assert missing.headers["cache-control"] == "no-store"
+    assert missing.headers["referrer-policy"] == "no-referrer"

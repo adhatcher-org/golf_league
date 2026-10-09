@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Holes and yardages - Golf League{% endblock %}
 {% block content %}
-<h2>Holes and yardages: {{ course.name }}</h2>
+<h1>Holes and yardages: {{ course.name }}</h1>
 {% if errors %}<ul class="error">{% for field, message in errors.items() %}<li>{{ field }}: {{ message }}</li>{% endfor %}</ul>{% endif %}
 <p>Paste a complete JSON grid below. Preview it before saving; the server validates every hole, index, par total, and tee yardage.</p>
 <form method="post" action="/admin/courses/{{ course.id }}/holes">

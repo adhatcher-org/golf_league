@@ -8,7 +8,7 @@ import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
@@ -42,6 +42,8 @@ logger = logging.getLogger(__name__)
 CSRF_COOKIE_NAME = "csrf_seed"
 
 RESET_TOKEN_TTL_SECONDS = 60 * 60  # one hour
+# Pages whose URL carries a credential: never cached, never sent as a referrer.
+PRIVATE_HEADERS = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}
 MIN_PASSWORD_LENGTH = 8
 
 _NEUTRAL_LOGIN_MESSAGE = "That email or password is not correct."
@@ -184,6 +186,7 @@ async def logout(
 @router.get("/verify/{token}")
 async def verify_email(
     token: str,
+    request: Request,
     session: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
     """Consume a `verify_email` token; idempotent on repeat.
@@ -196,8 +199,8 @@ async def verify_email(
         now = datetime.now(UTC).replace(tzinfo=None)
         mark_email_verified(session, user_id, now)
 
-    return HTMLResponse(
-        "<p>If that link was valid, your email address is now verified.</p>"
+    return _templates(request).TemplateResponse(
+        request, "identity/verify_result.html", {}, headers=PRIVATE_HEADERS
     )
 
 
@@ -254,13 +257,16 @@ async def reset_form(
 ) -> Response:
     user_id = peek_token(session, token, "reset_password")
     if user_id is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found") from None
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Not found", headers=PRIVATE_HEADERS
+        ) from None
 
     seed = request.cookies.get(CSRF_COOKIE_NAME) or generate_token()
     response = _templates(request).TemplateResponse(
         request,
         "identity/reset_form.html",
         {"errors": None, "csrf_token": generate_csrf_token(seed), "token": token},
+        headers=PRIVATE_HEADERS,
     )
     response.set_cookie(
         CSRF_COOKIE_NAME, seed, httponly=True, samesite="lax", secure=cookie_is_secure(_settings(request))
@@ -289,6 +295,7 @@ async def reset_submit(
                 "token": token,
             },
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            headers=PRIVATE_HEADERS,
         )
 
     password_hash = hash_password(password)
@@ -300,16 +307,18 @@ async def reset_submit(
         )
         if result is None:
             session.rollback()
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found", headers=PRIVATE_HEADERS)
         session.commit()
     except HTTPException:
         raise
     except Exception:
         session.rollback()
         logging.getLogger(__name__).warning("password reset completion failed")
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found") from None
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Not found", headers=PRIVATE_HEADERS
+        ) from None
 
-    redirect = RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+    redirect = RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER, headers=PRIVATE_HEADERS)
     redirect.delete_cookie(
         SESSION_COOKIE_NAME, httponly=True, samesite="lax", secure=cookie_is_secure(_settings(request))
     )

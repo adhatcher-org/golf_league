@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{% if season %}Edit Season{% else %}New Season{% endif %} - Golf League{% endblock %}
 {% block content %}
-<h2>{% if season %}Edit season{% else %}New season{% endif %}</h2>
+<h1>{% if season %}Edit season{% else %}New season{% endif %}</h1>
 {% if season %}
 <p>{{ display_name }} — {{ week_count }} weekly date{% if week_count != 1 %}s{% endif %}</p>
 {% endif %}

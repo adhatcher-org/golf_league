@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{% if golfer %}Edit Golfer{% else %}New Golfer{% endif %} - Golf League{% endblock %}
 {% block content %}
-<h2>{% if golfer %}Edit golfer{% else %}New golfer{% endif %}</h2>
+<h1>{% if golfer %}Edit golfer{% else %}New golfer{% endif %}</h1>
 {% if errors %}
 <ul class="error">
     {% for field, message in errors.items() %}

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{% if tee_set %}Edit Tee Set{% else %}New Tee Set{% endif %} - Golf League{% endblock %}
 {% block content %}
-<h2>{% if tee_set %}Edit tee set{% else %}New tee set{% endif %}</h2>
+<h1>{% if tee_set %}Edit tee set{% else %}New tee set{% endif %}</h1>
 {% if errors %}
 <ul class="error">
     {% for field, message in errors.items() %}
