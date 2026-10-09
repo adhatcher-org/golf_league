@@ -8,9 +8,9 @@
 <form method="post" action="/register">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label>Email <input type="email" name="email" required></label>
-    {% if errors and errors.email %}<p class="error">{{ errors.email }}</p>{% endif %}
+    {% if errors and errors.email %}<p class="error" role="alert">{{ errors.email }}</p>{% endif %}
     <label>Password <input type="password" name="password" required minlength="8"></label>
-    {% if errors and errors.password %}<p class="error">{{ errors.password }}</p>{% endif %}
+    {% if errors and errors.password %}<p class="error" role="alert">{{ errors.password }}</p>{% endif %}
     <button type="submit">Create account</button>
 </form>
 {% endif %}

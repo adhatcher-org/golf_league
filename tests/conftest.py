@@ -51,6 +51,25 @@ def _make_admin_client(client: TestClient) -> TestClient:
     return client
 
 
+_MANAGED_ENVIRONMENT_KEYS = (
+    "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM_EMAIL",
+    "SMTP_FROM_NAME", "SMTP_TLS_MODE", "LOG_LEVEL",
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_managed_config(tmp_path_factory, monkeypatch):
+    """Point the managed configuration file at a per-test temporary path.
+
+    No test may read or write a real managed `.env`, and a developer's shell
+    SMTP/LOG_LEVEL variables must not change which mail sender a test gets.
+    """
+    managed_dir = tmp_path_factory.mktemp("managed-config")
+    monkeypatch.setenv("MANAGED_ENV_PATH", str(managed_dir / ".env"))
+    for name in _MANAGED_ENVIRONMENT_KEYS:
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture
 def engine():
     """Create an in-memory SQLite engine with foreign keys ON and tables created."""

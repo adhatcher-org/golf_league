@@ -236,3 +236,56 @@ def test_concurrent_duplicate_registration_creates_at_most_one_user_and_link(cli
         assert sum(token.revoked_at is None for token in tokens) == 1
     finally:
         session.close()
+
+
+# --- GL-45: absolute verification links, sent after the response --------------
+
+
+class _RaisingSender:
+    def __init__(self):
+        self.attempts = 0
+
+    def send(self, to, subject, body):
+        self.attempts += 1
+        raise OSError("simulated relay outage")
+
+
+def test_verification_email_link_uses_configured_origin(client):
+    client.app.state.settings = client.app.state.settings.model_copy(
+        update={"external_base_url": "https://league.example.test"}
+    )
+    _add_golfer(client)
+    page = client.get("/register")
+    response = client.post(
+        "/register",
+        data={"email": "player@example.test", "password": "a-real-password-1",
+              "csrf_token": _extract_csrf(page.text)},
+        headers={"host": "attacker.example.test"},
+    )
+    assert response.status_code == 200
+    (message,) = client.app.state.email_sender.sent
+    assert "https://league.example.test/verify/" in message["body"]
+    assert "attacker" not in message["body"]
+    token = message["body"].rsplit("/verify/", 1)[1]
+    assert client.get(f"/verify/{token}").status_code == 200
+
+
+def test_verification_send_failure_does_not_change_the_response(client, caplog):
+    _add_golfer(client, email="first@example.test")
+    _add_golfer(client, email="second@example.test")
+    succeeded = _submit(client, "first@example.test")
+
+    raising = _RaisingSender()
+    client.app.state.email_sender = raising
+    with caplog.at_level("WARNING"):
+        failed = _submit(client, "second@example.test")
+
+    assert raising.attempts == 1
+    assert (failed.status_code, failed.text) == (succeeded.status_code, succeeded.text)
+    assert "verification email send failed" in caplog.text
+    assert "second@example.test" not in caplog.text
+    session = Session(bind=client.app.state.engine)
+    try:
+        assert session.scalar(select(func.count()).select_from(User).where(User.email == "second@example.test")) == 1
+    finally:
+        session.close()

@@ -1,4 +1,6 @@
+import logging
 import re
+import sys
 
 _TOKEN_PATH = re.compile(r"(/(?:join|set-password|reset|verify)/)([^/?\s\"'<>]+)", re.IGNORECASE)
 
@@ -24,6 +26,49 @@ def install_access_log_filter() -> None:
     access_logger = logging.getLogger("uvicorn.access")
     if not any(isinstance(item, AccessPathRedactionFilter) for item in access_logger.filters):
         access_logger.addFilter(AccessPathRedactionFilter())
+
+
+class _RedactingFormatter(logging.Formatter):
+    """Format a record with the standard layout, then redact the text."""
+
+    def __init__(self) -> None:
+        super().__init__("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+    def format(self, record) -> str:
+        return redact(super().format(record))
+
+
+class ApplicationLogHandler(logging.StreamHandler):
+    """Redacting stdout handler; resolves `sys.stdout` at emit time."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setFormatter(_RedactingFormatter())
+
+    @property
+    def stream(self):
+        return sys.stdout
+
+    @stream.setter
+    def stream(self, value) -> None:
+        pass
+
+
+def apply_log_level(level: str) -> None:
+    """Apply the managed `LOG_LEVEL` to the application's own loggers.
+
+    Called once at startup (LOG_LEVEL is restart-required). Installs one
+    redacting stdout handler on the `golf_league` logger, so application
+    records are visible at the chosen level under uvicorn, which configures
+    only its own loggers. Unknown names fall back to INFO.
+    """
+    numeric = logging.getLevelName(str(level).upper())
+    if not isinstance(numeric, int):
+        numeric = logging.INFO
+    app_logger = logging.getLogger("golf_league")
+    app_logger.setLevel(numeric)
+    if not any(isinstance(handler, ApplicationLogHandler) for handler in app_logger.handlers):
+        app_logger.addHandler(ApplicationLogHandler())
 
 
 def configure_logging(debug: bool = False) -> None:

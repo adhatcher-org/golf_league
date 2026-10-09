@@ -1,0 +1,10 @@
+{% if errors %}
+<div class="error-summary" role="alert" aria-labelledby="error-summary-title" tabindex="-1">
+    <h2 id="error-summary-title" class="error-summary__title">There is a problem</h2>
+    <ul>
+        {% for field, message in errors.items() %}
+        <li>{% if field_ids and field in field_ids %}<a href="#{{ field_ids[field] }}">{{ message }}</a>{% else %}{{ message }}{% endif %}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}

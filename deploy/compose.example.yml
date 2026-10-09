@@ -1,0 +1,68 @@
+# Golf League on Unraid behind the existing SWAG reverse proxy — EXAMPLE ONLY.
+#
+# Copy this file to the Unraid host and supply every ${...} value privately (a
+# root-only env file next to the copy, or the Unraid compose manager). Real
+# values never go in this repository, the vault or a task note. See
+# docs/deployment.md for each value and docs/backup-restore.md for backups.
+#
+# One application container, one worker. No Apache, no second proxy, no
+# load balancing: SWAG terminates TLS and forwards plain HTTP to port 8000.
+name: golf-league
+
+services:
+  golf-league:
+    # Pin a released tag or, better, an image digest; never a moving "latest".
+    image: ${GOLF_LEAGUE_IMAGE:?set GOLF_LEAGUE_IMAGE to ghcr.io/adhatcher-org/golf_league@sha256:<digest>}
+    container_name: golf-league
+    restart: unless-stopped
+    # The image's non-root user is 1000:1000. Either chown the data directory
+    # to 1000:1000 or set PUID/PGID to the owner of the data directory.
+    user: "${PUID:-1000}:${PGID:-1000}"
+    # No published host port: only SWAG reaches the app, over the proxy network.
+    expose:
+      - "8000"
+    networks:
+      - proxy
+    volumes:
+      # Mount the DIRECTORY, never a single file: the managed settings file
+      # (/app/data/.env) is replaced atomically, which cannot cross a file mount.
+      - ${GOLF_LEAGUE_DATA_DIR:?set GOLF_LEAGUE_DATA_DIR to the Unraid data directory, e.g. /mnt/user/appdata/golf-league}:/app/data
+    environment:
+      # Deploy-time (R-DEPLOYMENT); never editable from the app. Each of these
+      # may instead live in ${GOLF_LEAGUE_DATA_DIR}/.env (mode 0600, owned by
+      # PUID:PGID): the environment wins, the file is the fallback, and an empty
+      # value (here or there) counts as unset. If you keep SESSION_SECRET only
+      # in that file, delete its line here (the :? guard would otherwise refuse).
+      DATABASE_URL: sqlite:///./data/golf_league.db
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET privately (or remove this line and keep it in the data-dir .env); rotating it signs everyone out}
+      EXTERNAL_BASE_URL: ${EXTERNAL_BASE_URL:-https://golfleague.aaronhatcher.com}
+      MAX_USERS: "150"
+      EMAIL_VERIFICATION_REQUIRED: "true"
+      # Environment-only: never read from the file it points at.
+      MANAGED_ENV_PATH: /app/data/.env
+      # First boot only (ignored once any user exists). Remove after first login.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # Trust X-Forwarded-For / X-Forwarded-Proto ONLY from SWAG. Set this to
+      # SWAG's fixed address on the proxy network. Never "*": that would let
+      # any client pick its own address and bypass the per-IP invite quota.
+      FORWARDED_ALLOW_IPS: ${SWAG_IP:?set SWAG_IP to the SWAG container address on the proxy network}
+      # SMTP_* and LOG_LEVEL may be set here as well, but values saved at
+      # /admin/config (stored in /app/data/.env) take precedence over these.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/readyz').status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+networks:
+  proxy:
+    # The existing user-defined Docker network SWAG is attached to.
+    external: true
+    name: ${PROXY_NETWORK:?set PROXY_NETWORK to the Docker network SWAG uses}

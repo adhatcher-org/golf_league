@@ -1,9 +1,10 @@
 """Admin bootstrap configuration and logic.
 
-`Settings` (golf_league/config.py) has no ADMIN_EMAIL/ADMIN_PASSWORD fields
-and this task must not add any (GL-02's and GL-60's Must-not lists forbid
-editing config.py). Those two values only ever matter once, at first boot,
-so they are read directly from the environment here instead.
+`Settings` (golf_league/config.py) has no ADMIN_EMAIL/ADMIN_PASSWORD fields.
+Those two values only ever matter once, at first boot, so they are read
+here: from the environment first, then, as a fallback, from the managed
+file (`MANAGED_ENV_PATH`, see golf_league/managed_config.py). An empty value
+counts as unset.
 """
 
 import logging
@@ -15,16 +16,29 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from golf_league.domain.identity import normalize_email
+from golf_league.managed_config import read_deploy_values
 from golf_league.models import User
 from golf_league.services.auth import hash_password
 
 logger = logging.getLogger(__name__)
 
 
-def bootstrap_admin(session: Session) -> None:
+def _first_admin_credentials(managed_env_path: str | None) -> tuple[str | None, str | None]:
+    """Environment wins; the managed file fills only what the environment lacks."""
+    email = os.environ.get("ADMIN_EMAIL") or None
+    password = os.environ.get("ADMIN_PASSWORD") or None
+    if (email is None or password is None) and managed_env_path:
+        from_file = read_deploy_values(managed_env_path)
+        email = email or from_file.get("ADMIN_EMAIL")
+        password = password or from_file.get("ADMIN_PASSWORD")
+    return email, password
+
+
+def bootstrap_admin(session: Session, *, managed_env_path: str | None = None) -> None:
     """Create the first admin user if, and only if, `users` is empty.
 
-    Reads `ADMIN_EMAIL` and `ADMIN_PASSWORD` from the environment. The
+    Reads `ADMIN_EMAIL` and `ADMIN_PASSWORD` from the environment, falling
+    back to the managed file at `managed_env_path` when given. The
     admin is created pre-verified (`email_verified_at` set) because SMTP
     does not exist until M7 and requiring verification here would make
     login impossible.
@@ -39,12 +53,11 @@ def bootstrap_admin(session: Session) -> None:
     if count != 0:
         return
 
-    admin_email = os.environ.get("ADMIN_EMAIL")
-    admin_password = os.environ.get("ADMIN_PASSWORD")
+    admin_email, admin_password = _first_admin_credentials(managed_env_path)
     if not admin_email or not admin_password:
         logger.warning(
             "admin bootstrap skipped: set both ADMIN_EMAIL and ADMIN_PASSWORD "
-            "in the environment to create the first admin account"
+            "in the environment or the managed file to create the first admin account"
         )
         return
 

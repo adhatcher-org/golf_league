@@ -70,7 +70,7 @@
                     {% set golfer = item.golfer %}
                     <tr class="{% if not golfer.is_active %}is-inactive{% endif %}">
                         <td class="season-roster__select-column">
-                            <input class="season-golfer-checkbox" type="checkbox" name="golfer_ids" value="{{ golfer.id }}" data-active="{{ 'true' if golfer.is_active else 'false' }}" {% if item.included or item.assigned_to_team %}checked{% endif %} {% if not golfer.is_active or item.assigned_to_team %}disabled{% endif %} aria-label="Include {{ golfer.first_name }} {{ golfer.last_name }}">
+                            <label class="touch-target"><input class="season-golfer-checkbox" type="checkbox" name="golfer_ids" value="{{ golfer.id }}" data-active="{{ 'true' if golfer.is_active else 'false' }}" {% if item.included or item.assigned_to_team %}checked{% endif %} {% if not golfer.is_active or item.assigned_to_team %}disabled{% endif %} aria-label="Include {{ golfer.first_name }} {{ golfer.last_name }}"></label>
                         </td>
                         <td>
                             <a class="season-roster__name" href="/admin/golfers/{{ golfer.id }}/edit">{{ golfer.last_name }}, {{ golfer.first_name }}</a>
