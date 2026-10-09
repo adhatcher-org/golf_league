@@ -4,11 +4,13 @@ What must be backed up, all of it inside the mounted data directory (`/app/data`
 container, `GOLF_LEAGUE_DATA_DIR` on the host):
 
 - `golf_league.db` — the SQLite database.
-- `.env` — the managed settings file (`MANAGED_ENV_PATH`). It can hold the SMTP password, so
-  the copy is private: keep mode 0600 and the owner.
-- The private deployment values (`SESSION_SECRET` and the compose env file) are kept by the
-  operator separately. Restoring a database with a different `SESSION_SECRET` signs everyone
-  out and resets invite-quota keys; it does not lose data.
+- `.env` — the managed settings file (`MANAGED_ENV_PATH`). It is **secret-bearing**: it can
+  hold the SMTP password and, under R-DEPLOYMENT v3, the deploy-time values including
+  `SESSION_SECRET` and `ADMIN_PASSWORD`. Every copy keeps mode 0600 and the owner, lives only in
+  the private backup location, and is never attached to a ticket, chat or the vault.
+- Deploy-time values kept outside the data directory (the compose env file or the Unraid
+  template) are backed up privately by the operator. Restoring a database with a different
+  `SESSION_SECRET` signs everyone out and resets invite-quota keys; it does not lose data.
 
 Never copy the live `golf_league.db` file on its own while the app is running: a copy taken
 mid-write can be inconsistent, and SQLite may also have `-wal`/`-journal` files beside it.
@@ -27,6 +29,7 @@ with dst:
 print(stamp, dst.execute('PRAGMA integrity_check').fetchone()[0])
 dst.close(); src.close()"
 cp -p <GOLF_LEAGUE_DATA_DIR>/.env <GOLF_LEAGUE_DATA_DIR>/backups/managed-env-<stamp>
+chmod 600 <GOLF_LEAGUE_DATA_DIR>/backups/managed-env-<stamp>  # secret-bearing
 ```
 
 `Connection.backup` copies a consistent snapshot even while requests are writing. Expect

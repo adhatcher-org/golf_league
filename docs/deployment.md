@@ -109,6 +109,9 @@ container. Because the file lives in the mounted directory it survives image rep
 
 ## Rollout checklist (for the authorized deployment)
 
+The full ordered procedure, including verification and rollback, is `docs/deployment-runbook.md`;
+the short form:
+
 1. Record the current running image digest, compose file and mounts.
 2. Take and verify a backup (`docs/backup-restore.md`).
 3. Validate the host copy: `docker compose --env-file <private env> -f <copy> config --quiet`.

@@ -31,6 +31,9 @@ Private data, ignored files, and source contents are excluded.
 ### `docs/adr/0003-shared-league-invites.md`
 
 
+### `docs/adr/0004-managed-configuration-and-deployment.md`
+
+
 ### `docs/architecture/C1-context.md`
 
 
@@ -49,10 +52,19 @@ Private data, ignored files, and source contents are excluded.
 ### `docs/configuration.md`
 
 
+### `docs/deployment-runbook.md`
+
+
 ### `docs/deployment.md`
 
 
 ### `docs/implementation-decisions.md`
+
+
+### `docs/release-checklist.md`
+
+
+### `docs/releases/mvp-release-notes.md`
 
 
 ### `docs/validation/browser-journeys.md`

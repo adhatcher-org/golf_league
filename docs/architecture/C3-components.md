@@ -1,26 +1,32 @@
-# C3: Components
+# C3: Components (as built, M7)
 
-## Overview
+Three layers inside `golf_league/`, with the boundaries enforced by `tests/test_architecture.py`:
 
-This document describes the components that make up the Golf League application.
+- `domain/` — pure rules: no SQLAlchemy, FastAPI or models imports.
+- `services/` — take a SQLAlchemy `Session`; never import FastAPI. Helpers that must join a
+  larger transaction only flush; the operation owner commits.
+- `routers/` — the only HTTP layer: authentication dependencies, CSRF, form parsing, status
+  codes (R-FORMS), templates.
 
-## Main Components
+Cross-cutting modules at the package root: `app.py` (factory, lifespan, navigation middleware,
+health), `config.py` (`Settings`), `managed_config.py` (managed `.env` allowlist, reader,
+atomic writer), `security.py` (CSRF, cookie `Secure` rule, the auth dependency ladder),
+`database.py`, `migrations.py`, `models.py`, `logging_config.py` (redaction), `admin_config.py`
+(first-admin bootstrap).
 
-1. **Authentication System**: Handles user login, registration, and session management
-2. **Database Layer**: Manages SQLite database operations and migrations
-3. **User Management**: Handles user creation, modification, and deletion
-4. **Course Management**: Manages golf course information
-5. **Season Management**: Handles season scheduling and tournament organization
+| Area | Routers | Services | Domain |
+|---|---|---|---|
+| Identity: login, logout, register, verify, reset | `identity.py` | `auth.py`, `identity.py`, `email.py` | `identity.py`, `tokens.py`, `rate_limit.py` |
+| Shared league link and set-password | `admin_invites.py`, `join.py` | `invites.py` | `tokens.py` |
+| Roster and CSV import | `admin_roster.py`, `admin_imports.py`, `roster.py` | `roster.py`, `roster_imports.py` | `roster.py`, `roster_import.py` |
+| Course, tees, ratings, holes | `admin_courses.py` | `courses.py`, `course_seed.py` | `course.py`, `handicap.py` |
+| Seasons, selection, overrides, teams | `admin_seasons.py`, `admin_participants.py`, `admin_teams.py` | `seasons.py`, `season_roster.py`, `participants.py`, `teams.py` | `teams.py`, `roster.py` |
+| Weeks, cascades, nine, rain dates | `admin_weeks.py` | `schedule.py` | `schedule.py` |
+| Matchups, snapshots, substitutions | `admin_matches.py` | `matchups.py`, `handicaps.py` | `matchups.py` |
+| Player views | `home.py`, `player_schedule.py` | `player_schedule.py` | — |
+| Managed configuration | `admin_config.py` | — (`managed_config.py`) | — |
 
-## Component Interactions
-
-- Authentication system interacts with the database to validate users
-- User management component communicates with the database layer for persistence
-- Course and season management components use shared domain objects
-- All components follow the three-layer architecture pattern
-
-## Dependencies
-
-- Database layer is a core dependency for all other components
-- Authentication system depends on the database and cryptographic libraries
-- All components must not import sqlalchemy, fastapi, or golf_league.models directly from the domain layer
+Authorization ladder (`security.py`): `get_optional_user` → `require_user` (401) →
+`require_verified_user` (403 unverified) → `require_admin` (403 non-admin). Every POST checks
+CSRF; admin forms bind the token to the session cookie, anonymous forms to a `csrf_seed`
+cookie.
