@@ -26,7 +26,11 @@ from golf_league.routers.identity import (
     MIN_PASSWORD_LENGTH,
     _require_csrf,
 )
-from golf_league.security import SESSION_COOKIE_NAME, generate_csrf_token
+from golf_league.security import (
+    SESSION_COOKIE_NAME,
+    cookie_is_secure,
+    generate_csrf_token,
+)
 from golf_league.services.auth import create_session_cookie, hash_password
 from golf_league.services.invites import (
     AccountCapacityReached,
@@ -142,7 +146,9 @@ async def join_form(token: str, request: Request, session: Session = Depends(get
         {"csrf_token": generate_csrf_token(seed), "message": None},
         headers=PRIVATE_HEADERS,
     )
-    response.set_cookie(CSRF_COOKIE_NAME, seed, httponly=True, samesite="lax")
+    response.set_cookie(
+        CSRF_COOKIE_NAME, seed, httponly=True, samesite="lax", secure=cookie_is_secure(_settings(request))
+    )
     return response
 
 
@@ -193,7 +199,9 @@ async def set_password_form(token: str, request: Request, session: Session = Dep
         {"csrf_token": generate_csrf_token(seed), "errors": None, "token": token},
         headers=PRIVATE_HEADERS,
     )
-    response.set_cookie(CSRF_COOKIE_NAME, seed, httponly=True, samesite="lax")
+    response.set_cookie(
+        CSRF_COOKIE_NAME, seed, httponly=True, samesite="lax", secure=cookie_is_secure(_settings(request))
+    )
     return response
 
 
@@ -255,6 +263,6 @@ async def set_password_submit(
         create_session_cookie(result.user_id, result.session_version, settings.session_secret),
         httponly=True,
         samesite="lax",
-        secure=settings.external_base_url.startswith("https://"),
+        secure=cookie_is_secure(settings),
     )
     return response

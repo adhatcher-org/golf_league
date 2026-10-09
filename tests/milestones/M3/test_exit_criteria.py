@@ -84,7 +84,7 @@ def seeded_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Test
         database_url=database_url,
         session_secret="m3-milestone-test-secret-not-a-real-secret",
     )
-    with TestClient(create_app(settings=settings)) as client:
+    with TestClient(create_app(settings=settings), base_url="https://testserver") as client:
         assert current_revision(database_url) == _head_revision()
         yield client
 
@@ -101,7 +101,7 @@ def unseeded_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Te
         session_secret="m3-milestone-test-secret-not-a-real-secret",
         seed_course=False,
     )
-    with TestClient(create_app(settings=settings)) as client:
+    with TestClient(create_app(settings=settings), base_url="https://testserver") as client:
         yield client
 
 

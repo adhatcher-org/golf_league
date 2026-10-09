@@ -17,7 +17,12 @@ from golf_league.config import get_settings
 from golf_league.database import get_session
 from golf_league.domain.identity import normalize_email
 from golf_league.domain.tokens import generate_token
-from golf_league.security import SESSION_COOKIE_NAME, generate_csrf_token, validate_csrf
+from golf_league.security import (
+    SESSION_COOKIE_NAME,
+    cookie_is_secure,
+    generate_csrf_token,
+    validate_csrf,
+)
 from golf_league.services.auth import (
     authenticate_user,
     complete_reset_token,
@@ -110,7 +115,9 @@ async def login_form(request: Request) -> Response:
             "next_path": _login_destination(request.query_params.get("next")),
         },
     )
-    response.set_cookie(CSRF_COOKIE_NAME, seed, httponly=True, samesite="lax")
+    response.set_cookie(
+        CSRF_COOKIE_NAME, seed, httponly=True, samesite="lax", secure=cookie_is_secure(_settings(request))
+    )
     return response
 
 
@@ -152,7 +159,9 @@ async def login_submit(
     redirect = RedirectResponse(
         url=_login_destination(next_path), status_code=status.HTTP_303_SEE_OTHER
     )
-    redirect.set_cookie(SESSION_COOKIE_NAME, cookie_value, httponly=True, samesite="lax")
+    redirect.set_cookie(
+        SESSION_COOKIE_NAME, cookie_value, httponly=True, samesite="lax", secure=cookie_is_secure(settings)
+    )
     return redirect
 
 
@@ -166,7 +175,9 @@ async def logout(
     _require_csrf(session_cookie, csrf_token or csrf)
 
     redirect = RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
-    redirect.delete_cookie(SESSION_COOKIE_NAME)
+    redirect.delete_cookie(
+        SESSION_COOKIE_NAME, httponly=True, samesite="lax", secure=cookie_is_secure(_settings(request))
+    )
     return redirect
 
 
@@ -198,7 +209,9 @@ async def reset_request_form(request: Request) -> Response:
         "identity/reset_request.html",
         {"errors": None, "csrf_token": generate_csrf_token(seed)},
     )
-    response.set_cookie(CSRF_COOKIE_NAME, seed, httponly=True, samesite="lax")
+    response.set_cookie(
+        CSRF_COOKIE_NAME, seed, httponly=True, samesite="lax", secure=cookie_is_secure(_settings(request))
+    )
     return response
 
 
@@ -249,7 +262,9 @@ async def reset_form(
         "identity/reset_form.html",
         {"errors": None, "csrf_token": generate_csrf_token(seed), "token": token},
     )
-    response.set_cookie(CSRF_COOKIE_NAME, seed, httponly=True, samesite="lax")
+    response.set_cookie(
+        CSRF_COOKIE_NAME, seed, httponly=True, samesite="lax", secure=cookie_is_secure(_settings(request))
+    )
     return response
 
 
@@ -295,7 +310,9 @@ async def reset_submit(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found") from None
 
     redirect = RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
-    redirect.delete_cookie(SESSION_COOKIE_NAME)
+    redirect.delete_cookie(
+        SESSION_COOKIE_NAME, httponly=True, samesite="lax", secure=cookie_is_secure(_settings(request))
+    )
     return redirect
 
 
@@ -322,7 +339,9 @@ async def register_form(request: Request) -> Response:
         "identity/register.html",
         {"errors": None, "message": None, "csrf_token": generate_csrf_token(seed)},
     )
-    response.set_cookie(CSRF_COOKIE_NAME, seed, httponly=True, samesite="lax")
+    response.set_cookie(
+        CSRF_COOKIE_NAME, seed, httponly=True, samesite="lax", secure=cookie_is_secure(_settings(request))
+    )
     return response
 
 

@@ -57,10 +57,12 @@ The app runs uvicorn with its default proxy-header handling, which trusts
   <PROXY_NETWORK> swag`, or the network's static-IP field in the Unraid template). Trusting the
   whole subnet instead would let any container on that network forge client addresses.
 - **Never** set `FORWARDED_ALLOW_IPS=*`.
-- Emailed links, invite URLs and the secure flag on the invite receipt cookie come from
-  `EXTERNAL_BASE_URL`, never from `Host`, `X-Forwarded-Host` or `X-Forwarded-Proto`.
-- The session and CSRF cookies are not yet marked `Secure` by the application. The SWAG
-  template adds the flag at the TLS edge with `proxy_cookie_flags ~ secure;`. Keep that line.
+- Emailed links, invite URLs and the `Secure` flag on every cookie the app sets (session,
+  CSRF seed, invite receipt) come from `EXTERNAL_BASE_URL`, never from `Host`,
+  `X-Forwarded-Host` or `X-Forwarded-Proto`. With the https origin every cookie is `Secure`,
+  even though the hop from SWAG to the app is plain HTTP. An `http://` origin (local development
+  only) keeps plain cookies.
+- The SWAG template also adds `proxy_cookie_flags ~ secure;` as defence in depth.
 
 ## Startup, migrations and health
 

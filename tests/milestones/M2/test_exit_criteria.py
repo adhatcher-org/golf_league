@@ -77,7 +77,7 @@ def m2_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
         database_url=database_url,
         session_secret="m2-milestone-test-secret-not-a-real-secret",
     )
-    with TestClient(create_app(settings=settings)) as client:
+    with TestClient(create_app(settings=settings), base_url="https://testserver") as client:
         assert current_revision(database_url) == _head_revision()
         yield client
 

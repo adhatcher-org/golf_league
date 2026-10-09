@@ -31,6 +31,17 @@ def _current_settings(request: Request) -> Settings:
     return settings
 
 
+def cookie_is_secure(settings: Settings) -> bool:
+    """Whether cookies carry the `Secure` flag.
+
+    Derived from the configured public origin (R-DEPLOYMENT), never from the
+    inbound request: true whenever `EXTERNAL_BASE_URL` is https, so cookies
+    are Secure behind SWAG even though the app itself listens on plain HTTP.
+    An http origin (local development only) keeps plain cookies working.
+    """
+    return settings.external_base_url.startswith("https://")
+
+
 def generate_csrf_token(session_value: str) -> str:
     """Return a CSRF token bound to `session_value`.
 

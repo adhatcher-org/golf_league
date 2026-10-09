@@ -13,6 +13,10 @@ from golf_league.services.auth import hash_password
 
 _CSRF_RE = re.compile(r'name="csrf_token" value="([^"]*)"')
 
+# The default EXTERNAL_BASE_URL is https, so the app marks its cookies Secure;
+# the shared clients therefore talk https, as a browser behind SWAG would.
+HTTPS_TEST_BASE_URL = "https://testserver"
+
 
 def _extract_csrf(html: str) -> str:
     """Return the value of the hidden `csrf_token` input in a rendered form."""
@@ -120,7 +124,7 @@ def client(tmp_path):
     )
 
     # Use TestClient context manager to handle lifespan
-    with TestClient(create_app(settings=settings)) as test_client:
+    with TestClient(create_app(settings=settings), base_url=HTTPS_TEST_BASE_URL) as test_client:
         yield test_client
 
 
@@ -144,7 +148,7 @@ def empty_client(tmp_path):
         seed_course=False,
     )
 
-    with TestClient(create_app(settings=settings)) as test_client:
+    with TestClient(create_app(settings=settings), base_url=HTTPS_TEST_BASE_URL) as test_client:
         yield test_client
 
 

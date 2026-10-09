@@ -69,7 +69,7 @@ def admin_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         session_secret="milestone-m1-test-secret-not-a-real-secret",
     )
 
-    with TestClient(create_app(settings=settings)) as client:
+    with TestClient(create_app(settings=settings), base_url="https://testserver") as client:
         yield client, db_path
 
 

@@ -17,6 +17,7 @@ from golf_league.domain.tokens import digest, generate_token
 from golf_league.models import LeagueInviteLink
 from golf_league.security import (
     SESSION_COOKIE_NAME,
+    cookie_is_secure,
     generate_csrf_token,
     require_admin,
     validate_csrf,
@@ -108,7 +109,7 @@ def _receipt_redirect(request: Request, admin_id: int, raw_token: str) -> Respon
     response = RedirectResponse(RECEIPT_PATH, status_code=303, headers=PRIVATE_HEADERS)
     response.set_cookie(
         RECEIPT_COOKIE, nonce, max_age=300, httponly=True, samesite="lax",
-        secure=settings.external_base_url.startswith("https://"), path=RECEIPT_PATH,
+        secure=cookie_is_secure(settings), path=RECEIPT_PATH,
     )
     return response
 

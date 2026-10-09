@@ -263,7 +263,7 @@ def test_trusted_proxy_client_scope_controls_ip_quota_not_forwarded_headers(tmp_
         session_secret="synthetic-proxy-scope-secret",
     ))
     wrapped = _TrustedClientScope(app, "198.51.100.17")
-    with TestClient(wrapped) as client:
+    with TestClient(wrapped, base_url="https://testserver") as client:
         invite = _invite(client)
         emails = [f"proxy-{index}@example.test" for index in range(11)]
         for email in emails:
@@ -408,7 +408,7 @@ def test_asgi_frames_meet_floor_and_precede_blocked_fake_sender(tmp_path):
         session_secret="synthetic-frame-secret",
     ))
     recorder = _ASGIFrameRecorder(app)
-    with TestClient(recorder) as client:
+    with TestClient(recorder, base_url="https://testserver") as client:
         page = client.get("/login")
         csrf = _csrf(page.text)
         clock_values = []

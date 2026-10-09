@@ -236,7 +236,7 @@ def test_default_app_factory_signs_previews_and_refuses_tampered_confirmation(
     monkeypatch.setenv("SEED_COURSE", "true")
     app = create_app()
     assert not hasattr(app.state, "settings")
-    with TestClient(app) as client:
+    with TestClient(app, base_url="https://testserver") as client:
         _make_admin_client(client)
         with Session(app.state.engine) as session:
             course = session.scalar(select(Course).where(Course.name == "Wyandot Golf Club"))
