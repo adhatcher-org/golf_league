@@ -43,6 +43,9 @@ Private data, ignored files, and source contents are excluded.
 ### `docs/architecture/C4-code.md`
 
 
+### `docs/configuration.md`
+
+
 ### `docs/implementation-decisions.md`
 
 
@@ -55,16 +58,23 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/app.py`
 
-- function `_navigation_user` (line 56)
-- function `lifespan` (line 89)
-- function `create_app` (line 132)
+- function `_navigation_user` (line 57)
+- function `lifespan` (line 90)
+- function `create_app` (line 137)
 
 ### `golf_league/config.py`
 
-- class `Settings` (line 8)
-  - method `external_origin_must_be_absolute` (line 20)
-  - method `league_name_template_must_support_season` (line 39)
-- function `get_settings` (line 51)
+- class `_ManagedFileSource` (line 18)
+  - method `__init__` (line 21)
+  - method `get_field_value` (line 25)
+  - method `__call__` (line 28)
+- class `Settings` (line 33)
+  - method `settings_customise_sources` (line 57)
+  - method `tls_mode_is_case_insensitive` (line 82)
+  - method `log_level_is_case_insensitive` (line 87)
+  - method `external_origin_must_be_absolute` (line 92)
+  - method `league_name_template_must_support_season` (line 111)
+- function `get_settings` (line 123)
 
 ### `golf_league/database.py`
 
@@ -153,11 +163,37 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/logging_config.py`
 
-- class `AccessPathRedactionFilter` (line 6)
-  - method `filter` (line 9)
-- function `install_access_log_filter` (line 20)
-- function `configure_logging` (line 29)
-- function `redact` (line 41)
+- class `AccessPathRedactionFilter` (line 8)
+  - method `filter` (line 11)
+- function `install_access_log_filter` (line 22)
+- class `_RedactingFormatter` (line 31)
+  - method `__init__` (line 34)
+  - method `format` (line 37)
+- class `ApplicationLogHandler` (line 41)
+  - method `__init__` (line 44)
+  - method `stream` (line 49)
+  - method `stream` (line 53)
+- function `apply_log_level` (line 57)
+- function `configure_logging` (line 74)
+- function `redact` (line 86)
+
+### `golf_league/managed_config.py`
+
+- class `ManagedKey` (line 38)
+  - method `is_secret` (line 51)
+- function `_has_control_characters` (line 83)
+- function `_validate_host` (line 87)
+- function `_validate_port` (line 96)
+- function `_validate_email` (line 102)
+- function `_validate_choice` (line 108)
+- function `validate_value` (line 123)
+- function `_decode` (line 141)
+- function `_encode` (line 150)
+- function `read_managed_values` (line 155)
+- function `_check_updates` (line 185)
+- function `_merge` (line 195)
+- function `write_managed_values` (line 212)
+- function `_fsync_directory` (line 248)
 
 ### `golf_league/migrations.py`
 
@@ -196,6 +232,16 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/routers/__init__.py`
 
+
+### `golf_league/routers/admin_config.py`
+
+- function `_settings` (line 44)
+- function `_running_value` (line 48)
+- function `_rows` (line 53)
+- function `_render` (line 69)
+- function `_submitted_value` (line 87)
+- function `config_form` (line 111)
+- function `config_submit` (line 116)
 
 ### `golf_league/routers/admin_courses.py`
 
@@ -765,6 +811,12 @@ Private data, ignored files, and source contents are excluded.
 ### `static/app.js`
 
 
+### `templates/_error_summary.html`
+
+
+### `templates/admin/config.html`
+
+
 ### `templates/admin/courses/form.html`
 
 
@@ -874,14 +926,15 @@ Private data, ignored files, and source contents are excluded.
 
 - function `_extract_csrf` (line 17)
 - function `_make_admin_client` (line 24)
-- function `engine` (line 55)
-- function `session` (line 75)
-- function `client` (line 89)
-- function `empty_client` (line 109)
-- function `wyandot_course` (line 133)
-- function `golfer` (line 152)
-- function `admin_client` (line 179)
-- function `empty_admin_client` (line 190)
+- function `_isolated_managed_config` (line 61)
+- function `engine` (line 74)
+- function `session` (line 94)
+- function `client` (line 108)
+- function `empty_client` (line 128)
+- function `wyandot_course` (line 152)
+- function `golfer` (line 171)
+- function `admin_client` (line 198)
+- function `empty_admin_client` (line 209)
 
 ### `tests/fixtures/roster/bad_encoding.csv`
 
@@ -1014,6 +1067,70 @@ Private data, ignored files, and source contents are excluded.
 - function `test_cancelled_origin_and_activated_makeup_keep_navigation` (line 70)
 - function `test_week_and_home_show_all_league_matches_without_initial_contacts` (line 92)
 - function `test_authentication_and_verification_guard_player_journeys` (line 125)
+
+### `tests/test_accessibility.py`
+
+- class `_Audit` (line 29)
+  - method `__init__` (line 32)
+  - method `handle_starttag` (line 46)
+  - method `_start_label` (line 56)
+  - method `_start_input` (line 61)
+  - method `_start_select` (line 66)
+  - method `_start_textarea` (line 69)
+  - method `_start_button` (line 72)
+  - method `_start_table` (line 77)
+  - method `_start_th` (line 80)
+  - method `_start_a` (line 83)
+  - method `_start_main` (line 87)
+  - method `handle_endtag` (line 90)
+  - method `handle_data` (line 96)
+- function `_audit` (line 101)
+- function `_assert_accessible` (line 108)
+- function `_long_names` (line 132)
+- function `_stage_import` (line 140)
+- function `_admin_pages` (line 159)
+- function `test_admin_and_player_pages_pass_static_audit_with_long_names` (line 183)
+- function `test_anonymous_pages_pass_static_audit` (line 193)
+- function `test_empty_admin_states_pass_static_audit` (line 200)
+- function `test_identity_error_states_are_announced_with_text` (line 207)
+- function `_rules` (line 220)
+- function `test_stylesheet_has_only_the_720px_breakpoint` (line 227)
+- function `test_interactive_touch_targets_are_at_least_44px` (line 241)
+- function `test_wide_tables_scroll_inside_their_own_region` (line 249)
+
+### `tests/test_admin_config.py`
+
+- function `_key` (line 33)
+- function `_managed_path` (line 37)
+- function `_form` (line 41)
+- function `test_allowlist_is_exactly_the_eight_ruled_keys` (line 56)
+- function `test_valid_values_are_normalized` (line 84)
+- function `test_invalid_values_are_rejected_without_echoing_them` (line 110)
+- function `test_missing_file_reads_as_empty` (line 121)
+- function `test_unreadable_file_reads_as_empty` (line 125)
+- function `test_reader_ignores_unknown_keys_and_invalid_values` (line 131)
+- function `test_write_creates_file_with_owner_only_mode` (line 161)
+- function `test_write_preserves_unowned_lines_and_replaces_in_place` (line 168)
+- function `test_written_values_round_trip_awkward_characters` (line 192)
+- function `test_write_refuses_unknown_keys_and_invalid_values_before_touching_file` (line 208)
+- function `test_interrupted_write_leaves_previous_file_intact` (line 217)
+- function `test_settings_defaults_match_the_ruling` (line 235)
+- function `test_managed_file_outranks_environment_which_outranks_default` (line 244)
+- function `test_managed_file_cannot_set_fixed_deploy_time_settings` (line 260)
+- function `test_smtp_password_is_not_in_settings_repr` (line 277)
+- function `_player_client` (line 286)
+- function `test_anonymous_and_nonadmin_are_refused` (line 301)
+- function `test_admin_sees_allowlisted_fields_without_secret_values` (line 312)
+- function `test_csrf_is_required` (line 328)
+- function `test_unknown_keys_are_rejected_and_nothing_is_written` (line 345)
+- function `test_duplicate_fields_are_rejected` (line 353)
+- function `test_invalid_values_rerender_stored_values_with_error_summary` (line 363)
+- function `test_success_writes_only_changed_keys_and_is_restart_required` (line 375)
+- function `test_saved_setting_survives_restart` (line 401)
+- function `test_unchanged_form_writes_nothing` (line 411)
+- function `test_blank_secret_keeps_and_clear_empties` (line 417)
+- function `test_write_failure_keeps_file_and_reports_without_values` (line 439)
+- function `test_lifespan_applies_managed_log_level` (line 459)
 
 ### `tests/test_admin_courses.py`
 
@@ -1334,23 +1451,25 @@ Private data, ignored files, and source contents are excluded.
 
 ### `tests/test_identity_routes.py`
 
-- function `_extract_csrf` (line 23)
-- function `_make_user` (line 29)
-- function `_add_protected_routes` (line 48)
-- function `test_correct_credentials_redirect_and_set_session_cookie` (line 69)
-- function `test_wrong_password_and_unknown_email_are_identical` (line 86)
-- function `test_post_without_valid_csrf_is_rejected` (line 105)
-- function `test_logout_clears_cookie_and_protected_page_becomes_unreachable` (line 121)
-- function `test_verified_user_reaches_verified_page_unverified_does_not` (line 147)
-- function `test_non_admin_gets_403_on_admin_page_even_when_verified` (line 174)
-- function `test_sixth_login_attempt_in_window_is_blocked_with_same_neutral_page` (line 189)
-- function `test_completed_reset_invalidates_a_prior_session` (line 237)
-- function `test_verify_token_is_idempotent_and_never_500s` (line 276)
-- function `test_verify_with_a_real_token_sets_email_verified_and_repeats_neutrally` (line 285)
-- function `test_reset_form_and_submit_reject_an_unknown_token_with_404` (line 313)
-- function `test_short_password_re_renders_the_reset_form_with_422` (line 326)
-- function `test_fake_email_sender_records_only_on_a_matched_reset` (line 358)
-- function `test_reset_commit_failure_rolls_back_password_and_token` (line 376)
+- function `_extract_csrf` (line 24)
+- function `_make_user` (line 30)
+- function `_add_protected_routes` (line 49)
+- function `test_correct_credentials_redirect_and_set_session_cookie` (line 70)
+- function `test_wrong_password_and_unknown_email_are_identical` (line 87)
+- function `test_post_without_valid_csrf_is_rejected` (line 106)
+- function `test_logout_clears_cookie_and_protected_page_becomes_unreachable` (line 122)
+- function `test_verified_user_reaches_verified_page_unverified_does_not` (line 148)
+- function `test_non_admin_gets_403_on_admin_page_even_when_verified` (line 175)
+- function `test_sixth_login_attempt_in_window_is_blocked_with_same_neutral_page` (line 190)
+- function `test_completed_reset_invalidates_a_prior_session` (line 238)
+- function `test_verify_token_is_idempotent_and_never_500s` (line 277)
+- function `test_verify_with_a_real_token_sets_email_verified_and_repeats_neutrally` (line 286)
+- function `test_reset_form_and_submit_reject_an_unknown_token_with_404` (line 314)
+- function `test_short_password_re_renders_the_reset_form_with_422` (line 327)
+- function `test_fake_email_sender_records_only_on_a_matched_reset` (line 359)
+- function `test_reset_commit_failure_rolls_back_password_and_token` (line 377)
+- function `test_ordinary_reset_preserves_account_and_revokes_other_credentials` (line 408)
+- function `test_reset_csrf_and_short_password_leave_token_usable` (line 465)
 
 ### `tests/test_invite_limits.py`
 
@@ -1402,19 +1521,27 @@ Private data, ignored files, and source contents are excluded.
 
 ### `tests/test_join.py`
 
-- class `_ASGIFrameRecorder` (line 18)
-  - method `__init__` (line 19)
-  - method `__call__` (line 24)
-- function `_csrf` (line 34)
-- function `_invite` (line 38)
-- function `_golfer` (line 52)
-- function `test_join_email_and_set_password_create_one_verified_linked_user` (line 67)
-- function `test_join_csrf_failure_is_private_and_never_sends` (line 118)
-- function `test_join_invalid_parent_is_neutral_and_does_not_debit_or_send` (line 127)
-- function `test_join_floor_sleeps_only_remaining_time_on_valid_csrf_branch` (line 140)
-- function `test_send_failure_keeps_reservation_and_revokes_credential` (line 161)
-- function `test_outcome_recording_failure_never_reinvokes_sender_or_fabricates_failure` (line 185)
-- function `test_asgi_frames_meet_floor_and_precede_blocked_fake_sender` (line 210)
+- class `_ASGIFrameRecorder` (line 25)
+  - method `__init__` (line 26)
+  - method `__call__` (line 31)
+- class `_TrustedClientScope` (line 41)
+  - method `__init__` (line 44)
+  - method `__call__` (line 49)
+- function `_csrf` (line 56)
+- function `_invite` (line 60)
+- function `_golfer` (line 74)
+- function `test_join_email_and_set_password_create_one_verified_linked_user` (line 89)
+- function `test_join_completion_establishes_session_for_scheduled_my_schedule` (line 142)
+- function `test_join_csrf_failure_is_private_and_never_sends` (line 178)
+- function `test_join_neutral_frame_matches_across_invalid_and_ineligible_branches` (line 198)
+- function `test_trusted_proxy_client_scope_controls_ip_quota_not_forwarded_headers` (line 255)
+- function `test_full_account_capacity_suppresses_issuance_without_debit` (line 287)
+- function `test_join_invalid_parent_is_neutral_and_does_not_debit_or_send` (line 315)
+- function `test_join_floor_sleeps_only_remaining_time_on_valid_csrf_branch` (line 328)
+- function `test_send_failure_keeps_reservation_and_revokes_credential` (line 349)
+- function `test_outcome_recording_failure_never_reinvokes_sender_or_fabricates_failure` (line 375)
+- function `test_asgi_frames_meet_floor_and_precede_blocked_fake_sender` (line 402)
+- function `test_each_quota_tier_keeps_the_same_neutral_http_frame` (line 468)
 
 ### `tests/test_logging_config.py`
 
@@ -1666,11 +1793,23 @@ Private data, ignored files, and source contents are excluded.
 
 ### `tests/test_set_password.py`
 
-- function `_csrf` (line 12)
-- function `_credential` (line 16)
-- function `test_short_password_is_blank_validation_and_does_not_consume` (line 45)
-- function `test_bad_credential_is_404_even_with_short_password` (line 60)
-- function `test_set_password_accepts_only_once_and_invalidates_old_session` (line 70)
+- function `_csrf` (line 32)
+- function `_credential` (line 36)
+- function `_existing_credential` (line 65)
+- function `_fill_user_count` (line 94)
+- function `_race_completion` (line 106)
+- function `test_short_password_is_blank_validation_and_does_not_consume` (line 148)
+- function `test_bad_credential_is_404_even_with_short_password` (line 163)
+- function `test_set_password_rejects_identity_or_invite_drift` (line 174)
+- function `test_set_password_rejects_nonlive_child_token` (line 200)
+- function `test_set_password_requires_csrf_and_blank_password_does_not_consume` (line 216)
+- function `test_set_password_write_failure_rolls_back_user_and_child_token` (line 241)
+- function `test_set_password_accepts_only_once_and_invalidates_old_session` (line 267)
+- function `test_new_account_completes_from_149_to_150_accounts` (line 289)
+- function `test_new_account_capacity_refusal_is_atomic_and_keeps_credential` (line 306)
+- function `test_existing_account_at_capacity_preserves_identity_and_rotates_session` (line 328)
+- function `test_existing_completion_revokes_all_outstanding_siblings` (line 375)
+- function `test_reset_and_shared_completion_serialize_in_either_order` (line 424)
 
 ### `tests/test_substitutions.py`
 

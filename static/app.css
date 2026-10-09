@@ -189,6 +189,9 @@ a:hover {
 }
 
 .nav-menu__panel a {
+    min-height: 2.75rem;
+    display: flex;
+    align-items: center;
     padding: 0.65rem 0.75rem;
     border-radius: 0.3rem;
     color: var(--ink);
@@ -357,11 +360,77 @@ form + p + p {
 
 .error {
     width: fit-content;
+    max-width: 100%;
     margin: 0 0 1rem;
-    padding: 0.55rem 0;
+    padding: 0.55rem 0 0.55rem 0.75rem;
+    border-left: 3px solid var(--danger);
     color: var(--danger);
     font-weight: 600;
+    overflow-wrap: anywhere;
 }
+
+/* A text marker, so an error never depends on colour alone. */
+p.error::before,
+.error > p:first-child::before,
+.error > li::marker {
+    content: "Error: ";
+}
+
+.error-summary {
+    margin: 0 0 1.5rem;
+    padding: 1rem 1.15rem;
+    border: 2px solid var(--danger);
+    border-radius: 0.45rem;
+    background: #fbf1ee;
+    color: var(--danger);
+}
+
+.error-summary__title {
+    margin: 0 0 0.5rem;
+    color: var(--danger);
+    font-family: inherit;
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.error-summary ul { margin: 0; padding-left: 1.2rem; }
+.error-summary a { color: var(--danger); font-weight: 650; overflow-wrap: anywhere; }
+
+.notice {
+    margin: 0 0 1.5rem;
+    padding: 0.85rem 1rem;
+    border-left: 3px solid var(--evergreen);
+    background: #edf5eb;
+    color: var(--evergreen-deep);
+}
+
+.touch-target {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    display: inline-grid;
+    place-items: center;
+    cursor: pointer;
+}
+
+/* Managed configuration */
+.config-form { width: min(100%, 36rem); }
+.config-field { display: grid; gap: 0.4rem; }
+.config-field--error input,
+.config-field--error select { border-color: var(--danger); border-width: 2px; }
+.config-field__key { color: var(--muted); font-size: 0.78rem; font-weight: 500; }
+.config-field__help,
+.config-field__state { margin: 0; font-size: 0.86rem; }
+.config-field__pending { margin: 0; color: #6b5420; font-size: 0.86rem; }
+.config-field__clear {
+    min-height: 2.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-weight: 500;
+}
+.config-field__clear input { width: 1.25rem; min-height: 1.25rem; margin: 0; accent-color: var(--evergreen); }
+.config-note { max-width: 42rem; font-size: 0.9rem; }
 
 .table-wrap {
     overflow: hidden;
@@ -530,7 +599,7 @@ tbody tr:hover {
     .site-nav > a,
     .site-nav__logout button,
     .nav-menu > summary {
-        min-height: 2.5rem;
+        min-height: 2.75rem;
         padding: 0.5rem 0.65rem;
         font-size: 0.88rem;
     }
@@ -795,7 +864,7 @@ tbody tr:hover {
 .import-fields select {
     width: 100%;
     min-width: 0;
-    min-height: 2.65rem;
+    min-height: 2.75rem;
     padding: 0.55rem 0.65rem;
     font-size: 0.92rem;
 }
@@ -811,6 +880,7 @@ tbody tr:hover {
 }
 
 .import-check {
+    min-height: 2.75rem;
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
@@ -836,7 +906,7 @@ tbody tr:hover {
 
 .import-row__buttons button,
 .import-actions__buttons button {
-    min-height: 2.55rem;
+    min-height: 2.75rem;
     padding: 0.5rem 0.8rem;
     font-size: 0.86rem;
 }
@@ -1013,7 +1083,7 @@ button:disabled:hover {
 .season-roster__table tr.is-inactive .season-roster__name { color: #66736b; }
 
 .season-roster__select-column { width: 3.5rem; text-align: center; }
-.season-roster__select-all { width: fit-content; margin: 0 auto; display: block; cursor: pointer; }
+.season-roster__select-all { min-width: 2.75rem; min-height: 2.75rem; margin: 0 auto; display: grid; place-items: center; cursor: pointer; }
 .season-roster__select-all input,
 .season-golfer-checkbox {
     width: 1.1rem;
@@ -1067,7 +1137,7 @@ button:disabled:hover {
 .season-override-row h3 { margin: 0; color: var(--evergreen-deep); }
 .season-override-row > p { margin: 0.35rem 0 1rem; }
 
-@media (max-width: 680px) {
+@media (max-width: 720px) {
     .admin-page-heading { align-items: stretch; flex-direction: column; gap: 1rem; }
     .admin-page-heading .button-link { width: 100%; }
     .season-roster__toolbar { align-items: flex-start; flex-direction: column; }
@@ -1081,7 +1151,7 @@ button:disabled:hover {
     to { opacity: 1; transform: translateY(0); }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 720px) {
     .import-heading {
         align-items: flex-start;
     }
@@ -1125,7 +1195,7 @@ button:disabled:hover {
     }
 }
 
-@media (min-width: 900px) {
+@media (min-width: 721px) {
     .import-roster { overflow-x: auto; }
 
     .import-fields__header,
@@ -1179,7 +1249,7 @@ button:disabled:hover {
     .import-row__source { margin-left: 0; }
 }
 
-@media (max-width: 380px) {
+@media (max-width: 720px) {
     .import-heading {
         flex-direction: column;
         gap: 0.5rem;
@@ -1196,7 +1266,7 @@ button:disabled:hover {
 .week-preview__table th,
 .week-preview__table td { padding: 0.6rem 0.75rem; vertical-align: middle; white-space: nowrap; }
 .week-preview__table select,
-.week-preview__table input { width: auto; min-width: 100%; min-height: 2.5rem; padding: 0.4rem 0.6rem; font-size: 0.92rem; }
+.week-preview__table input { width: auto; min-width: 100%; min-height: 2.75rem; padding: 0.4rem 0.6rem; font-size: 0.92rem; }
 .week-preview__table select { min-width: 9.5rem; }
 .week-preview__table td[data-label="Makeup for"] select { min-width: 7rem; }
 .week-preview__table td[data-label="Status"] select { min-width: 8rem; }
@@ -1282,8 +1352,8 @@ button:disabled:hover {
     top: 0.8rem;
     right: 0.8rem;
     display: grid;
-    width: 2.6rem;
-    min-height: 2.6rem;
+    width: 2.75rem;
+    min-height: 2.75rem;
     padding: 0;
     place-items: center;
     border: 1px solid var(--line);
@@ -1296,7 +1366,7 @@ button:disabled:hover {
 .opponent-dialog__details dt { color: var(--muted); font-weight: 700; }
 .opponent-dialog__details dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .opponent-dialog__details dd a[hidden] { display: none; }
-.opponent-dialog__details dd .button-link { min-height: 2.4rem; margin: 0.6rem 0 0 0.55rem; padding: 0.45rem 0.8rem; }
+.opponent-dialog__details dd .button-link { min-height: 2.75rem; margin: 0.6rem 0 0 0.55rem; padding: 0.45rem 0.8rem; }
 .opponent-dialog__status { min-height: 1.4em; margin: 1rem 0 0; color: var(--muted); }
 
 @keyframes opponent-dialog-in {

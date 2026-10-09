@@ -16,8 +16,9 @@ from golf_league.admin_config import bootstrap_admin
 from golf_league.config import get_settings
 from golf_league.database import make_engine
 from golf_league.domain.rate_limit import RateLimiter
-from golf_league.logging_config import install_access_log_filter
+from golf_league.logging_config import apply_log_level, install_access_log_filter
 from golf_league.migrations import upgrade_to_head
+from golf_league.routers.admin_config import router as admin_config_router
 from golf_league.routers.admin_courses import router as admin_courses_router
 from golf_league.routers.admin_imports import router as admin_imports_router
 from golf_league.routers.admin_invites import InviteReceiptStore
@@ -91,6 +92,10 @@ async def lifespan(app: FastAPI):
     settings = getattr(app.state, "settings", None)
     if settings is None:
         settings = get_settings()
+    # Settings are resolved once per process: the managed file is read here
+    # and every managed setting is restart-required (R-DEPLOYMENT).
+    app.state.settings = settings
+    apply_log_level(settings.log_level)
     database_url = settings.database_url
 
     app.state.ready = False
@@ -169,6 +174,7 @@ def create_app(settings=None) -> FastAPI:
     app.include_router(home_router)
     app.include_router(roster_router)
     app.include_router(player_schedule_router)
+    app.include_router(admin_config_router)
     app.include_router(admin_courses_router)
     app.include_router(admin_roster_router)
     app.include_router(admin_imports_router)

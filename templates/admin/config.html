@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Configuration - Golf League{% endblock %}
+{% block content %}
+<header class="admin-page-heading">
+    <div>
+        <p class="eyebrow">Manage · Configuration</p>
+        <h1>Configuration</h1>
+        <p>Mail relay and logging settings. Every change takes effect after the container restarts; the application never restarts itself.</p>
+    </div>
+</header>
+{% set field_ids = {} %}
+{% for row in rows %}{% set _ = field_ids.update({row.key.name: "config-" ~ row.key.name|lower}) %}{% endfor %}
+{% include "_error_summary.html" %}
+{% if saved and not errors %}
+<p class="notice" role="status"><strong>Saved.</strong> Restart the container to apply the settings marked “Restart required”.</p>
+{% endif %}
+<form class="config-form" method="post" action="/admin/config" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% for row in rows %}
+    {% set key = row.key %}
+    {% set field_id = "config-" ~ key.name|lower %}
+    {% set described = [] %}
+    {% if key.help %}{% set _ = described.append(field_id ~ "-help") %}{% endif %}
+    {% if row.restart_required %}{% set _ = described.append(field_id ~ "-pending") %}{% endif %}
+    {% if errors.get(key.name) %}{% set _ = described.append(field_id ~ "-error") %}{% endif %}
+    <div class="config-field{% if errors.get(key.name) %} config-field--error{% endif %}">
+        <label for="{{ field_id }}">{{ key.label }} <code class="config-field__key">{{ key.name }}</code></label>
+        {% if key.kind == "choice" %}
+        <select id="{{ field_id }}" name="{{ key.name }}"{% if described %} aria-describedby="{{ described|join(' ') }}"{% endif %}{% if errors.get(key.name) %} aria-invalid="true"{% endif %}>
+            {% for choice in key.choices %}
+            <option value="{{ choice }}"{% if choice == row.value %} selected{% endif %}>{{ choice }}</option>
+            {% endfor %}
+        </select>
+        {% elif key.is_secret %}
+        <input id="{{ field_id }}" name="{{ key.name }}" type="password" value="" autocomplete="new-password"{% if described %} aria-describedby="{{ described|join(' ') }} {{ field_id }}-state"{% else %} aria-describedby="{{ field_id }}-state"{% endif %}{% if errors.get(key.name) %} aria-invalid="true"{% endif %}>
+        <p id="{{ field_id }}-state" class="config-field__state">Currently {% if row.is_set %}set{% else %}not set{% endif %}.</p>
+        <label class="config-field__clear" for="{{ field_id }}-clear">
+            <input id="{{ field_id }}-clear" name="{{ key.name }}{{ clear_suffix }}" type="checkbox" value="1">
+            Clear the stored {{ key.label|lower }}
+        </label>
+        {% else %}
+        <input id="{{ field_id }}" name="{{ key.name }}" type="{{ 'email' if key.kind == 'email' else 'text' }}" value="{{ row.value }}" maxlength="{{ key.max_length }}"{% if key.kind == "port" %} inputmode="numeric"{% endif %} autocomplete="off" spellcheck="false"{% if described %} aria-describedby="{{ described|join(' ') }}"{% endif %}{% if errors.get(key.name) %} aria-invalid="true"{% endif %}>
+        {% endif %}
+        {% if key.help %}<p id="{{ field_id }}-help" class="config-field__help">{{ key.help }}</p>{% endif %}
+        {% if row.restart_required %}<p id="{{ field_id }}-pending" class="config-field__pending"><strong>Restart required:</strong> the running application still uses the previous value.</p>{% endif %}
+        {% if errors.get(key.name) %}<p id="{{ field_id }}-error" class="error">{{ errors.get(key.name) }}</p>{% endif %}
+    </div>
+    {% endfor %}
+    <button type="submit">Save settings</button>
+</form>
+<p class="config-note">Database location, session secret, public address, account limit, first-admin values and the location of this settings file are fixed at deploy time and cannot be changed here.</p>
+{% endblock %}
