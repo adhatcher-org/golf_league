@@ -43,7 +43,13 @@ Private data, ignored files, and source contents are excluded.
 ### `docs/architecture/C4-code.md`
 
 
+### `docs/backup-restore.md`
+
+
 ### `docs/configuration.md`
+
+
+### `docs/deployment.md`
 
 
 ### `docs/implementation-decisions.md`
@@ -1375,6 +1381,16 @@ Private data, ignored files, and source contents are excluded.
 
 - function `test_engine_fixture_enforces_foreign_keys` (line 4)
 - function `test_session_fixture_is_usable_and_isolated` (line 10)
+
+### `tests/test_deployment_artifacts.py`
+
+- function `test_compose_trusts_only_the_swag_address_for_forwarded_headers` (line 21)
+- function `test_compose_mounts_the_data_directory_and_points_managed_file_into_it` (line 26)
+- function `test_compose_publishes_no_host_port_and_pins_the_image` (line 32)
+- function `test_compose_holds_placeholders_not_secrets` (line 38)
+- function `test_swag_template_appends_client_address_and_marks_cookies_secure` (line 46)
+- function `_resolved_client` (line 53)
+- function `test_forwarded_headers_count_only_from_the_trusted_proxy` (line 71)
 
 ### `tests/test_email.py`
 

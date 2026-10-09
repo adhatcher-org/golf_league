@@ -63,6 +63,10 @@ orchestrator repo next door.
   `golf_league/routers/admin_config.py` with `templates/admin/config.html`; behaviour is
   documented in `docs/configuration.md`. Tests point `MANAGED_ENV_PATH` at a temporary file
   through an autouse fixture in `tests/conftest.py`.
+- Deployment templates are `deploy/compose.example.yml` and `deploy/swag.example.conf`
+  (placeholders only); `docs/deployment.md` and `docs/backup-restore.md` describe the Unraid/SWAG
+  shape, trusted-proxy client IP, startup order and SQLite backup. `tests/test_deployment_artifacts.py`
+  guards their safety properties.
 - `tests/test_accessibility.py` is the static (non-browser) audit of rendered pages and
   `static/app.css`: labels, skip link, button names, escaping, 44px targets, one breakpoint.
 
