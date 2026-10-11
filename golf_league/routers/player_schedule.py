@@ -77,6 +77,7 @@ async def opponent_contact(
 async def week_detail(
     week_id: int,
     request: Request,
+    season_id: int | None = None,
     session: Session = Depends(get_session),  # noqa: B008
     user: User = Depends(require_verified_user),  # noqa: B008
 ) -> Response:
@@ -84,6 +85,9 @@ async def week_detail(
     if detail is None:
         raise HTTPException(status_code=404, detail="Week not found")
     season, seasons, week_view = detail
+    if season_id is not None and season_id != season.id:
+        # The week decides its season; a different one in the URL is a wrong address.
+        raise HTTPException(status_code=404, detail="Week not found")
     return request.app.state.templates.TemplateResponse(
         request,
         "player/week.html",

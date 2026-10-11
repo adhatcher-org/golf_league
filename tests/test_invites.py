@@ -456,6 +456,42 @@ def test_parallel_double_submit_creates_exactly_one_invite(admin_client):
     assert _live_invites(admin_client) == 1
 
 
+def test_back_then_resubmit_with_a_fresh_form_makes_no_second_invite(admin_client):
+    """Back re-fetches the form (a new nonce) with the label still filled in."""
+    first = create_admin_invite(admin_client, label="Back button")
+    again = create_admin_invite(admin_client, label="  Back button ")  # a second, fresh form
+    assert first.status_code == 303 and first.headers["location"] == "/admin/invites/created"
+    assert again.status_code == 303 and again.headers["location"] == "/admin/invites?submitted=again"
+    assert again.headers["cache-control"] == "no-store"
+    assert _live_invites(admin_client) == 1
+    assert "already submitted" in admin_client.get("/admin/invites?submitted=again").text
+
+    other = create_admin_invite(admin_client, label="Another label")
+    assert other.headers["location"] == "/admin/invites/created"
+    assert _live_invites(admin_client) == 2
+
+
+def test_same_label_is_allowed_again_after_a_revoke_or_after_the_window(admin_client):
+    from golf_league.services.invites import (
+        DUPLICATE_WINDOW_SECONDS,
+        has_recent_live_twin,
+    )
+
+    create_admin_invite(admin_client, label="Reused")
+    with Session(admin_client.app.state.engine) as session:
+        invite = session.scalar(select(LeagueInviteLink))
+        owner, created_at = invite.created_by_user_id, invite.created_at
+        twin = {"created_by_user_id": owner, "label": "Reused"}
+        assert has_recent_live_twin(session, now=created_at + timedelta(seconds=1), **twin)
+        assert not has_recent_live_twin(session, now=created_at + timedelta(seconds=1), created_by_user_id=owner + 1, label="Reused")
+        assert not has_recent_live_twin(session, now=created_at + timedelta(seconds=DUPLICATE_WINDOW_SECONDS + 1), **twin)
+        invite_id = invite.id
+    revoked = admin_client.post(f"/admin/invites/{invite_id}/revoke", data={"csrf_token": csrf(admin_client)}, follow_redirects=False)
+    assert revoked.status_code == 303
+    assert create_admin_invite(admin_client, label="Reused").headers["location"] == "/admin/invites/created"
+    assert _live_invites(admin_client) == 2  # one revoked, one live
+
+
 @pytest.mark.parametrize("nonce", ["", "not-issued"])
 def test_missing_or_unknown_form_nonce_creates_nothing(admin_client, nonce):
     response = admin_client.post("/admin/invites/new", data={

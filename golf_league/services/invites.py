@@ -118,6 +118,30 @@ def create_invite(
     return CreatedInvite(invite.id, raw)
 
 
+DUPLICATE_WINDOW_SECONDS = 600
+
+
+def has_recent_live_twin(
+    session: Session, *, created_by_user_id: int, label: str, now: datetime,
+    within_seconds: int = DUPLICATE_WINDOW_SECONDS,
+) -> bool:
+    """True when this admin already has a live invite with this label, created just now.
+
+    The create form's one-time nonce stops a double click, but the browser's
+    Back button fetches the form again with a fresh nonce and the label still
+    filled in. Refusing a same-label twin for a short window closes that path
+    without stopping deliberate reuse of a label later, or after a revoke.
+    """
+    now = _utc(now)
+    return session.scalar(select(LeagueInviteLink.id).where(
+        LeagueInviteLink.created_by_user_id == created_by_user_id,
+        LeagueInviteLink.label == label.strip(),
+        LeagueInviteLink.revoked_at.is_(None),
+        LeagueInviteLink.expires_at > now,
+        LeagueInviteLink.created_at > now - timedelta(seconds=within_seconds),
+    ).limit(1)) is not None
+
+
 def revoke_invite(session: Session, *, invite_id: int, now: datetime) -> bool:
     now = _utc(now)
     invite = session.get(LeagueInviteLink, invite_id)

@@ -37,7 +37,10 @@ def test_week_detail_admin_link_and_self_match_explanation(client):
             end_date=date(2027, 10, 28), play_weekday=3, status="draft", first_week_nine="front",
         ))
         session.commit()
-    player_page = client.get(f"/weeks/{ids['weeks'][0]}?season_id=999")
+    # The week decides its season: a different one in the URL is a wrong address.
+    assert client.get(f"/weeks/{ids['weeks'][0]}?season_id=999").status_code == 404
+    assert client.get(f"/weeks/{ids['weeks'][0]}?season_id={ids['season'] + 1}").status_code == 404
+    player_page = client.get(f"/weeks/{ids['weeks'][0]}?season_id={ids['season']}")
     assert player_page.status_code == 200
     assert "against each golfer&#39;s own handicap" in player_page.text or "against each golfer's own handicap" in player_page.text
     assert "P1vP2" in player_page.text and "Against own handicap" in player_page.text

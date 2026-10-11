@@ -27,6 +27,7 @@ from golf_league.services.invites import (
     InviteNotFound,
     InviteValidationError,
     create_invite,
+    has_recent_live_twin,
     revoke_invite,
     rotate_invite,
 )
@@ -212,7 +213,12 @@ async def invite_create(
         })
     try:
         _begin(session)
-        created = create_invite(session, created_by_user_id=admin_id, label=label, expiry_days=expiry_days, now=datetime.now(UTC))
+        now = datetime.now(UTC)
+        if has_recent_live_twin(session, created_by_user_id=admin_id, label=label, now=now):
+            # Back, then submit again: a fresh nonce, but the invite already exists.
+            session.rollback()
+            return RedirectResponse("/admin/invites?submitted=again", status_code=303, headers=PRIVATE_HEADERS)
+        created = create_invite(session, created_by_user_id=admin_id, label=label, expiry_days=expiry_days, now=now)
         session.commit()
     except InviteValidationError as exc:
         session.rollback()
