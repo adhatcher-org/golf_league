@@ -1,7 +1,8 @@
 # Deployment: Unraid behind SWAG
 
-Governing decision: `R-DEPLOYMENT` (v2). Templates: `deploy/compose.example.yml` and
-`deploy/swag.example.conf`. Every value shown as `<...>` or `${...}` is a placeholder; the
+Governing decision: `R-DEPLOYMENT` (v3). Templates: `deploy/compose.example.yml` and
+`deploy/swag.example.conf`; `deploy/example.env` holds placeholder values only, so the compose
+template can be validated. Every value shown as `<...>` or `${...}` is a placeholder; the
 operator records real values privately on the host, never in this repository or the vault.
 
 This page prepares a deployment. It does not authorize one: changing the live Unraid host,
@@ -56,6 +57,10 @@ The app runs uvicorn with its default proxy-header handling, which trusts
 - Give SWAG a fixed address on the proxy network (`docker network connect --ip <SWAG_IP>
   <PROXY_NETWORK> swag`, or the network's static-IP field in the Unraid template). Trusting the
   whole subnet instead would let any container on that network forge client addresses.
+  Pick an address Docker will not hand out by itself (high in the subnet, or outside the
+  network's `--ip-range`) and attach SWAG before starting the app: Docker assigns the lowest free
+  address automatically, so the app container can otherwise take `SWAG_IP` first, and SWAG then
+  fails to attach with "Address already in use".
 - **Never** set `FORWARDED_ALLOW_IPS=*`.
 - Emailed links, invite URLs and the `Secure` flag on every cookie the app sets (session,
   CSRF seed, invite receipt) come from `EXTERNAL_BASE_URL`, never from `Host`,

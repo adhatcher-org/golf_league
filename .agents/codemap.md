@@ -1467,13 +1467,16 @@ Private data, ignored files, and source contents are excluded.
 
 ### `tests/test_deployment_artifacts.py`
 
-- function `test_compose_trusts_only_the_swag_address_for_forwarded_headers` (line 21)
-- function `test_compose_mounts_the_data_directory_and_points_managed_file_into_it` (line 26)
-- function `test_compose_publishes_no_host_port_and_pins_the_image` (line 32)
-- function `test_compose_holds_placeholders_not_secrets` (line 38)
-- function `test_swag_template_appends_client_address_and_marks_cookies_secure` (line 46)
-- function `_resolved_client` (line 53)
-- function `test_forwarded_headers_count_only_from_the_trusted_proxy` (line 71)
+- function `test_compose_trusts_only_the_swag_address_for_forwarded_headers` (line 23)
+- function `test_compose_mounts_the_data_directory_and_points_managed_file_into_it` (line 28)
+- function `test_compose_publishes_no_host_port_and_pins_the_image` (line 34)
+- function `test_compose_holds_placeholders_not_secrets` (line 40)
+- function `test_swag_template_appends_client_address_and_marks_cookies_secure` (line 48)
+- function `_example_env` (line 55)
+- function `test_example_env_defines_every_required_placeholder` (line 64)
+- function `test_example_env_holds_nothing_real` (line 71)
+- function `_resolved_client` (line 84)
+- function `test_forwarded_headers_count_only_from_the_trusted_proxy` (line 102)
 
 ### `tests/test_email.py`
 

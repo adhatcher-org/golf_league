@@ -7,6 +7,7 @@ choose its own address by sending X-Forwarded-For.
 """
 
 import asyncio
+import ipaddress
 import re
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 ROOT = Path(__file__).resolve().parent.parent
 COMPOSE = (ROOT / "deploy" / "compose.example.yml").read_text(encoding="utf-8")
 SWAG = (ROOT / "deploy" / "swag.example.conf").read_text(encoding="utf-8")
+EXAMPLE_ENV = (ROOT / "deploy" / "example.env").read_text(encoding="utf-8")
 
 
 def test_compose_trusts_only_the_swag_address_for_forwarded_headers():
@@ -48,6 +50,35 @@ def test_swag_template_appends_client_address_and_marks_cookies_secure():
     assert "proxy_cookie_flags ~ secure;" in SWAG
     assert "set $upstream_port 8000;" in SWAG
     assert not re.search(r"^\s*proxy_set_header\s+X-Forwarded-For", SWAG, re.MULTILINE)
+
+
+def _example_env() -> dict[str, str]:
+    values = {}
+    for line in EXAMPLE_ENV.splitlines():
+        if line.strip() and not line.startswith("#"):
+            name, _, value = line.partition("=")
+            values[name] = value
+    return values
+
+
+def test_example_env_defines_every_required_placeholder():
+    required = set(re.findall(r"\$\{([A-Z_]+):\?", COMPOSE))
+    assert required  # the template really does have required placeholders
+    values = _example_env()
+    assert {name for name in required if values.get(name)} == required
+
+
+def test_example_env_holds_nothing_real():
+    values = _example_env()
+    assert values["SESSION_SECRET"] == "replace-me"
+    assert values["ADMIN_EMAIL"] == "" and values["ADMIN_PASSWORD"] == ""
+    assert values["GOLF_LEAGUE_IMAGE"].startswith("registry.example.invalid/")
+    assert "sha256:" not in EXAMPLE_ENV and ":latest" not in EXAMPLE_ENV
+    assert values["EXTERNAL_BASE_URL"].endswith(".example.invalid")
+    assert values["GOLF_LEAGUE_DATA_DIR"].startswith("/path/to/")
+    # RFC 5737 documentation range: never a routable or private-network address.
+    assert ipaddress.ip_address(values["SWAG_IP"]) in ipaddress.ip_network("192.0.2.0/24")
+    assert "PLACEHOLDERS ONLY" in EXAMPLE_ENV
 
 
 async def _resolved_client(peer: str, headers: list[tuple[bytes, bytes]]) -> tuple[str, str]:

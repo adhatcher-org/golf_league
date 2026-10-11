@@ -66,7 +66,8 @@ orchestrator repo next door.
   documented in `docs/configuration.md`. Tests point `MANAGED_ENV_PATH` at a temporary file
   through an autouse fixture in `tests/conftest.py`.
 - Deployment templates are `deploy/compose.example.yml` and `deploy/swag.example.conf`
-  (placeholders only); `docs/deployment.md` and `docs/backup-restore.md` describe the Unraid/SWAG
+  (placeholders only), with `deploy/example.env` supplying placeholder values so
+  `docker compose config` can validate the template; `docs/deployment.md` and `docs/backup-restore.md` describe the Unraid/SWAG
   shape, trusted-proxy client IP, startup order and SQLite backup. `tests/test_deployment_artifacts.py`
   guards their safety properties.
 - `README.md` covers setup, running and the admin/player journeys. Release preparation:
