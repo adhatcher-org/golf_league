@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- Background circle -->
+  <circle cx="128" cy="128" r="120" fill="#1e40af"/>
+  
+  <!-- Golf ball -->
+  <circle cx="128" cy="128" r="40" fill="#f3f4f6"/>
+  <circle cx="128" cy="128" r="35" fill="#e5e7eb"/>
+  <circle cx="128" cy="128" r="30" fill="#d1d5db"/>
+  
+  <!-- Golf club -->
+  <rect x="120" y="80" width="16" height="80" rx="4" fill="#92400e" transform="rotate(-15 120 80)"/>
+  <rect x="120" y="70" width="16" height="10" rx="2" fill="#78350f" transform="rotate(-15 120 70)"/>
+  
+  <!-- League/teams elements -->
+  <circle cx="90" cy="100" r="8" fill="#ef4444"/>
+  <circle cx="166" cy="100" r="8" fill="#ef4444"/>
+  <rect x="95" y="110" width="70" height="4" rx="2" fill="#ef4444"/>
+  
+  <!-- Text "GL" initials -->
+  <text x="115" y="155" font-family="Arial, sans-serif" font-weight="bold" font-size="36" fill="#ffffff">GL</text>
+</svg>
