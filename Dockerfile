@@ -31,4 +31,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/readyz').status == 200 else 1)"]
 
 # Run application
-CMD ["uvicorn", "golf_league.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# `main` starts uvicorn on 0.0.0.0:8000 and takes the trusted-proxy list
+# (FORWARDED_ALLOW_IPS) from the environment or, failing that, the data-dir .env.
+CMD ["python", "-c", "from golf_league.app import main; main()"]

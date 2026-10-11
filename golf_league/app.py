@@ -223,3 +223,25 @@ def create_app(settings=None) -> FastAPI:
 
 
 app = create_app()
+
+
+def main() -> None:
+    """Serve the application; this is what the container runs.
+
+    Starting the server from here, rather than from the `uvicorn` command,
+    lets the trusted-proxy list come from the managed file in the data
+    directory when the container environment does not set it.
+    """
+    import os
+
+    import uvicorn
+
+    from golf_league.managed_config import (
+        DEFAULT_MANAGED_ENV_PATH,
+        trusted_proxy_addresses,
+    )
+
+    path = os.environ.get("MANAGED_ENV_PATH") or DEFAULT_MANAGED_ENV_PATH
+    proxies, source = trusted_proxy_addresses(os.environ, path)
+    print(f"Trusted proxy addresses ({source}): {proxies}", flush=True)
+    uvicorn.run(app, host="0.0.0.0", port=8000, proxy_headers=True, forwarded_allow_ips=proxies)

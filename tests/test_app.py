@@ -52,3 +52,40 @@ def test_importing_the_app_needs_no_session_secret():
     result = subprocess.run([sys.executable, "-c", "import golf_league.app"], env=env,
                             capture_output=True, text=True, timeout=60, check=False)
     assert result.returncode == 0, result.stderr
+
+
+def test_trusted_proxies_come_from_environment_then_managed_file_then_default(tmp_path, caplog):
+    from golf_league.managed_config import trusted_proxy_addresses
+
+    path = tmp_path / ".env"
+    assert trusted_proxy_addresses({}, path) == ("127.0.0.1", "default")  # no file at all
+    path.write_text('FORWARDED_ALLOW_IPS="192.0.2.10"\nSMTP_HOST=relay.example.test\n', encoding="utf-8")
+    assert trusted_proxy_addresses({}, path) == ("192.0.2.10", "managed file")
+    assert trusted_proxy_addresses({"FORWARDED_ALLOW_IPS": " "}, path) == ("192.0.2.10", "managed file")
+    assert trusted_proxy_addresses({"FORWARDED_ALLOW_IPS": "198.51.100.7"}, path) == ("198.51.100.7", "environment")
+    path.write_text("FORWARDED_ALLOW_IPS=\n", encoding="utf-8")  # empty counts as unset
+    assert trusted_proxy_addresses({}, path) == ("127.0.0.1", "default")
+    for everyone in ("*", "192.0.2.10, *"):
+        path.write_text(f"FORWARDED_ALLOW_IPS={everyone}\n", encoding="utf-8")
+        assert trusted_proxy_addresses({}, path) == ("127.0.0.1", "default")
+    assert "trusts every address" in caplog.text
+
+
+def test_main_serves_with_the_trusted_proxies_from_the_managed_file(tmp_path, monkeypatch, capsys):
+    import uvicorn
+
+    import golf_league.app as app_module
+
+    path = tmp_path / ".env"
+    path.write_text("FORWARDED_ALLOW_IPS=192.0.2.10\n", encoding="utf-8")
+    monkeypatch.setenv("MANAGED_ENV_PATH", str(path))
+    monkeypatch.delenv("FORWARDED_ALLOW_IPS", raising=False)
+    calls = []
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: calls.append((app, kwargs)))
+
+    app_module.main()
+
+    ((served, kwargs),) = calls
+    assert served is app_module.app
+    assert kwargs == {"host": "0.0.0.0", "port": 8000, "proxy_headers": True, "forwarded_allow_ips": "192.0.2.10"}
+    assert "managed file" in capsys.readouterr().out

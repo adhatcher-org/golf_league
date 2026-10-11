@@ -102,3 +102,9 @@ async def _resolved_client(peer: str, headers: list[tuple[bytes, bytes]]) -> tup
 def test_forwarded_headers_count_only_from_the_trusted_proxy(peer, forwarded, expected):
     headers = [(b"x-forwarded-for", forwarded), (b"x-forwarded-proto", b"https")]
     assert asyncio.run(_resolved_client(peer, headers)) == expected
+
+
+def test_image_starts_through_main_so_the_managed_file_can_name_the_proxy():
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert 'CMD ["python", "-c", "from golf_league.app import main; main()"]' in dockerfile
+    assert 'CMD ["uvicorn"' not in dockerfile

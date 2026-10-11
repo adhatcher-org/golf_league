@@ -34,7 +34,8 @@ DNS, SWAG or sending real mail needs the owner's explicit authorization (GL-72).
 ### Where the deploy-time values may live
 
 `SESSION_SECRET`, `DATABASE_URL`, `EXTERNAL_BASE_URL`, `MAX_USERS`,
-`EMAIL_VERIFICATION_REQUIRED`, `ADMIN_EMAIL` and `ADMIN_PASSWORD` may be set either in the
+`EMAIL_VERIFICATION_REQUIRED`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` and `FORWARDED_ALLOW_IPS` may be
+set either in the
 container environment or in the managed file `/app/data/.env` (`MANAGED_ENV_PATH`) in the data
 directory. The environment wins; the file is the fallback; an empty value counts as unset.
 Keeping them in the data-dir file (mode `0600`, owned by the container user) keeps the secret
@@ -45,9 +46,12 @@ the environment. Without `SESSION_SECRET` in either place the container fails to
 
 ## Client IP and HTTPS behind the proxy
 
-The app runs uvicorn with its default proxy-header handling, which trusts
+The app runs uvicorn with proxy-header handling, which trusts
 `X-Forwarded-For` and `X-Forwarded-Proto` **only** from the addresses in
-`FORWARDED_ALLOW_IPS`. The compose template sets that to `SWAG_IP` and nothing else.
+`FORWARDED_ALLOW_IPS`. The compose template sets that to `SWAG_IP` and nothing else. On Unraid
+the same line may instead go in `/app/data/.env`; the container's first output line says which
+source it used. With neither set, only the container itself is trusted and every request is
+logged with the proxy's address.
 
 - SWAG's stock `proxy.conf` appends the real client to `X-Forwarded-For`. Uvicorn walks that
   list from the right and uses the first address that is not a trusted proxy, so a client that
