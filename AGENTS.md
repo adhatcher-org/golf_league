@@ -66,9 +66,17 @@ orchestrator repo next door.
   documented in `docs/configuration.md`. Tests point `MANAGED_ENV_PATH` at a temporary file
   through an autouse fixture in `tests/conftest.py`.
 - Deployment templates are `deploy/compose.example.yml` and `deploy/swag.example.conf`
-  (placeholders only); `docs/deployment.md` and `docs/backup-restore.md` describe the Unraid/SWAG
+  (placeholders only), with `deploy/example.env` supplying placeholder values so
+  `docker compose config` can validate the template; `docs/deployment.md` and `docs/backup-restore.md` describe the Unraid/SWAG
   shape, trusted-proxy client IP, startup order and SQLite backup. `tests/test_deployment_artifacts.py`
   guards their safety properties.
+- `README.md` covers setup, running and the admin/player journeys. Release preparation:
+  `docs/deployment-runbook.md` (GL-72 steps, not executed), `docs/release-checklist.md`,
+  `docs/releases/mvp-release-notes.md`; as-built architecture in `docs/architecture/C1..C4` and
+  `docs/adr/0001..0004`. `scripts/run_local.py` starts a local server with synthetic demo data
+  and file-captured mail for browser journeys (`docs/validation/browser-journeys.md`).
+- `tests/test_contract_regressions.py` holds the GL-61 contract assertions not covered elsewhere;
+  `tests/test_secure_cookies.py` the `Secure`-cookie rule (shared test clients use https).
 - `tests/test_accessibility.py` is the static (non-browser) audit of rendered pages and
   `static/app.css`: labels, skip link, button names, escaping, 44px targets, one breakpoint.
 

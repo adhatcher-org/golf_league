@@ -5,6 +5,7 @@
     <div>
         <p class="eyebrow">Manage · {{ season.year }}</p>
         <h1>{% if team %}Assign players / edit team {{ team.number }}{% else %}Create team and assign players{% endif %}</h1>
+        {% if notice %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
         <p>{{ season.name_override or season.year }}{% if team %} · {{ team.name }}{% endif %}</p>
     </div>
 </header>

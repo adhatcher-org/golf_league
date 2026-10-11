@@ -16,7 +16,11 @@ from golf_league.models import (
     User,
     UserToken,
 )
-from golf_league.routers.admin_invites import RECEIPT_COOKIE, InviteReceiptStore
+from golf_league.routers.admin_invites import (
+    RECEIPT_COOKIE,
+    InviteFormNonceStore,
+    InviteReceiptStore,
+)
 from golf_league.security import generate_csrf_token
 from golf_league.services.auth import create_session_cookie, issue_token
 from golf_league.services.invites import (
@@ -281,13 +285,19 @@ def csrf(client):
     return generate_csrf_token(client.cookies.get("session"))
 
 
+def form_nonce(client):
+    page = client.get("/admin/invites/new")
+    return re.search(r'name="form_nonce" value="([^"]+)"', page.text).group(1)
+
+
 def create_admin_invite(client, **fields):
-    return client.post("/admin/invites/new", data={"label": "Test invite", "csrf_token": csrf(client), **fields}, follow_redirects=False)
+    data = {"label": "Test invite", "csrf_token": csrf(client), "form_nonce": form_nonce(client), **fields}
+    return client.post("/admin/invites/new", data=data, follow_redirects=False)
 
 
 def test_admin_receipt_once_privacy_and_host_spoof(admin_client, caplog):
     admin_client.base_url = "https://testserver"
-    response = admin_client.post("/admin/invites/new", data={"label": "Test invite", "csrf_token": csrf(admin_client)}, headers={"Host": "spoof.example.test", "X-Forwarded-Host": "evil.example.test"}, follow_redirects=False)
+    response = admin_client.post("/admin/invites/new", data={"label": "Test invite", "csrf_token": csrf(admin_client), "form_nonce": form_nonce(admin_client)}, headers={"Host": "spoof.example.test", "X-Forwarded-Host": "evil.example.test"}, follow_redirects=False)
     assert response.status_code == 303 and response.headers["location"] == "/admin/invites/created"
     cookie = response.headers["set-cookie"]
     assert "HttpOnly" in cookie and "SameSite=lax" in cookie and "Secure" in cookie
@@ -412,3 +422,105 @@ def test_admin_revoke_rotate_codes_and_statuses(admin_client):
     assert admin_client.post(f"/admin/invites/{expired_id}/rotate", data={"csrf_token": csrf(admin_client)}).status_code == 409
     listing = admin_client.get("/admin/invites").text
     assert "revoked" in listing and "expired" in listing
+
+
+# --- F5: create-invite form is single-submission -------------------------------
+
+
+def _live_invites(client):
+    with Session(client.app.state.engine) as session:
+        return session.scalar(select(func.count(LeagueInviteLink.id)))
+
+
+def test_replayed_create_form_makes_no_second_invite(admin_client):
+    data = {"label": "Double submit", "csrf_token": csrf(admin_client), "form_nonce": form_nonce(admin_client)}
+    first = admin_client.post("/admin/invites/new", data=data, follow_redirects=False)
+    second = admin_client.post("/admin/invites/new", data=data, follow_redirects=False)
+    assert first.status_code == 303 and first.headers["location"] == "/admin/invites/created"
+    assert second.status_code == 303 and second.headers["location"] == "/admin/invites?submitted=again"
+    assert _live_invites(admin_client) == 1
+    page = admin_client.get("/admin/invites?submitted=again")
+    assert "already submitted" in page.text
+    assert admin_client.get("/admin/invites/created").status_code == 200  # first receipt intact
+
+
+def test_parallel_double_submit_creates_exactly_one_invite(admin_client):
+    from concurrent.futures import ThreadPoolExecutor
+
+    data = {"label": "Parallel", "csrf_token": csrf(admin_client), "form_nonce": form_nonce(admin_client)}
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(pool.map(
+            lambda _: admin_client.post("/admin/invites/new", data=data, follow_redirects=False), range(2)))
+    assert sorted(r.headers["location"] for r in responses) == [
+        "/admin/invites/created", "/admin/invites?submitted=again"]
+    assert _live_invites(admin_client) == 1
+
+
+def test_back_then_resubmit_with_a_fresh_form_makes_no_second_invite(admin_client):
+    """Back re-fetches the form (a new nonce) with the label still filled in."""
+    first = create_admin_invite(admin_client, label="Back button")
+    again = create_admin_invite(admin_client, label="  Back button ")  # a second, fresh form
+    assert first.status_code == 303 and first.headers["location"] == "/admin/invites/created"
+    assert again.status_code == 303 and again.headers["location"] == "/admin/invites?submitted=again"
+    assert again.headers["cache-control"] == "no-store"
+    assert _live_invites(admin_client) == 1
+    assert "already submitted" in admin_client.get("/admin/invites?submitted=again").text
+
+    other = create_admin_invite(admin_client, label="Another label")
+    assert other.headers["location"] == "/admin/invites/created"
+    assert _live_invites(admin_client) == 2
+
+
+def test_same_label_is_allowed_again_after_a_revoke_or_after_the_window(admin_client):
+    from golf_league.services.invites import (
+        DUPLICATE_WINDOW_SECONDS,
+        has_recent_live_twin,
+    )
+
+    create_admin_invite(admin_client, label="Reused")
+    with Session(admin_client.app.state.engine) as session:
+        invite = session.scalar(select(LeagueInviteLink))
+        owner, created_at = invite.created_by_user_id, invite.created_at
+        twin = {"created_by_user_id": owner, "label": "Reused"}
+        assert has_recent_live_twin(session, now=created_at + timedelta(seconds=1), **twin)
+        assert not has_recent_live_twin(session, now=created_at + timedelta(seconds=1), created_by_user_id=owner + 1, label="Reused")
+        assert not has_recent_live_twin(session, now=created_at + timedelta(seconds=DUPLICATE_WINDOW_SECONDS + 1), **twin)
+        invite_id = invite.id
+    revoked = admin_client.post(f"/admin/invites/{invite_id}/revoke", data={"csrf_token": csrf(admin_client)}, follow_redirects=False)
+    assert revoked.status_code == 303
+    assert create_admin_invite(admin_client, label="Reused").headers["location"] == "/admin/invites/created"
+    assert _live_invites(admin_client) == 2  # one revoked, one live
+
+
+@pytest.mark.parametrize("nonce", ["", "not-issued"])
+def test_missing_or_unknown_form_nonce_creates_nothing(admin_client, nonce):
+    response = admin_client.post("/admin/invites/new", data={
+        "label": "No nonce", "csrf_token": csrf(admin_client), "form_nonce": nonce}, follow_redirects=False)
+    assert response.status_code == 422
+    assert "This form has expired" in response.text
+    assert re.search(r'name="form_nonce" value="[^"]+"', response.text)
+    assert _live_invites(admin_client) == 0
+
+
+def test_validation_failure_keeps_the_form_usable(admin_client):
+    nonce = form_nonce(admin_client)
+    base = {"csrf_token": csrf(admin_client), "form_nonce": nonce}
+    bad = admin_client.post("/admin/invites/new", data={**base, "label": ""}, follow_redirects=False)
+    assert bad.status_code == 422
+    good = admin_client.post("/admin/invites/new", data={**base, "label": "Retry"}, follow_redirects=False)
+    assert good.status_code == 303 and good.headers["location"] == "/admin/invites/created"
+    assert _live_invites(admin_client) == 1
+
+
+def test_form_nonce_is_bound_to_admin_session_and_expires():
+    clock = [0.0]
+    store = InviteFormNonceStore(clock=lambda: clock[0])
+    nonce = store.issue(admin_id=1, session_cookie="synthetic-session")
+    assert store.consume(nonce=nonce, admin_id=2, session_cookie="synthetic-session") == "unknown"
+    assert store.consume(nonce=nonce, admin_id=1, session_cookie="other-session") == "unknown"
+    assert store.consume(nonce=nonce, admin_id=1, session_cookie="synthetic-session") == "fresh"
+    assert store.consume(nonce=nonce, admin_id=1, session_cookie="synthetic-session") == "used"
+    store.release(nonce)
+    assert store.consume(nonce=nonce, admin_id=1, session_cookie="synthetic-session") == "fresh"
+    clock[0] = InviteFormNonceStore.TTL_SECONDS + 1
+    assert store.consume(nonce=nonce, admin_id=1, session_cookie="synthetic-session") == "unknown"

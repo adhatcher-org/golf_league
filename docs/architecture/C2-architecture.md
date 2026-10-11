@@ -1,30 +1,35 @@
-# C2: Architecture
+# C2: Containers (as built, M7)
 
-## Overview
+```
+Browser ──HTTPS──> SWAG (nginx, TLS) ──HTTP :8000──> golf-league container ──> /app/data (host dir)
+                                                        │                        ├─ golf_league.db (SQLite)
+                                                        │                        ├─ .env (managed settings, 0600)
+                                                        └──SMTP (587/STARTTLS)──> relay (optional)
+```
 
-This document describes the overall architecture of the Golf League application.
+## golf-league container
 
-## Layers
+- Image: `python:3.12-slim`, dependencies from `uv.lock` (`uv sync --frozen --no-dev`),
+  non-root `appuser` (1000:1000), `uvicorn golf_league.app:app` on port 8000, one worker.
+- Health: `/healthz` (process) and `/readyz` (startup complete and database answering); the
+  image healthcheck probes `/readyz`.
+- Startup (`lifespan` in `golf_league/app.py`): resolve settings (environment plus the managed
+  file) → apply `LOG_LEVEL` → choose the mail sender → engine → `alembic upgrade head` →
+  first-admin bootstrap (empty `users` only) → idempotent Wyandot course seed. Database or
+  migration failures keep the process up with `/readyz` 503.
+- Server-rendered HTML (Jinja2) with one stylesheet and one small script; no client framework.
+- Process-local state: login/registration rate limiters and one-time invite receipts — the
+  reason for the single-worker rule.
 
-The application follows a three-layer architectural pattern:
+## Data directory (host bind mount at `/app/data`)
 
-1. **API Layer**: Handles HTTP requests and responses, including routing and authentication
-2. **Services Layer**: Contains business logic and orchestrates operations between domain objects
-3. **Domain Layer**: Represents core business entities and their relationships
+- `golf_league.db`: all business data; Alembic migrations are forward-only.
+- `.env`: the managed settings file (`MANAGED_ENV_PATH`). Holds the eight admin-editable keys
+  and may hold the deploy-time keys, including `SESSION_SECRET` (R-DEPLOYMENT v3). Secret-
+  bearing; part of the private backup.
 
-## Components
+## Configuration
 
-- FastAPI web framework for handling HTTP requests
-- SQLite database with Alembic migrations
-- Argon2 for password hashing
-- Session management with secure cookies
-- CSRF protection for all mutations
-- Rate limiting for security
-
-## Data Flow
-
-1. HTTP requests are received by the API layer
-2. Authentication and authorization checks are performed
-3. Business logic is executed in the services layer
-4. Domain objects are manipulated to perform operations
-5. Results are returned to the client through the API layer
+Deploy-time values from the container environment (fallback: the managed file); eight managed
+values edited at `/admin/config` (file above environment), applied on restart. Details:
+`docs/configuration.md`.

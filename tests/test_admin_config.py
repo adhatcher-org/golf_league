@@ -332,7 +332,7 @@ def test_app_starts_from_the_file_alone_and_bootstraps_admin(tmp_path, monkeypat
                  f"SESSION_SECRET={FILE_SECRET}\nDATABASE_URL=sqlite:///{tmp_path / 'app.db'}\n"
                  "ADMIN_EMAIL=file-admin@example.test\n"
                  f"ADMIN_PASSWORD='{FILE_ADMIN_PASSWORD}'\nEMAIL_VERIFICATION_REQUIRED=true\n")
-    with caplog.at_level(logging.DEBUG), TestClient(create_app()) as client:
+    with caplog.at_level(logging.DEBUG), TestClient(create_app(), base_url="https://testserver") as client:
         assert client.get("/readyz").status_code == 200
         page = client.get("/login")
         response = client.post("/login", data={

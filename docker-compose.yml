@@ -14,6 +14,9 @@ services:
       # Keep verification enabled by default. Set false only for trusted local
       # development, where email delivery is not configured.
       - EMAIL_VERIFICATION_REQUIRED=${EMAIL_VERIFICATION_REQUIRED:-true}
+      # Local development only: an http origin keeps cookies usable over plain
+      # http://localhost. Production uses deploy/compose.example.yml (https).
+      - EXTERNAL_BASE_URL=${EXTERNAL_BASE_URL:-http://localhost:8000}
       # Used only on first boot when the database has no users. Keep these
       # values in the shell environment or an untracked local .env file.
       - ADMIN_EMAIL=${ADMIN_EMAIL:-}

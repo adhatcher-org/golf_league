@@ -1,8 +1,8 @@
 # ADR 0003: Shared invitations authorize roster-bound credentials
 
-Status: Accepted for GL-42 (R-SHARED-LINK v2). GL-43 anonymous HTTP,
-transport and credential completion are implemented; focused validation passed
-on 2026-10-07. The committed-candidate fresh-check remains the release gate.
+Status: Accepted (R-SHARED-LINK v2). Implemented by GL-42 and GL-43, merged to
+`main` in PR #25 (2026-10-08). Since GL-45 the set-password mail goes through the
+configured SMTP relay when `SMTP_HOST` is set, still after the response.
 
 A shared invitation is a reusable, digest-only parent authorization, not an
 account or reset token. Its raw URL uses EXTERNAL_BASE_URL, never inbound Host or

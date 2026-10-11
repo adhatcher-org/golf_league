@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Import Roster - Golf League{% endblock %}
 {% block content %}
-<h2>Import roster CSV</h2>
+<h1>Import roster CSV</h1>
 {% if errors %}
 <ul class="error">
     {% for field, message in errors.items() %}
@@ -18,13 +18,13 @@
     <section aria-labelledby="csv-format-heading">
         <h3 id="csv-format-heading">CSV file format</h3>
         <p>Upload a UTF-8 CSV with this exact header row and column order:</p>
-        <pre>FirstName,LastName,Tee,Handicap,Email,PhoneNumber</pre>
+        <pre class="wrap-pre">FirstName,LastName,Tee,Handicap,Email,PhoneNumber</pre>
         <p><code>Tee</code> must be <code>Blue</code>, <code>White</code>, or <code>Gold</code>. <code>Handicap</code> may be blank; otherwise use a whole number, including signed values.</p>
     </section>
     <button type="submit">Upload</button>
 </form>
 
-<h2>Purge expired imports</h2>
+<h2 class="section-break">Purge expired imports</h2>
 <p>Deletes every staged, applied or discarded batch (and its rows) whose retention period has passed.</p>
 <form method="post" action="/admin/roster/imports/purge">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

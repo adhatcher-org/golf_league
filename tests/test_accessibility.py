@@ -42,11 +42,18 @@ class _Audit(HTMLParser):
         self.headings = 0
         self.skip_link = False
         self.main_ids: list[str] = []
+        self.h1 = 0
+        self.lang = ""
+        self.stylesheets: list[str] = []
+        self.container_stack: list[str] = []
+        self.unwrapped_tables = 0
 
     def handle_starttag(self, tag, attrs):
         attr = {name: (value or "") for name, value in attrs}
         if "id" in attr:
             self.ids.append(attr["id"])
+        if tag in {"div", "section"}:
+            self.container_stack.append(attr.get("class", ""))
         handler = getattr(self, f"_start_{tag}", None)
         if handler is not None:
             handler(attr)
@@ -76,6 +83,9 @@ class _Audit(HTMLParser):
 
     def _start_table(self, attr):
         self.tables += 1
+        wrappers = ("table-wrap", "season-roster__table-wrap")
+        if not any(name in classes for classes in self.container_stack for name in wrappers):
+            self.unwrapped_tables += 1
 
     def _start_th(self, attr):
         self.table_headers += 1
@@ -84,10 +94,23 @@ class _Audit(HTMLParser):
         if attr.get("href") == "#main-content":
             self.skip_link = True
 
+    def _start_h1(self, attr):
+        self.h1 += 1
+        self.headings += 1
+
+    def _start_html(self, attr):
+        self.lang = attr.get("lang", "")
+
+    def _start_link(self, attr):
+        if attr.get("rel") == "stylesheet":
+            self.stylesheets.append(attr.get("href", ""))
+
     def _start_main(self, attr):
         self.main_ids.append(attr.get("id", ""))
 
     def handle_endtag(self, tag):
+        if tag in {"div", "section"} and self.container_stack:
+            self.container_stack.pop()
         if tag == "label":
             self.label_depth = max(0, self.label_depth - 1)
         elif tag == "button" and self.button_stack:
@@ -110,6 +133,9 @@ def _assert_accessible(path: str, html: str) -> None:
     assert audit.skip_link, f"{path}: no skip link"
     assert audit.main_ids == ["main-content"], f"{path}: main landmark"
     assert audit.headings, f"{path}: no h1/h2"
+    assert audit.h1 == 1, f"{path}: expected exactly one h1, found {audit.h1}"
+    assert audit.lang == "en", f"{path}: <html> has no lang"
+    assert any(href.startswith("/static/app.css") for href in audit.stylesheets), f"{path}: no stylesheet"
     duplicates = {item for item in audit.ids if audit.ids.count(item) > 1}
     assert not duplicates, f"{path}: duplicate ids {duplicates}"
     for control in audit.controls:
@@ -127,6 +153,7 @@ def _assert_accessible(path: str, html: str) -> None:
         )
     if audit.tables:
         assert audit.table_headers, f"{path}: table without header cells"
+        assert audit.unwrapped_tables == 0, f"{path}: table outside a scrolling .table-wrap region"
 
 
 def _long_names(client) -> None:
@@ -250,3 +277,66 @@ def test_wide_tables_scroll_inside_their_own_region():
     assert re.search(r"\.table-wrap\s*\{[^}]*overflow-x:\s*auto", CSS)
     assert ".golfer-table-wrap { overflow-x: auto; }" in CSS
     assert "min-width: 320px" in CSS
+
+
+def test_public_token_pages_use_the_styled_layout_and_private_headers(client):
+    from test_join import _golfer, _invite
+
+    from golf_league.services.auth import issue_token
+
+    invite = _invite(client)
+    _golfer(client)
+    join = client.get(f"/join/{invite}")
+    client.post(f"/join/{invite}", data={"email": "player@example.test", "csrf_token": _extract_csrf(join.text)})
+    body = client.app.state.email_sender.sent[-1]["body"]
+    set_password_path = "/set-password/" + body.rsplit("/set-password/", 1)[1]
+
+    with Session(client.app.state.engine) as session:
+        from golf_league.models import User
+
+        user_id = session.scalar(select(User.id).where(User.email == "admin@example.test"))
+        reset_token = issue_token(session, user_id, "reset_password", 3600)
+
+    for path in (f"/join/{invite}", set_password_path, "/verify/not-a-real-token", f"/reset/{reset_token}"):
+        response = client.get(path)
+        assert response.status_code == 200, path
+        assert response.headers["cache-control"] == "no-store", path
+        assert response.headers["referrer-policy"] == "no-referrer", path
+        _assert_accessible(path, response.text)
+        assert 'href="/login"' in response.text, path
+    missing = client.get("/reset/not-a-real-token")
+    assert missing.status_code == 404
+    assert missing.headers["cache-control"] == "no-store"
+    assert missing.headers["referrer-policy"] == "no-referrer"
+
+
+def _rule(selector: str, *, media: str | None = None) -> str:
+    """Body of the first rule with exactly this selector (optionally inside a media block)."""
+    css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.DOTALL)
+    scope = css
+    if media is not None:
+        blocks = [m.end() for m in re.finditer(re.escape(f"@media {media}") + r"\s*\{", css)]
+        scope = "".join(css[start:start + 6000] for start in blocks)
+    match = re.search(r"(?:^|[{}])\s*" + re.escape(selector) + r"\s*\{([^}]*)\}", scope)
+    assert match, selector
+    return match.group(1)
+
+
+def test_hidden_labels_and_wide_content_cannot_widen_the_page():
+    hidden = _rule(".visually-hidden")
+    assert "top: 0" in hidden and "left: 0" in hidden
+    wrap = _rule(".table-wrap")
+    assert "position: relative" in wrap and "overflow-x: auto" in wrap
+    assert "max-width: 100%" in _rule('input[type="file"]')
+    assert "pre-wrap" in _rule(".wrap-pre")
+
+
+def test_import_review_columns_do_not_use_font_relative_units():
+    columns = re.findall(r"grid-template-columns:([^;]*);", _rule(".import-fields__header,\n    .import-fields", media="(min-width: 721px)"))
+    assert columns and all("ch" not in value for value in columns)
+
+
+def test_phone_tap_targets_for_links_brand_and_my_schedule_cards():
+    assert "min-height: 2.75rem" in _rule(".brand")
+    assert "min-height: 2.75rem" in _rule(".page-shell a:not(.button-link)", media="(max-width: 720px)")
+    assert "display: block" in _rule(".schedule-cards__table,\n    .schedule-cards__table tbody,\n    .schedule-cards__table tr,\n    .schedule-cards__table th,\n    .schedule-cards__table td", media="(max-width: 720px)")
