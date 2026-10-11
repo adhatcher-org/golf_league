@@ -26,7 +26,7 @@ def _csrf(request: Request, token: str) -> None:
 
 
 def _form(request: Request, session: Session, season_id: int, *, team=None,
-          errors=None, status_code: int = 200) -> Response:
+          errors=None, status_code: int = 200, notice: str = "") -> Response:
     season = get_season(session, season_id)
     if season is None:
         raise HTTPException(status_code=404, detail="Not found")
@@ -42,6 +42,7 @@ def _form(request: Request, session: Session, season_id: int, *, team=None,
             "golfers": list_assignable_golfers(session, season_id, team.id if team else None),
             "selected": selected,
             "csrf_token": generate_csrf_token(seed) if seed else "",
+            "notice": notice,
         },
         status_code=status_code,
     )
@@ -120,7 +121,9 @@ async def edit_team_form(
     team = get_team(session, team_id)
     if team is None:
         raise HTTPException(status_code=404, detail="Not found")
-    return _form(request, session, team.season_id, team=team)
+    # Fixed text keyed by a flag; the query string is never reflected.
+    notice = "Positions assigned by handicap." if request.query_params.get("positions") == "assigned" else ""
+    return _form(request, session, team.season_id, team=team, notice=notice)
 
 
 @router.post("/admin/teams/{team_id}/edit")
@@ -174,4 +177,4 @@ async def assign_team_positions(
         return _form(request, session, team.season_id, team=team, errors=exc.errors, status_code=422)
     if updated is None:
         raise HTTPException(status_code=404, detail="Not found")
-    return RedirectResponse(f"/admin/teams/{team_id}/edit", status_code=303)
+    return RedirectResponse(f"/admin/teams/{team_id}/edit?positions=assigned", status_code=303)

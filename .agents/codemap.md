@@ -70,6 +70,9 @@ Private data, ignored files, and source contents are excluded.
 ### `docs/validation/browser-journeys.md`
 
 
+### `docs/validation/mvp-evidence.md`
+
+
 ### `golf_league/__init__.py`
 
 
@@ -80,9 +83,9 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/app.py`
 
-- function `_navigation_user` (line 57)
-- function `lifespan` (line 90)
-- function `create_app` (line 150)
+- function `_navigation_user` (line 58)
+- function `lifespan` (line 91)
+- function `create_app` (line 151)
 
 ### `golf_league/config.py`
 
@@ -187,6 +190,14 @@ Private data, ignored files, and source contents are excluded.
 - function `digest` (line 17)
 - function `is_expired` (line 26)
 
+### `golf_league/error_pages.py`
+
+- function `wants_html` (line 44)
+- function `_page` (line 48)
+- function `_http_exception` (line 67)
+- function `_validation_exception` (line 73)
+- function `install_error_pages` (line 79)
+
 ### `golf_league/logging_config.py`
 
 - class `AccessPathRedactionFilter` (line 8)
@@ -290,8 +301,8 @@ Private data, ignored files, and source contents are excluded.
 - function `edit_tee_form` (line 299)
 - function `update_tee_submit` (line 322)
 - function `hole_grid_form` (line 384)
-- function `save_hole_grid_submit` (line 395)
-- function `delete_tee_submit` (line 421)
+- function `save_hole_grid_submit` (line 397)
+- function `delete_tee_submit` (line 423)
 
 ### `golf_league/routers/admin_imports.py`
 
@@ -315,17 +326,23 @@ Private data, ignored files, and source contents are excluded.
   - method `__init__` (line 51)
   - method `put` (line 56)
   - method `pop` (line 64)
-- function `_csrf` (line 78)
-- function `_csrf_value` (line 83)
-- function `_id` (line 87)
-- function `_begin` (line 96)
-- function `_receipt_redirect` (line 103)
-- function `invite_list` (line 118)
-- function `invite_form` (line 132)
-- function `invite_create` (line 139)
-- function `invite_created` (line 162)
-- function `invite_revoke` (line 178)
-- function `invite_rotate` (line 197)
+- class `InviteFormNonceStore` (line 78)
+  - method `__init__` (line 90)
+  - method `issue` (line 95)
+  - method `consume` (line 103)
+  - method `release` (line 116)
+- function `_csrf` (line 124)
+- function `_csrf_value` (line 129)
+- function `_id` (line 133)
+- function `_begin` (line 142)
+- function `_receipt_redirect` (line 149)
+- function `invite_list` (line 164)
+- function `_invite_form` (line 178)
+- function `invite_form` (line 190)
+- function `invite_create` (line 195)
+- function `invite_created` (line 229)
+- function `invite_revoke` (line 245)
+- function `invite_rotate` (line 264)
 
 ### `golf_league/routers/admin_matches.py`
 
@@ -382,13 +399,13 @@ Private data, ignored files, and source contents are excluded.
 
 - function `_csrf` (line 22)
 - function `_form` (line 28)
-- function `_members` (line 50)
-- function `teams_page` (line 59)
-- function `new_team_form` (line 76)
-- function `create_team_submit` (line 86)
-- function `edit_team_form` (line 114)
-- function `update_team_submit` (line 127)
-- function `assign_team_positions` (line 160)
+- function `_members` (line 51)
+- function `teams_page` (line 60)
+- function `new_team_form` (line 77)
+- function `create_team_submit` (line 87)
+- function `edit_team_form` (line 115)
+- function `update_team_submit` (line 130)
+- function `assign_team_positions` (line 163)
 
 ### `golf_league/routers/admin_weeks.py`
 
@@ -418,24 +435,24 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/routers/identity.py`
 
-- function `_settings` (line 58)
-- function `_templates` (line 63)
-- function `_csrf_seed` (line 67)
-- function `_require_csrf` (line 77)
-- function `_send_reset_email` (line 84)
-- function `_send_verification_email` (line 92)
-- function `_login_destination` (line 100)
-- function `login_form` (line 107)
-- function `login_submit` (line 125)
-- function `logout` (line 169)
-- function `verify_email` (line 185)
-- function `reset_request_form` (line 205)
-- function `reset_request_submit` (line 219)
-- function `reset_form` (line 250)
-- function `reset_submit` (line 272)
-- function `_registration_form` (line 319)
-- function `register_form` (line 335)
-- function `register_submit` (line 349)
+- function `_settings` (line 60)
+- function `_templates` (line 65)
+- function `_csrf_seed` (line 69)
+- function `_require_csrf` (line 79)
+- function `_send_reset_email` (line 86)
+- function `_send_verification_email` (line 94)
+- function `_login_destination` (line 102)
+- function `login_form` (line 109)
+- function `login_submit` (line 127)
+- function `logout` (line 171)
+- function `verify_email` (line 187)
+- function `reset_request_form` (line 208)
+- function `reset_request_submit` (line 222)
+- function `reset_form` (line 253)
+- function `reset_submit` (line 278)
+- function `_registration_form` (line 328)
+- function `register_form` (line 344)
+- function `register_submit` (line 358)
 
 ### `golf_league/routers/join.py`
 
@@ -931,6 +948,9 @@ Private data, ignored files, and source contents are excluded.
 ### `templates/base.html`
 
 
+### `templates/error.html`
+
+
 ### `templates/identity/join.html`
 
 
@@ -949,6 +969,9 @@ Private data, ignored files, and source contents are excluded.
 ### `templates/identity/set_password.html`
 
 
+### `templates/identity/verify_result.html`
+
+
 ### `templates/player/_matchups.html`
 
 
@@ -962,6 +985,9 @@ Private data, ignored files, and source contents are excluded.
 
 
 ### `templates/player/week.html`
+
+
+### `templates/public_base.html`
 
 
 ### `templates/roster.html`
@@ -1117,31 +1143,39 @@ Private data, ignored files, and source contents are excluded.
 
 - class `_Audit` (line 29)
   - method `__init__` (line 32)
-  - method `handle_starttag` (line 46)
-  - method `_start_label` (line 56)
-  - method `_start_input` (line 61)
-  - method `_start_select` (line 66)
-  - method `_start_textarea` (line 69)
-  - method `_start_button` (line 72)
-  - method `_start_table` (line 77)
-  - method `_start_th` (line 80)
-  - method `_start_a` (line 83)
-  - method `_start_main` (line 87)
-  - method `handle_endtag` (line 90)
-  - method `handle_data` (line 96)
-- function `_audit` (line 101)
-- function `_assert_accessible` (line 108)
-- function `_long_names` (line 132)
-- function `_stage_import` (line 140)
-- function `_admin_pages` (line 159)
-- function `test_admin_and_player_pages_pass_static_audit_with_long_names` (line 183)
-- function `test_anonymous_pages_pass_static_audit` (line 193)
-- function `test_empty_admin_states_pass_static_audit` (line 200)
-- function `test_identity_error_states_are_announced_with_text` (line 207)
-- function `_rules` (line 220)
-- function `test_stylesheet_has_only_the_720px_breakpoint` (line 227)
-- function `test_interactive_touch_targets_are_at_least_44px` (line 241)
-- function `test_wide_tables_scroll_inside_their_own_region` (line 249)
+  - method `handle_starttag` (line 51)
+  - method `_start_label` (line 63)
+  - method `_start_input` (line 68)
+  - method `_start_select` (line 73)
+  - method `_start_textarea` (line 76)
+  - method `_start_button` (line 79)
+  - method `_start_table` (line 84)
+  - method `_start_th` (line 90)
+  - method `_start_a` (line 93)
+  - method `_start_h1` (line 97)
+  - method `_start_html` (line 101)
+  - method `_start_link` (line 104)
+  - method `_start_main` (line 108)
+  - method `handle_endtag` (line 111)
+  - method `handle_data` (line 119)
+- function `_audit` (line 124)
+- function `_assert_accessible` (line 131)
+- function `_long_names` (line 159)
+- function `_stage_import` (line 167)
+- function `_admin_pages` (line 186)
+- function `test_admin_and_player_pages_pass_static_audit_with_long_names` (line 210)
+- function `test_anonymous_pages_pass_static_audit` (line 220)
+- function `test_empty_admin_states_pass_static_audit` (line 227)
+- function `test_identity_error_states_are_announced_with_text` (line 234)
+- function `_rules` (line 247)
+- function `test_stylesheet_has_only_the_720px_breakpoint` (line 254)
+- function `test_interactive_touch_targets_are_at_least_44px` (line 268)
+- function `test_wide_tables_scroll_inside_their_own_region` (line 276)
+- function `test_public_token_pages_use_the_styled_layout_and_private_headers` (line 282)
+- function `_rule` (line 313)
+- function `test_hidden_labels_and_wide_content_cannot_widen_the_page` (line 325)
+- function `test_import_review_columns_do_not_use_font_relative_units` (line 334)
+- function `test_phone_tap_targets_for_links_brand_and_my_schedule_cards` (line 339)
 
 ### `tests/test_admin_config.py`
 
@@ -1469,6 +1503,16 @@ Private data, ignored files, and source contents are excluded.
 - function `test_transport_errors_propagate` (line 188)
 - function `test_smtp_sender_satisfies_the_email_sender_protocol` (line 196)
 
+### `tests/test_error_pages.py`
+
+- function `_user` (line 19)
+- function `test_anonymous_browser_gets_login_page_and_api_client_gets_json` (line 30)
+- function `test_unverified_user_gets_a_verification_page` (line 42)
+- function `test_verified_non_admin_gets_not_allowed_page` (line 50)
+- function `test_token_404_page_keeps_private_headers` (line 56)
+- function `test_conflict_page_shows_the_human_detail` (line 64)
+- function `test_request_validation_error_page_for_browsers` (line 82)
+
 ### `tests/test_handicap_isolation.py`
 
 - function `_resolved_handicap_imports` (line 13)
@@ -1599,30 +1643,37 @@ Private data, ignored files, and source contents are excluded.
 
 ### `tests/test_invites.py`
 
-- function `seed_environment` (line 40)
-- function `admission` (line 53)
-- function `invite_env` (line 65)
-- function `test_creation_digest_default_explicit_and_uniqueness` (line 69)
-- function `test_invalid_expiry_never_converts_unsafe_input` (line 90)
-- function `test_naive_now_rejected` (line 98)
-- function `test_rotation_revoke_and_rollback` (line 104)
-- function `test_issue_peek_prior_revocation_and_no_identity_creation` (line 136)
-- function `test_peek_rejects_subject_and_parent_drift` (line 164)
-- function `test_existing_user_subject_must_still_match` (line 184)
-- function `test_issue_refusals_do_not_reserve_or_create` (line 211)
-- function `test_existing_account_can_issue_at_cap` (line 244)
-- function `test_send_callbacks_increment_and_failure_revokes_without_refund` (line 258)
-- function `csrf` (line 280)
-- function `create_admin_invite` (line 284)
-- function `test_admin_receipt_once_privacy_and_host_spoof` (line 288)
-- function `test_receipt_foreign_admin_session_and_exact_expiry` (line 313)
-- function `test_receipt_foreign_session_http_and_expiry` (line 330)
-- function `test_admin_validation_html_blank_values` (line 351)
-- function `test_admin_new_default_and_explicit_366` (line 361)
-- function `test_admin_missing_or_foreign_csrf` (line 368)
-- function `test_admin_auth_ladder` (line 377)
-- function `test_admin_malformed_missing_ids_404` (line 394)
-- function `test_admin_revoke_rotate_codes_and_statuses` (line 398)
+- function `seed_environment` (line 44)
+- function `admission` (line 57)
+- function `invite_env` (line 69)
+- function `test_creation_digest_default_explicit_and_uniqueness` (line 73)
+- function `test_invalid_expiry_never_converts_unsafe_input` (line 94)
+- function `test_naive_now_rejected` (line 102)
+- function `test_rotation_revoke_and_rollback` (line 108)
+- function `test_issue_peek_prior_revocation_and_no_identity_creation` (line 140)
+- function `test_peek_rejects_subject_and_parent_drift` (line 168)
+- function `test_existing_user_subject_must_still_match` (line 188)
+- function `test_issue_refusals_do_not_reserve_or_create` (line 215)
+- function `test_existing_account_can_issue_at_cap` (line 248)
+- function `test_send_callbacks_increment_and_failure_revokes_without_refund` (line 262)
+- function `csrf` (line 284)
+- function `form_nonce` (line 288)
+- function `create_admin_invite` (line 293)
+- function `test_admin_receipt_once_privacy_and_host_spoof` (line 298)
+- function `test_receipt_foreign_admin_session_and_exact_expiry` (line 323)
+- function `test_receipt_foreign_session_http_and_expiry` (line 340)
+- function `test_admin_validation_html_blank_values` (line 361)
+- function `test_admin_new_default_and_explicit_366` (line 371)
+- function `test_admin_missing_or_foreign_csrf` (line 378)
+- function `test_admin_auth_ladder` (line 387)
+- function `test_admin_malformed_missing_ids_404` (line 404)
+- function `test_admin_revoke_rotate_codes_and_statuses` (line 408)
+- function `_live_invites` (line 430)
+- function `test_replayed_create_form_makes_no_second_invite` (line 435)
+- function `test_parallel_double_submit_creates_exactly_one_invite` (line 447)
+- function `test_missing_or_unknown_form_nonce_creates_nothing` (line 460)
+- function `test_validation_failure_keeps_the_form_usable` (line 469)
+- function `test_form_nonce_is_bound_to_admin_session_and_expires` (line 479)
 
 ### `tests/test_join.py`
 

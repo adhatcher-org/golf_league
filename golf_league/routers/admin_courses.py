@@ -388,7 +388,9 @@ async def hole_grid_form(
     if grid is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     course, holes, tee_sets = grid
-    return _templates(request).TemplateResponse(request, "admin/courses/holes.html", _grid_context(request, course=course, holes=holes, tee_sets=tee_sets))
+    context = _grid_context(request, course=course, holes=holes, tee_sets=tee_sets)
+    context["saved"] = request.query_params.get("saved") == "1"
+    return _templates(request).TemplateResponse(request, "admin/courses/holes.html", context)
 
 
 @router.post("/admin/courses/{course_id}/holes")
@@ -414,7 +416,7 @@ async def save_hole_grid_submit(
         return _templates(request).TemplateResponse(request, "admin/courses/holes.html", _grid_context(request, course=course, holes=current_holes, tee_sets=tee_sets, errors={"grid": "Enter a complete valid grid."}), status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
     except CourseValidationError as exc:
         return _templates(request).TemplateResponse(request, "admin/courses/holes.html", _grid_context(request, course=course, holes=current_holes, tee_sets=tee_sets, errors=exc.errors), status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
-    return RedirectResponse(url=f"/admin/courses/{course_id}/holes", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url=f"/admin/courses/{course_id}/holes?saved=1", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post("/admin/courses/{course_id}/tees/{tee_set_id}/delete")

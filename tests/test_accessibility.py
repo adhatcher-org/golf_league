@@ -45,11 +45,15 @@ class _Audit(HTMLParser):
         self.h1 = 0
         self.lang = ""
         self.stylesheets: list[str] = []
+        self.container_stack: list[str] = []
+        self.unwrapped_tables = 0
 
     def handle_starttag(self, tag, attrs):
         attr = {name: (value or "") for name, value in attrs}
         if "id" in attr:
             self.ids.append(attr["id"])
+        if tag in {"div", "section"}:
+            self.container_stack.append(attr.get("class", ""))
         handler = getattr(self, f"_start_{tag}", None)
         if handler is not None:
             handler(attr)
@@ -79,6 +83,9 @@ class _Audit(HTMLParser):
 
     def _start_table(self, attr):
         self.tables += 1
+        wrappers = ("table-wrap", "season-roster__table-wrap")
+        if not any(name in classes for classes in self.container_stack for name in wrappers):
+            self.unwrapped_tables += 1
 
     def _start_th(self, attr):
         self.table_headers += 1
@@ -102,6 +109,8 @@ class _Audit(HTMLParser):
         self.main_ids.append(attr.get("id", ""))
 
     def handle_endtag(self, tag):
+        if tag in {"div", "section"} and self.container_stack:
+            self.container_stack.pop()
         if tag == "label":
             self.label_depth = max(0, self.label_depth - 1)
         elif tag == "button" and self.button_stack:
@@ -144,6 +153,7 @@ def _assert_accessible(path: str, html: str) -> None:
         )
     if audit.tables:
         assert audit.table_headers, f"{path}: table without header cells"
+        assert audit.unwrapped_tables == 0, f"{path}: table outside a scrolling .table-wrap region"
 
 
 def _long_names(client) -> None:
@@ -298,3 +308,35 @@ def test_public_token_pages_use_the_styled_layout_and_private_headers(client):
     assert missing.status_code == 404
     assert missing.headers["cache-control"] == "no-store"
     assert missing.headers["referrer-policy"] == "no-referrer"
+
+
+def _rule(selector: str, *, media: str | None = None) -> str:
+    """Body of the first rule with exactly this selector (optionally inside a media block)."""
+    css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.DOTALL)
+    scope = css
+    if media is not None:
+        blocks = [m.end() for m in re.finditer(re.escape(f"@media {media}") + r"\s*\{", css)]
+        scope = "".join(css[start:start + 6000] for start in blocks)
+    match = re.search(r"(?:^|[{}])\s*" + re.escape(selector) + r"\s*\{([^}]*)\}", scope)
+    assert match, selector
+    return match.group(1)
+
+
+def test_hidden_labels_and_wide_content_cannot_widen_the_page():
+    hidden = _rule(".visually-hidden")
+    assert "top: 0" in hidden and "left: 0" in hidden
+    wrap = _rule(".table-wrap")
+    assert "position: relative" in wrap and "overflow-x: auto" in wrap
+    assert "max-width: 100%" in _rule('input[type="file"]')
+    assert "pre-wrap" in _rule(".wrap-pre")
+
+
+def test_import_review_columns_do_not_use_font_relative_units():
+    columns = re.findall(r"grid-template-columns:([^;]*);", _rule(".import-fields__header,\n    .import-fields", media="(min-width: 721px)"))
+    assert columns and all("ch" not in value for value in columns)
+
+
+def test_phone_tap_targets_for_links_brand_and_my_schedule_cards():
+    assert "min-height: 2.75rem" in _rule(".brand")
+    assert "min-height: 2.75rem" in _rule(".page-shell a:not(.button-link)", media="(max-width: 720px)")
+    assert "display: block" in _rule(".schedule-cards__table,\n    .schedule-cards__table tbody,\n    .schedule-cards__table tr,\n    .schedule-cards__table th,\n    .schedule-cards__table td", media="(max-width: 720px)")

@@ -80,6 +80,7 @@ a:hover {
 }
 
 .brand {
+    min-height: 2.75rem;
     display: inline-flex;
     align-items: center;
     gap: 0.7rem;
@@ -433,7 +434,10 @@ p.error::before,
 .config-note { max-width: 42rem; font-size: 0.9rem; }
 
 .table-wrap {
-    overflow: hidden;
+    /* A wide table scrolls inside its own region; position: relative keeps
+       absolutely positioned (visually hidden) content inside it (F1, F2). */
+    position: relative;
+    overflow-x: auto;
     border: 1px solid var(--line);
     border-radius: 0.55rem;
     background: var(--surface);
@@ -748,6 +752,13 @@ tbody tr:hover {
 
 .visually-hidden {
     position: absolute;
+    /* Pinned to the containing block's corner so a hidden label can never
+       sit past the right edge and widen the page (F2). */
+    top: 0;
+    left: 0;
+    margin: -1px;
+    padding: 0;
+    border: 0;
     width: 1px;
     height: 1px;
     overflow: hidden;
@@ -960,6 +971,8 @@ button:disabled:hover {
 
 .import-row__source summary {
     width: fit-content;
+    min-height: 2.75rem;
+    padding: 0.65rem 0;
     cursor: pointer;
 }
 
@@ -1200,7 +1213,9 @@ button:disabled:hover {
 
     .import-fields__header,
     .import-fields {
-        grid-template-columns: 20ch 15ch 25ch 35ch 13ch 8ch 5ch;
+        /* rem, not ch: the header and the inputs use different font sizes,
+           so ch columns drifted apart (F13). */
+        grid-template-columns: 11rem 8rem 12rem 17rem 8rem 6.5rem 5rem;
         column-gap: 0.6rem;
         width: max-content;
         min-width: 100%;
@@ -1352,8 +1367,8 @@ button:disabled:hover {
     top: 0.8rem;
     right: 0.8rem;
     display: grid;
-    width: 2.75rem;
-    min-height: 2.75rem;
+    width: 3rem;
+    min-height: 3rem;
     padding: 0;
     place-items: center;
     border: 1px solid var(--line);
@@ -1382,4 +1397,80 @@ button:disabled:hover {
 @media (prefers-reduced-motion: reduce) {
     .opponent-dialog,
     .opponent-dialog::backdrop { animation: none; }
+}
+
+/* --- Release fixes (GL-61 browser run) ------------------------------------ */
+
+[hidden] { display: none !important; }
+
+.golfer-table-wrap,
+.season-roster__table-wrap,
+.week-preview,
+.import-roster { position: relative; }
+
+/* F3: grid items default to min-width:auto, which let the file input and the
+   CSV sample push the form past a 390px screen. */
+label > input,
+label > select,
+label > textarea { min-width: 0; max-width: 100%; }
+input[type="file"] { max-width: 100%; }
+pre { max-width: 100%; overflow-x: auto; }
+.wrap-pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.section-break { margin-top: 2.5rem; }
+
+.error-page { max-width: 42rem; }
+.error-page__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+
+/* F13: one left inset for every review row and the header, so columns line up
+   whether or not a row carries the error border. */
+@media (min-width: 721px) {
+    .import-row,
+    .import-row:focus-within { padding-left: 0.9rem; padding-right: 0.8rem; border-left: 3px solid transparent; }
+    .import-row--error { border-left-color: var(--danger); }
+    .import-fields__header { padding-left: calc(0.9rem + 3px); }
+}
+
+@media (max-width: 720px) {
+    /* F6: standalone and table links get a 44px tap height on phones. */
+    .page-shell a:not(.button-link) {
+        min-height: 2.75rem;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    /* OBS-7: My Schedule becomes one card per week, so the matchup is on
+       screen instead of in a sideways-scrolling column. */
+    .schedule-cards { overflow: visible; border: 0; background: transparent; }
+    .schedule-cards__table,
+    .schedule-cards__table tbody,
+    .schedule-cards__table tr,
+    .schedule-cards__table th,
+    .schedule-cards__table td { display: block; min-width: 0; }
+    .schedule-cards__table thead { position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .schedule-cards__table tr {
+        margin-bottom: 0.9rem;
+        padding: 0.4rem 0.9rem 0.6rem;
+        border: 1px solid var(--line);
+        border-radius: 0.55rem;
+        background: var(--surface);
+    }
+    .schedule-cards__table tbody tr:hover { background: var(--surface); }
+    .schedule-cards__table th[scope="row"] { padding: 0.6rem 0; background: transparent; font-size: 0.95rem; }
+    .schedule-cards__table th[scope="row"]::before { content: "Week "; }
+    .schedule-cards__table td {
+        display: grid;
+        grid-template-columns: 5.5rem minmax(0, 1fr);
+        gap: 0.6rem;
+        padding: 0.35rem 0;
+        border: 0;
+        overflow-wrap: anywhere;
+    }
+    .schedule-cards__table td::before {
+        content: attr(data-label);
+        color: var(--muted);
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.045em;
+        text-transform: uppercase;
+    }
 }

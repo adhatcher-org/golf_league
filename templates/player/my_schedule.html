@@ -18,14 +18,14 @@
 {% if projection.season %}
 <h2>{{ projection.season.name_override or projection.season.year }}</h2>
 {% if projection.weeks %}
-<div class="table-wrap"><table>
+<div class="table-wrap schedule-cards"><table class="schedule-cards__table">
     <caption class="visually-hidden">My schedule for {{ projection.season.year }}</caption>
     <thead><tr><th scope="col">Week</th><th scope="col">Date</th><th scope="col">Nine</th><th scope="col">Status</th><th scope="col">Matchup</th><th scope="col">Details</th></tr></thead>
     <tbody>{% for item in projection.weeks %}{% set week = item.week %}<tr>
         <th scope="row">{{ week.index }}</th>
-        <td>{{ week.play_date.strftime('%b %-d, %Y') }}</td>
-        <td>{% if week.nine %}{{ week.nine|title }}{% else %}—{% endif %}</td>
-        <td>
+        <td data-label="Date">{{ week.play_date.strftime('%b %-d, %Y') }}</td>
+        <td data-label="Nine">{% if week.nine %}{{ week.nine|title }}{% else %}—{% endif %}</td>
+        <td data-label="Status">
             {% if item.state == 'cancelled' %}Cancelled
                 {% if item.makeup_week %} · Makeup: <a href="/weeks/{{ item.makeup_week.id }}?season_id={{ projection.season.id }}">Week {{ item.makeup_week.index }}</a>{% endif %}
             {% elif item.state == 'reserved' %}Reserved rain date{% if item.source_week %} for <a href="/weeks/{{ item.source_week.id }}?season_id={{ projection.season.id }}">Week {{ item.source_week.index }}</a>{% endif %}
@@ -35,7 +35,7 @@
             {% elif item.state == 'no_participation' %}No participation
             {% else %}{{ week.status|title }}{% endif %}
         </td>
-        <td>
+        <td data-label="Matchup">
             {% if item.state in ('match', 'makeup') %}
                 {% for match in item.matches %}<div>
                     {% if match.pairing.is_self_match %}<span>Self-match: both sides play against their own handicap.</span>{% endif %}
@@ -55,7 +55,7 @@
                 </div>{% endfor %}
             {% else %}—{% endif %}
         </td>
-        <td><a href="/weeks/{{ week.id }}?season_id={{ projection.season.id }}">Week details</a></td>
+        <td data-label="Details"><a href="/weeks/{{ week.id }}?season_id={{ projection.season.id }}">Week details</a></td>
     </tr>{% endfor %}</tbody>
 </table></div>
 {% else %}<p class="empty-state">No weeks are scheduled for this season yet.</p>{% endif %}
