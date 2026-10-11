@@ -100,9 +100,13 @@ def _send_verification_email(sender, to: str, subject: str, body: str) -> None:
 
 
 def _login_destination(requested: str | None) -> str:
-    """Keep the post-login destination on the roster page and same-origin."""
-    allowed_destinations = {"/roster"}
-    return requested if requested in allowed_destinations else "/roster"
+    """Land on My Schedule after login, or on a fixed same-origin page that asked for it.
+
+    Only an exact, known path is honoured; anything else (another site, a
+    crafted path) falls back to My Schedule.
+    """
+    allowed_destinations = {"/my/schedule", "/roster", "/"}
+    return requested if requested in allowed_destinations else "/my/schedule"
 
 
 @router.get("/login")
@@ -129,7 +133,7 @@ async def login_submit(
     email: str = Form(""),
     password: str = Form(""),
     csrf_token: str = Form(""),
-    next_path: str = Form("/roster", alias="next"),
+    next_path: str = Form("", alias="next"),
     session: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
     seed = _csrf_seed(request)

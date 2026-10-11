@@ -86,6 +86,7 @@ Private data, ignored files, and source contents are excluded.
 - function `_navigation_user` (line 58)
 - function `lifespan` (line 91)
 - function `create_app` (line 151)
+- function `main` (line 228)
 
 ### `golf_league/config.py`
 
@@ -218,21 +219,22 @@ Private data, ignored files, and source contents are excluded.
 
 - class `ManagedKey` (line 43)
   - method `is_secret` (line 56)
-- function `_has_control_characters` (line 103)
-- function `_validate_host` (line 107)
-- function `_validate_port` (line 116)
-- function `_validate_email` (line 122)
-- function `_validate_choice` (line 128)
-- function `validate_value` (line 143)
-- function `_decode` (line 161)
-- function `_encode` (line 170)
-- function `_read_assignments` (line 175)
-- function `read_managed_values` (line 197)
-- function `read_deploy_values` (line 217)
-- function `_check_updates` (line 232)
-- function `_merge` (line 242)
-- function `write_managed_values` (line 259)
-- function `_fsync_directory` (line 295)
+- function `_has_control_characters` (line 109)
+- function `_validate_host` (line 113)
+- function `_validate_port` (line 122)
+- function `_validate_email` (line 128)
+- function `_validate_choice` (line 134)
+- function `validate_value` (line 149)
+- function `_decode` (line 167)
+- function `_encode` (line 176)
+- function `_read_assignments` (line 181)
+- function `read_managed_values` (line 203)
+- function `read_deploy_values` (line 223)
+- function `trusted_proxy_addresses` (line 238)
+- function `_check_updates` (line 258)
+- function `_merge` (line 268)
+- function `write_managed_values` (line 285)
+- function `_fsync_directory` (line 321)
 
 ### `golf_league/migrations.py`
 
@@ -442,17 +444,17 @@ Private data, ignored files, and source contents are excluded.
 - function `_send_reset_email` (line 86)
 - function `_send_verification_email` (line 94)
 - function `_login_destination` (line 102)
-- function `login_form` (line 109)
-- function `login_submit` (line 127)
-- function `logout` (line 171)
-- function `verify_email` (line 187)
-- function `reset_request_form` (line 208)
-- function `reset_request_submit` (line 222)
-- function `reset_form` (line 253)
-- function `reset_submit` (line 278)
-- function `_registration_form` (line 328)
-- function `register_form` (line 344)
-- function `register_submit` (line 358)
+- function `login_form` (line 113)
+- function `login_submit` (line 131)
+- function `logout` (line 175)
+- function `verify_email` (line 191)
+- function `reset_request_form` (line 212)
+- function `reset_request_submit` (line 226)
+- function `reset_form` (line 257)
+- function `reset_submit` (line 282)
+- function `_registration_form` (line 332)
+- function `register_form` (line 348)
+- function `register_submit` (line 362)
 
 ### `golf_league/routers/join.py`
 
@@ -873,6 +875,9 @@ Private data, ignored files, and source contents are excluded.
 
 
 ### `static/app.js`
+
+
+### `static/golf-league-icon.svg`
 
 
 ### `templates/_error_summary.html`
@@ -1375,6 +1380,8 @@ Private data, ignored files, and source contents are excluded.
 - function `test_smtp_host_installs_the_smtp_sender_at_startup` (line 28)
 - function `test_without_smtp_host_the_fake_sender_stays` (line 39)
 - function `test_importing_the_app_needs_no_session_secret` (line 46)
+- function `test_trusted_proxies_come_from_environment_then_managed_file_then_default` (line 57)
+- function `test_main_serves_with_the_trusted_proxies_from_the_managed_file` (line 74)
 
 ### `tests/test_app_endpoints.py`
 
@@ -1479,6 +1486,7 @@ Private data, ignored files, and source contents are excluded.
 - function `test_example_env_holds_nothing_real` (line 71)
 - function `_resolved_client` (line 84)
 - function `test_forwarded_headers_count_only_from_the_trusted_proxy` (line 102)
+- function `test_image_starts_through_main_so_the_managed_file_can_name_the_proxy` (line 107)
 
 ### `tests/test_email.py`
 
@@ -1597,33 +1605,34 @@ Private data, ignored files, and source contents are excluded.
 
 ### `tests/test_identity_routes.py`
 
-- function `_extract_csrf` (line 24)
-- function `_make_user` (line 30)
-- function `_add_protected_routes` (line 49)
-- function `test_correct_credentials_redirect_and_set_session_cookie` (line 70)
-- function `test_wrong_password_and_unknown_email_are_identical` (line 87)
-- function `test_post_without_valid_csrf_is_rejected` (line 106)
-- function `test_logout_clears_cookie_and_protected_page_becomes_unreachable` (line 122)
-- function `test_verified_user_reaches_verified_page_unverified_does_not` (line 148)
-- function `test_non_admin_gets_403_on_admin_page_even_when_verified` (line 175)
-- function `test_sixth_login_attempt_in_window_is_blocked_with_same_neutral_page` (line 190)
-- function `test_completed_reset_invalidates_a_prior_session` (line 238)
-- function `test_verify_token_is_idempotent_and_never_500s` (line 277)
-- function `test_verify_with_a_real_token_sets_email_verified_and_repeats_neutrally` (line 286)
-- function `test_reset_form_and_submit_reject_an_unknown_token_with_404` (line 314)
-- function `test_short_password_re_renders_the_reset_form_with_422` (line 327)
-- function `test_fake_email_sender_records_only_on_a_matched_reset` (line 359)
-- function `test_reset_commit_failure_rolls_back_password_and_token` (line 377)
-- function `test_ordinary_reset_preserves_account_and_revokes_other_credentials` (line 408)
-- function `test_reset_csrf_and_short_password_leave_token_usable` (line 465)
-- class `_RaisingSender` (line 489)
-  - method `__init__` (line 490)
-  - method `send` (line 493)
-- function `_use_origin` (line 498)
-- function `_request_reset` (line 504)
-- function `test_reset_email_link_uses_configured_origin_not_host_header` (line 510)
-- function `test_reset_send_failure_keeps_the_neutral_response_and_logs_fixed_text` (line 528)
-- function `test_reset_for_unknown_address_attaches_no_send` (line 545)
+- function `_extract_csrf` (line 25)
+- function `_make_user` (line 31)
+- function `_add_protected_routes` (line 50)
+- function `test_correct_credentials_redirect_and_set_session_cookie` (line 71)
+- function `test_login_lands_on_my_schedule_unless_a_known_page_asked_for_it` (line 93)
+- function `test_wrong_password_and_unknown_email_are_identical` (line 106)
+- function `test_post_without_valid_csrf_is_rejected` (line 125)
+- function `test_logout_clears_cookie_and_protected_page_becomes_unreachable` (line 141)
+- function `test_verified_user_reaches_verified_page_unverified_does_not` (line 167)
+- function `test_non_admin_gets_403_on_admin_page_even_when_verified` (line 194)
+- function `test_sixth_login_attempt_in_window_is_blocked_with_same_neutral_page` (line 209)
+- function `test_completed_reset_invalidates_a_prior_session` (line 257)
+- function `test_verify_token_is_idempotent_and_never_500s` (line 296)
+- function `test_verify_with_a_real_token_sets_email_verified_and_repeats_neutrally` (line 305)
+- function `test_reset_form_and_submit_reject_an_unknown_token_with_404` (line 333)
+- function `test_short_password_re_renders_the_reset_form_with_422` (line 346)
+- function `test_fake_email_sender_records_only_on_a_matched_reset` (line 378)
+- function `test_reset_commit_failure_rolls_back_password_and_token` (line 396)
+- function `test_ordinary_reset_preserves_account_and_revokes_other_credentials` (line 427)
+- function `test_reset_csrf_and_short_password_leave_token_usable` (line 484)
+- class `_RaisingSender` (line 508)
+  - method `__init__` (line 509)
+  - method `send` (line 512)
+- function `_use_origin` (line 517)
+- function `_request_reset` (line 523)
+- function `test_reset_email_link_uses_configured_origin_not_host_header` (line 529)
+- function `test_reset_send_failure_keeps_the_neutral_response_and_logs_fixed_text` (line 547)
+- function `test_reset_for_unknown_address_attaches_no_send` (line 564)
 
 ### `tests/test_invite_limits.py`
 

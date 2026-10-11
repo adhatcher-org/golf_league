@@ -3,6 +3,7 @@
 import re
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -80,8 +81,26 @@ def test_correct_credentials_redirect_and_set_session_cookie(client):
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/roster"
+    assert response.headers["location"] == "/my/schedule"
     assert "session" in response.cookies
+
+
+@pytest.mark.parametrize("requested,expected", [
+    ("/roster", "/roster"), ("/", "/"), ("/my/schedule", "/my/schedule"),
+    ("", "/my/schedule"), ("/admin/golfers", "/my/schedule"),
+    ("https://evil.example/x", "/my/schedule"), ("//evil.example/x", "/my/schedule"),
+])
+def test_login_lands_on_my_schedule_unless_a_known_page_asked_for_it(client, requested, expected):
+    _make_user(client, email="user@example.test", password="s3cret-pw!")
+    page = client.get("/login", params={"next": requested} if requested else None)
+    assert f'name="next" value="{expected}"' in page.text
+    response = client.post(
+        "/login",
+        data={"email": "user@example.test", "password": "s3cret-pw!",
+              "csrf_token": _extract_csrf(page.text), "next": requested},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303 and response.headers["location"] == expected
 
 
 def test_wrong_password_and_unknown_email_are_identical(client):

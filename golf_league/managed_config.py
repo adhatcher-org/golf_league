@@ -90,7 +90,13 @@ DEPLOY_FILE_KEYS: dict[str, str | None] = {
     # First-boot only; read by `bootstrap_admin`, not a `Settings` field.
     "ADMIN_EMAIL": None,
     "ADMIN_PASSWORD": None,
+    # Read by `trusted_proxy_addresses` for the web server, not a `Settings` field.
+    "FORWARDED_ALLOW_IPS": None,
 }
+
+# With no trusted proxy configured, forwarded headers count only from the
+# container itself, so no outside client can choose its own address.
+DEFAULT_TRUSTED_PROXIES = "127.0.0.1"
 
 _HOST_LABEL = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
 _HOST_RE = re.compile(rf"^{_HOST_LABEL}(?:\.{_HOST_LABEL})*\.?$")
@@ -227,6 +233,26 @@ def read_deploy_values(path: Path | str) -> dict[str, str]:
         for name, value in _read_assignments(path).items()
         if name in DEPLOY_FILE_KEYS and value.strip()
     }
+
+
+def trusted_proxy_addresses(environment: Mapping[str, str], path: Path | str) -> tuple[str, str]:
+    """Return `(addresses, source)` for the web server's trusted-proxy list.
+
+    `FORWARDED_ALLOW_IPS` from the environment wins; the managed file is the
+    fallback, like every deploy-time key; otherwise only the container itself
+    is trusted. A file value that trusts every address (`*`) is refused: it
+    would let any client pick the address the per-IP invite limit sees.
+    """
+    value = (environment.get("FORWARDED_ALLOW_IPS") or "").strip()
+    if value:
+        return value, "environment"
+    value = read_deploy_values(path).get("FORWARDED_ALLOW_IPS", "").strip()
+    if value:
+        if any(part.strip() == "*" for part in value.split(",")):
+            logger.warning("FORWARDED_ALLOW_IPS in the managed file trusts every address; ignored")
+        else:
+            return value, "managed file"
+    return DEFAULT_TRUSTED_PROXIES, "default"
 
 
 def _check_updates(updates: Mapping[str, str]) -> None:

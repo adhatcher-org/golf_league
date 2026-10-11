@@ -64,8 +64,12 @@ retries and no outbox; a user whose mail failed simply asks again.
   mode `0600` and owned by the container user; it is part of the private backup.
 - `ADMIN_EMAIL` and `ADMIN_PASSWORD` reach the first-boot admin bootstrap the same way:
   environment first, then the file.
+- `FORWARDED_ALLOW_IPS` (the reverse proxy's address, so the app sees real client addresses) is
+  read the same way when the container starts: environment first, then the file, otherwise only
+  the container itself is trusted. A file value of `*` is refused. The start-up output prints
+  which source was used.
 - An empty value (`ADMIN_PASSWORD=`), in the file or in the environment, counts as unset. Any key outside the eight managed keys
-  and the seven deploy-time keys has no effect; `MANAGED_ENV_PATH` in the file has no effect.
+  and the deploy-time keys has no effect; `MANAGED_ENV_PATH` in the file has no effect.
 - A managed value in the file that fails validation (for example a hand-edited
   `SMTP_PORT=abc`) is ignored and logged by key name only; the environment or default value
   applies. An unreadable file is ignored the same way. Neither stops the application starting.

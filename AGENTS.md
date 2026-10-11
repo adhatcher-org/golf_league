@@ -13,8 +13,9 @@ orchestrator repo next door.
   domain purity, and that `services/` never imports FastAPI, by AST scan, including dotted
   submodules (`sqlalchemy.orm` counts as `sqlalchemy`). Nothing checks `routers/` automatically.
 - Entry point is `golf_league/app.py:create_app(settings=None)`; module-level `app` is what uvicorn
-  serves. The `golf_league` console script in `pyproject.toml` points at a `main` that does not
-  exist -- run uvicorn directly.
+  serves. `golf_league.app:main` (also the `golf_league` console script, and the container's
+  command) starts uvicorn on 0.0.0.0:8000 and takes `FORWARDED_ALLOW_IPS` from the environment
+  or, failing that, the managed file. For development run uvicorn directly.
 
 ## Commands
 - Install: `uv sync --frozen --extra dev`
