@@ -866,7 +866,8 @@ Private data, ignored files, and source contents are excluded.
 - function `prepare_environment` (line 58)
 - function `_demo_weeks` (line 80)
 - function `seed_demo` (line 99)
-- function `main` (line 206)
+- function `build_app` (line 206)
+- function `main` (line 222)
 
 ### `static/app.css`
 
@@ -1936,9 +1937,10 @@ Private data, ignored files, and source contents are excluded.
 - function `_module` (line 18)
 - function `test_refuses_a_data_dir_inside_the_repository` (line 26)
 - function `test_refuses_to_run_with_a_relay_configured` (line 31)
-- function `test_environment_is_local_http_with_a_private_generated_secret` (line 37)
-- function `test_file_mail_sender_writes_private_files` (line 52)
-- function `test_demo_seed_creates_personas_admin_and_pairings_once` (line 60)
+- function `test_a_relay_saved_in_the_managed_file_never_replaces_the_file_sender` (line 37)
+- function `test_environment_is_local_http_with_a_private_generated_secret` (line 57)
+- function `test_file_mail_sender_writes_private_files` (line 72)
+- function `test_demo_seed_creates_personas_admin_and_pairings_once` (line 80)
 
 ### `tests/test_season_migration.py`
 

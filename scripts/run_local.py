@@ -203,6 +203,22 @@ def seed_demo(database_url: str) -> bool:
         engine.dispose()
 
 
+def build_app(data_dir: Path):
+    """The local application: mail always goes to files, whatever the managed file says.
+
+    `SMTP_HOST` is a managed key, so a tester who saves one at /admin/config
+    (journey J13) writes it to this data directory's managed file, and the
+    next start would install the real SMTP sender over the file sender. An
+    explicit empty relay outranks the managed file, so startup never does.
+    """
+    from golf_league.app import create_app
+    from golf_league.config import Settings
+
+    app = create_app(settings=Settings(smtp_host=""))
+    app.state.email_sender = FileMailSender(data_dir.resolve() / "mail")
+    return app
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--data-dir", type=Path, required=True)
@@ -215,12 +231,9 @@ def main(argv: list[str] | None = None) -> None:
 
     import uvicorn
 
-    from golf_league.app import create_app
-
     if args.demo and seed_demo(os.environ["DATABASE_URL"]):
         print("Seeded the synthetic demo season.")
-    app = create_app()
-    app.state.email_sender = FileMailSender(args.data_dir.resolve() / "mail")
+    app = build_app(args.data_dir)
 
     print(f"Golf League (local) at http://127.0.0.1:{args.port}")
     print(f"  first admin : {os.environ['ADMIN_EMAIL']} (password from ADMIN_PASSWORD, "

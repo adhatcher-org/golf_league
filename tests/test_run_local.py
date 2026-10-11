@@ -34,6 +34,26 @@ def test_refuses_to_run_with_a_relay_configured(tmp_path, monkeypatch):
         _module().prepare_environment(tmp_path / "local", 8000)
 
 
+def test_a_relay_saved_in_the_managed_file_never_replaces_the_file_sender(tmp_path, monkeypatch):
+    """Journey J13 saves SMTP_HOST at /admin/config; the next local start must still not send."""
+    from fastapi.testclient import TestClient
+
+    module = _module()
+    for name in ("ADMIN_EMAIL", "ADMIN_PASSWORD", "SESSION_SECRET"):
+        monkeypatch.delenv(name, raising=False)
+    env = module.prepare_environment(tmp_path / "local", 8000)
+    with Path(env["MANAGED_ENV_PATH"]).open("a", encoding="utf-8") as handle:
+        handle.write('SMTP_HOST="relay.example.test"\n')
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    assert Settings().smtp_host == "relay.example.test"  # the managed file really does carry it
+
+    app = module.build_app(tmp_path / "local")
+    with TestClient(app):
+        assert isinstance(app.state.email_sender, module.FileMailSender)
+        assert app.state.settings.smtp_host == ""
+
+
 def test_environment_is_local_http_with_a_private_generated_secret(tmp_path, monkeypatch):
     monkeypatch.delenv("ADMIN_EMAIL", raising=False)
     monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
