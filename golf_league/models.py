@@ -584,6 +584,24 @@ class WeekHandicap(Base):
     tee_set: Mapped["TeeSet"] = relationship()
 
 
+class HoleScore(Base):
+    """One golfer's strokes on one hole of a submitted scorecard (R-SCORES)."""
+
+    __tablename__ = "hole_scores"
+    __table_args__ = (
+        UniqueConstraint("player_match_id", "golfer_id", "hole_id", name="uq_hole_scores_match_golfer_hole"),
+        CheckConstraint("strokes BETWEEN 1 AND 15", name="ck_hole_scores_strokes"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    player_match_id: Mapped[int] = mapped_column(ForeignKey("player_matches.id"), nullable=False, index=True)
+    golfer_id: Mapped[int] = mapped_column(ForeignKey("golfers.id"), nullable=False, index=True)
+    hole_id: Mapped[int] = mapped_column(ForeignKey("holes.id"), nullable=False)
+    strokes: Mapped[int] = mapped_column(Integer, nullable=False)
+    entered_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    entered_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False, server_default=func.current_timestamp())
+
+
 class LeagueInviteLink(Base):
     """Shared invitation; only its irreversible digest is persisted."""
 

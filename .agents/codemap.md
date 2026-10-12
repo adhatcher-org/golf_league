@@ -180,6 +180,13 @@ Private data, ignored files, and source contents are excluded.
 - function `shift_from` (line 34)
 - function `rotate_nines` (line 57)
 
+### `golf_league/domain/scorecard.py`
+
+- function `is_blank` (line 10)
+- function `validate_strokes` (line 15)
+- class `MatchGrouping` (line 38)
+- function `group_by_match` (line 45)
+
 ### `golf_league/domain/teams.py`
 
 - function `season_ready_for_matchups` (line 6)
@@ -267,9 +274,10 @@ Private data, ignored files, and source contents are excluded.
 - class `TeamMatch` (line 513)
 - class `PlayerMatch` (line 539)
 - class `WeekHandicap` (line 564)
-- class `LeagueInviteLink` (line 587)
-- class `GolferSetPasswordToken` (line 610)
-- class `InviteRateWindow` (line 627)
+- class `HoleScore` (line 587)
+- class `LeagueInviteLink` (line 605)
+- class `GolferSetPasswordToken` (line 628)
+- class `InviteRateWindow` (line 645)
 
 ### `golf_league/routers/__init__.py`
 
@@ -732,6 +740,29 @@ Private data, ignored files, and source contents are excluded.
 - function `confirm_nine` (line 573)
 - function `confirm_shift` (line 588)
 
+### `golf_league/services/scores.py`
+
+- class `ScoreEntryError` (line 36)
+  - method `__init__` (line 39)
+- class `Candidate` (line 46)
+- class `CardResult` (line 55)
+- class `GolferScores` (line 64)
+- class `MatchScores` (line 72)
+- function `league_today` (line 78)
+- function `_week_player_matches` (line 83)
+- function `_has_matches` (line 92)
+- function `eligible_weeks` (line 101)
+- function `default_week` (line 111)
+- function `week_for_entry` (line 120)
+- function `_name` (line 136)
+- function `card_candidates` (line 140)
+- function `week_holes` (line 150)
+- function `_resolve_golfers` (line 163)
+- function `_parse_scores` (line 176)
+- function `_already_scored` (line 195)
+- function `submit_card` (line 203)
+- function `scores_for_week` (line 266)
+
 ### `golf_league/services/season_roster.py`
 
 - class `SeasonRosterValidationError` (line 11)
@@ -827,6 +858,11 @@ Private data, ignored files, and source contents are excluded.
 
 - function `upgrade` (line 17)
 - function `downgrade` (line 56)
+
+### `migrations/versions/c3f8a1d27b45_hole_scores.py`
+
+- function `upgrade` (line 17)
+- function `downgrade` (line 39)
 
 ### `migrations/versions/c7b4e2d8a91f_seasons.py`
 
@@ -1650,10 +1686,11 @@ Private data, ignored files, and source contents are excluded.
 
 ### `tests/test_invite_migration.py`
 
-- function `_engine` (line 13)
-- function `_assert_invite_schema` (line 25)
-- function `test_fresh_upgrade_has_invite_tables_one_head_and_defaults` (line 43)
-- function `test_upgrade_from_prior_head_preserves_existing_identity_and_repeats_cleanly` (line 62)
+- function `_assert_single_head_at_or_after_invites` (line 13)
+- function `_engine` (line 21)
+- function `_assert_invite_schema` (line 33)
+- function `test_fresh_upgrade_has_invite_tables_one_head_and_defaults` (line 51)
+- function `test_upgrade_from_prior_head_preserves_existing_identity_and_repeats_cleanly` (line 70)
 
 ### `tests/test_invites.py`
 
@@ -1950,6 +1987,49 @@ Private data, ignored files, and source contents are excluded.
 - function `test_environment_is_local_http_with_a_private_generated_secret` (line 57)
 - function `test_file_mail_sender_writes_private_files` (line 72)
 - function `test_demo_seed_creates_personas_admin_and_pairings_once` (line 80)
+
+### `tests/test_score_migration.py`
+
+- function `_engine` (line 16)
+- function `_seed` (line 28)
+- function `_assert_schema` (line 62)
+- function `_insert` (line 77)
+- function `test_fresh_upgrade_creates_table_with_enforced_constraints` (line 84)
+- function `test_upgrade_from_prior_head_preserves_data_and_downgrades` (line 109)
+
+### `tests/test_scorecard_domain.py`
+
+- function `test_max_strokes_constant` (line 13)
+- function `test_valid_strokes` (line 18)
+- function `test_blank_is_none_and_flagged_blank` (line 23)
+- function `test_rejected_without_raising` (line 29)
+- function `test_group_by_match_complete_card` (line 34)
+- function `test_group_by_match_one_side_or_cross_match_is_incomplete` (line 40)
+
+### `tests/test_scores.py`
+
+- function `_user` (line 40)
+- function `_setup` (line 47)
+- function `_matches` (line 57)
+- function `_card` (line 64)
+- function `_count` (line 69)
+- function `test_league_today_is_chicago_evening_before_utc_midnight_rollover` (line 74)
+- function `test_eligible_and_default_weeks` (line 80)
+- function `test_activated_rain_date_with_matches_is_included` (line 100)
+- function `test_week_for_entry_codes` (line 110)
+- function `test_candidates_include_substitute_and_exclude_outsiders` (line 130)
+- function `test_week_holes_follow_the_nine_and_season_course` (line 149)
+- function `test_two_golfer_card_writes_eighteen_rows` (line 165)
+- function `test_scores_for_week_derives_totals` (line 184)
+- function `test_four_golfer_card_across_two_matches_writes_thirty_six` (line 197)
+- function `test_three_golfer_card_needs_acknowledgement` (line 209)
+- function `_refusal` (line 224)
+- function `test_refusals_write_nothing` (line 231)
+- function `test_second_submit_and_shared_golfer_card_are_already_submitted` (line 262)
+- function `test_unique_key_violation_becomes_already_submitted_without_poisoning` (line 286)
+- function `test_busy_writer_is_conflict_and_writes_nothing` (line 306)
+- function `test_submit_does_not_commit` (line 324)
+- function `test_two_connections_racing_the_same_card_leave_one_card` (line 341)
 
 ### `tests/test_season_migration.py`
 

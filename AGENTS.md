@@ -58,6 +58,8 @@ orchestrator repo next door.
 - Player home and contact entry points are `golf_league/routers/home.py` and
   `golf_league/routers/player_schedule.py`; projections are in
   `golf_league/services/player_schedule.py`, with markup in `templates/player/`.
+- Scorecard validation and match grouping are in `golf_league/domain/scorecard.py`;
+  `golf_league/services/scores.py` checks week eligibility and atomically writes hole scores.
 - Managed configuration (the R-DEPLOYMENT eight-key allowlist, the atomic managed `.env`
   file and its validation) is `golf_league/managed_config.py`; `Settings` in
   `golf_league/config.py` reads the eight managed keys from that file above the environment,
@@ -106,9 +108,10 @@ orchestrator repo next door.
   open or modify real `.env` files.
 - Runtime: single non-root container, SQLite persistence under `/data`, startup migrations,
   redacted stdout/stderr logs.
-- Out of scope unless a work item explicitly adds it: scoring, rounds, results, standings, scoring
-  rulesets, automatic team formation/pairings, handicap recomputation, AI/provider modules. Do not
-  restore PDF parsing, statistics, public roster, export, undo/redo, or load balancing.
+- Hole scores for a submitted scorecard are in scope under R-SCORES. Out of scope unless a work item
+  explicitly adds it: rounds, results, standings, statistics, scoring rulesets, automatic team
+  formation/pairings, handicap recomputation, AI/provider modules. Do not restore PDF parsing,
+  public roster, export, undo/redo, or load balancing.
 - Product decisions (tee mapping, handicap units, and the rest) live in exactly one place:
   `Plan/Rulings.md` in the vault, one versioned ruling per topic. The guide's older Q1-Q9/D1-D9
   table and the frozen Decision Register are history, not answers. Treat a "suggested default"
