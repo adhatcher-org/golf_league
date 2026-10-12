@@ -7,19 +7,32 @@ from threading import Barrier
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from test_matchup_generation import clock as matchup_clock
 from test_matchup_generation import create_generated
 from test_matchup_generation import matchup_db as _matchup_db
 
 import golf_league.services.scores as scores_module
 from golf_league.models import (
+    Course,
     Golfer,
     Hole,
     HoleScore,
+    HoleYardage,
     PlayerMatch,
+    Season,
+    SeasonGolfer,
     TeamMatch,
+    TeamMember,
     User,
     Week,
 )
+from golf_league.services.courses import CourseValidationError, save_hole_grid
+from golf_league.services.matchups import (
+    MatchupConflict,
+    generate_week_matches,
+    substitute_player,
+)
+from golf_league.services.schedule import ScheduleConflict, confirm_nine, preview_nine
 from golf_league.services.scores import (
     ScoreEntryError,
     card_candidates,
@@ -31,6 +44,7 @@ from golf_league.services.scores import (
     week_for_entry,
     week_holes,
 )
+from golf_league.services.seasons import SeasonValidationError, update_season
 
 TODAY = date(2026, 8, 27)
 
@@ -179,6 +193,154 @@ def test_two_golfer_card_writes_eighteen_rows(matchup_db):
         pages = scores_for_week(session, ids["weeks"][0])
         assert len(pages) == 1 and pages[0].player_match_id == match.id
         assert [g.total for g in pages[0].golfers] == [72, 72] or [g.total for g in pages[0].golfers] == [36, 36]
+
+
+def test_scored_week_refuses_nine_change_even_when_card_arrives_after_preview(matchup_db):
+    engine, ids = matchup_db
+    user_id = _setup(engine, ids)
+    week_id = ids["weeks"][0]
+    with Session(engine) as session:
+        preview = preview_nine(session, ids["season"], week_id, new_nine="back")
+        match = _matches(session, week_id)[0]
+        submit_card(session, week_id, _card(session, week_id, [match.a_golfer_id, match.b_golfer_id]),
+                    user_id, TODAY, acknowledged=False)
+        session.commit()
+        with pytest.raises(ScheduleConflict, match="submitted scores"):
+            confirm_nine(session, ids["season"], week_id, new_nine="back",
+                         expected_fingerprint=preview.fingerprint)
+        assert session.get(Week, week_id).nine == "front"
+        assert session.scalar(select(func.count(HoleScore.id))) == 18
+        no_change = preview_nine(session, ids["season"], week_id, new_nine="front")
+        assert no_change.changes == ()
+        confirm_nine(session, ids["season"], week_id, new_nine="front",
+                     expected_fingerprint=no_change.fingerprint)
+
+
+def test_rerotation_refuses_scored_downstream_week_atomically(matchup_db):
+    engine, ids = matchup_db
+    user_id = _setup(engine, ids, extra_weeks=(2,))
+    scored_week_id = ids["weeks"][2]
+    with Session(engine) as session:
+        match = _matches(session, scored_week_id)[0]
+        submit_card(session, scored_week_id,
+                    _card(session, scored_week_id, [match.a_golfer_id, match.b_golfer_id]),
+                    user_id, TODAY, acknowledged=False)
+        session.commit()
+        preview = preview_nine(session, ids["season"], ids["weeks"][0],
+                               new_nine="back", rerotate=True)
+        assert scored_week_id in {change.week_id for change in preview.changes}
+        before = [(week.id, week.nine) for week in session.scalars(
+            select(Week).where(Week.season_id == ids["season"]).order_by(Week.index)
+        )]
+        with pytest.raises(ScheduleConflict, match="submitted scores"):
+            confirm_nine(session, ids["season"], ids["weeks"][0], new_nine="back",
+                         rerotate=True, expected_fingerprint=preview.fingerprint)
+        after = [(week.id, week.nine) for week in session.scalars(
+            select(Week).where(Week.season_id == ids["season"]).order_by(Week.index)
+        )]
+        assert after == before
+        assert session.scalar(select(func.count(HoleScore.id))) == 18
+
+
+def test_scored_match_refuses_substitution_and_regeneration(matchup_db):
+    engine, ids = matchup_db
+    user_id = _setup(engine, ids)
+    week_id = ids["weeks"][0]
+    with Session(engine) as session:
+        match = _matches(session, week_id)[0]
+        old_sides = (match.a_golfer_id, match.b_golfer_id)
+        submit_card(session, week_id, _card(session, week_id, old_sides),
+                    user_id, TODAY, acknowledged=False)
+        session.commit()
+        replacements = []
+        for number in (1, 2):
+            golfer = Golfer(first_name=f"Replacement{number}", last_name="Synthetic",
+                            default_tee_set_id=ids["tee"], handicap_strokes=2,
+                            handicap_source="self_reported", handicap_status="ok")
+            session.add(golfer)
+            session.flush()
+            replacements.append(golfer.id)
+            session.add(SeasonGolfer(season_id=ids["season"], golfer_id=golfer.id))
+        session.commit()
+        with pytest.raises(MatchupConflict, match="submitted scores"):
+            substitute_player(session, ids["season"], match.id, side="a",
+                              golfer_id=replacements[0], clock=matchup_clock)
+        assert (session.get(PlayerMatch, match.id).a_golfer_id,
+                session.get(PlayerMatch, match.id).b_golfer_id) == old_sides
+        for position, golfer_id in enumerate(replacements, 1):
+            member = session.scalar(select(TeamMember).where(
+                TeamMember.team_id == ids["teams"][0], TeamMember.position == position
+            ))
+            member.golfer_id = golfer_id
+        session.commit()
+        with pytest.raises(MatchupConflict, match="submitted scores"):
+            generate_week_matches(session, ids["season"], team_match_id=match.team_match_id,
+                                  clock=matchup_clock)
+        assert (session.get(PlayerMatch, match.id).a_golfer_id,
+                session.get(PlayerMatch, match.id).b_golfer_id) == old_sides
+        assert session.scalar(select(func.count(HoleScore.id))) == 18
+
+
+def test_scored_season_refuses_course_change(matchup_db):
+    engine, ids = matchup_db
+    user_id = _setup(engine, ids)
+    with Session(engine) as session:
+        week_id = ids["weeks"][0]
+        match = _matches(session, week_id)[0]
+        submit_card(session, week_id,
+                    _card(session, week_id, [match.a_golfer_id, match.b_golfer_id]),
+                    user_id, TODAY, acknowledged=False)
+        session.commit()
+        season = session.get(Season, ids["season"])
+        old_course_id = season.course_id
+        other = Course(name="Other Synthetic Course", total_holes=18)
+        session.add(other)
+        session.commit()
+        with pytest.raises(SeasonValidationError) as caught:
+            update_season(session, season.id, year=str(season.year), name_override="",
+                          course_id=str(other.id), start_date=season.start_date.isoformat(),
+                          end_date=season.end_date.isoformat(), play_weekday=str(season.play_weekday),
+                          status=season.status, first_week_nine=season.first_week_nine)
+        assert caught.value.errors["course_id"] == "Cannot change the course after scores have been submitted."
+        session.rollback()
+        assert session.get(Season, season.id).course_id == old_course_id
+        assert session.scalar(select(func.count(HoleScore.id))) == 18
+
+
+def test_scored_hole_refuses_nine_reassignment(matchup_db):
+    engine, ids = matchup_db
+    user_id = _setup(engine, ids)
+    with Session(engine) as session:
+        week_id = ids["weeks"][0]
+        match = _matches(session, week_id)[0]
+        submit_card(session, week_id,
+                    _card(session, week_id, [match.a_golfer_id, match.b_golfer_id]),
+                    user_id, TODAY, acknowledged=False)
+        session.commit()
+        season = session.get(Season, ids["season"])
+        holes = list(session.scalars(select(Hole).where(Hole.course_id == season.course_id).order_by(Hole.number)))
+        front = holes[0]
+        back = next(hole for hole in holes if hole.nine == "back" and hole.par == front.par)
+        grid = []
+        for hole in holes:
+            grid.append({"number": hole.number, "nine": hole.nine, "par": hole.par,
+                         "stroke_index_18": hole.stroke_index_18, "stroke_index_9": hole.stroke_index_9,
+                         "yardages": {yardage.tee_set_id: yardage.yards for yardage in session.scalars(
+                             select(HoleYardage).where(HoleYardage.hole_id == hole.id)
+                         )}})
+        for row in grid:
+            if row["number"] == front.number:
+                row["nine"] = "back"
+                row["stroke_index_9"] = back.stroke_index_9
+            elif row["number"] == back.number:
+                row["nine"] = "front"
+                row["stroke_index_9"] = front.stroke_index_9
+        with pytest.raises(CourseValidationError) as caught:
+            save_hole_grid(session, season.course_id, grid)
+        assert caught.value.errors["holes"] == "Cannot change the nine of a hole with submitted scores."
+        session.rollback()
+        assert session.get(Hole, front.id).nine == "front"
+        assert session.scalar(select(func.count(HoleScore.id))) == 18
 
 
 def test_scores_for_week_derives_totals(matchup_db):

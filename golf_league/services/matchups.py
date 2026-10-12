@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from golf_league.domain.matchups import pairing_shape, validate_team_once_per_week
 from golf_league.models import (
     Golfer,
+    HoleScore,
     PlayerMatch,
     Season,
     SeasonGolfer,
@@ -36,6 +37,25 @@ class MatchupValidationError(Exception):
 
 class MatchupConflict(Exception):
     """Structural conflicts or retriable database contention."""
+
+
+def _has_submitted_scores(session: Session, player_match_id: int) -> bool:
+    return session.execute(
+        select(HoleScore.id).where(HoleScore.player_match_id == player_match_id).limit(1)
+    ).first() is not None
+
+
+def _require_scored_sides_unchanged(session: Session, row: PlayerMatch,
+                                    new_a_id: int, new_b_id: int) -> None:
+    if ((row.a_golfer_id, row.b_golfer_id) != (new_a_id, new_b_id)
+            and _has_submitted_scores(session, row.id)):
+        raise MatchupConflict("A match with submitted scores cannot change its golfers.")
+
+
+def _check_scored_generation_changes(session: Session, changes: list) -> None:
+    for _, row, values in changes:
+        if row is not None:
+            _require_scored_sides_unchanged(session, row, values[0], values[1])
 
 
 def _flush(session: Session) -> None:
@@ -175,6 +195,7 @@ def _generate_player_matches(session: Session, team_match_id: int, *, clock: Clo
             desired.append((label, row, (a, b, False, False, own)))
     changes = [(label, row, values) for label, row, values in desired if values is not None and
                (row is None or (row.a_golfer_id, row.b_golfer_id, row.a_is_sub, row.b_is_sub, row.vs_own_handicap) != values)]
+    _check_scored_generation_changes(session, changes)
     now = _generated_time(clock) if changes else None
     for label, row, values in changes:
         if row is None:
@@ -249,6 +270,11 @@ def substitute_player_core(session: Session, season_id: int, player_match_id: in
         raise MatchupValidationError({"week": "Choose a scheduled match week."})
     if getattr(row, f"{side}_golfer_id") == golfer_id and getattr(row, f"{side}_is_sub"):
         return row
+    _require_scored_sides_unchanged(
+        session, row,
+        golfer_id if side == "a" else row.a_golfer_id,
+        golfer_id if side == "b" else row.b_golfer_id,
+    )
     golfer = session.get(Golfer, golfer_id)
     if golfer is None:
         raise LookupError("Golfer not found.")

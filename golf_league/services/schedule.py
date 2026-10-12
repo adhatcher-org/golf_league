@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from golf_league.domain.schedule import generate_weeks, rotate_nines, shift_from
 from golf_league.models import (
     Golfer,
+    HoleScore,
     PlayerMatch,
     Season,
     SeasonGolfer,
@@ -565,6 +566,15 @@ def confirm_nine_core(session: Session, season_id: int, week_id: int, *, new_nin
     preview = preview_nine(session, season_id, week_id, new_nine=new_nine, rerotate=rerotate)
     if preview.fingerprint != expected_fingerprint:
         raise ScheduleConflict("The schedule or requested change changed after this preview. Review a fresh preview.")
+    changed_week_ids = [change.week_id for change in preview.changes]
+    if changed_week_ids and session.execute(
+        select(HoleScore.id)
+        .join(PlayerMatch, PlayerMatch.id == HoleScore.player_match_id)
+        .join(TeamMatch, TeamMatch.id == PlayerMatch.team_match_id)
+        .where(TeamMatch.week_id.in_(changed_week_ids))
+        .limit(1)
+    ).first() is not None:
+        raise ScheduleConflict("A week with submitted scores cannot change its nine.")
     for change in preview.changes:
         session.get(Week, change.week_id).nine = change.new_value
     return preview

@@ -25,6 +25,7 @@ from golf_league.models import (
     Course,
     Golfer,
     Hole,
+    HoleScore,
     HoleYardage,
     SeasonParticipant,
     TeeRating,
@@ -331,25 +332,60 @@ def get_course_grid(session: Session, course_id: int) -> tuple[Course, list[Hole
     return course, holes, tees
 
 
+def _reject_scored_nine_reassignments(
+    session: Session, existing: dict[int, Hole], holes: list[dict[str, object]]
+) -> None:
+    reassigned_ids = [
+        existing[row["number"]].id for row in holes
+        if row["number"] in existing and existing[row["number"]].nine != row["nine"]
+    ]
+    if reassigned_ids and session.execute(
+        select(HoleScore.id).where(HoleScore.hole_id.in_(reassigned_ids)).limit(1)
+    ).first() is not None:
+        raise CourseValidationError({"holes": "Cannot change the nine of a hole with submitted scores."})
+
+
+def _validate_hole_par_totals(session: Session, course_id: int, holes: list[dict[str, object]]) -> None:
+    par_by_nine = {
+        nine: sum(row["par"] for row in holes if row["nine"] == nine)
+        for nine in ("front", "back")
+    }
+    ratings = list(session.execute(select(TeeRating).join(TeeSet).where(TeeSet.course_id == course_id)).scalars())
+    expected_by_scope = {
+        "front": par_by_nine["front"],
+        "back": par_by_nine["back"],
+        "full": par_by_nine["front"] + par_by_nine["back"],
+    }
+    for scope, expected in expected_by_scope.items():
+        if any(rating.par != expected for rating in ratings if rating.scope == scope):
+            raise CourseValidationError({"par": f"Hole par total must match every {scope} tee rating."})
+
+
 def save_hole_grid(session: Session, course_id: int, holes: list[dict[str, object]]) -> list[Hole] | None:
     """Validate and atomically replace the complete logical hole grid.
 
     Existing rows are updated in place so a confirmed manual nine-index stays
     exactly what the submitted form says; no value is re-derived on save.
     """
-    course = get_course(session, course_id)
+    from golf_league.services.schedule import ScheduleConflict, reserve_schedule_write
+
+    try:
+        reserve_schedule_write(session)
+    except ScheduleConflict as exc:
+        session.rollback()
+        raise CourseValidationError({"holes": "The hole grid is being changed. Retry."}) from exc
+    course = session.get(Course, course_id, populate_existing=True)
     if course is None:
         return None
     tees = list(session.execute(select(TeeSet).where(TeeSet.course_id == course_id)).scalars())
     errors = validate_hole_grid(holes, {tee.id for tee in tees})
     if errors:
         raise CourseValidationError(errors)
-    par_by_nine = {"front": sum(row["par"] for row in holes if row["nine"] == "front"), "back": sum(row["par"] for row in holes if row["nine"] == "back")}
-    ratings = list(session.execute(select(TeeRating).join(TeeSet).where(TeeSet.course_id == course_id)).scalars())
-    for scope, expected in (("front", par_by_nine["front"]), ("back", par_by_nine["back"]), ("full", par_by_nine["front"] + par_by_nine["back"])):
-        if any(rating.par != expected for rating in ratings if rating.scope == scope):
-            raise CourseValidationError({"par": f"Hole par total must match every {scope} tee rating."})
-    existing = {hole.number: hole for hole in session.execute(select(Hole).where(Hole.course_id == course_id)).scalars()}
+    _validate_hole_par_totals(session, course_id, holes)
+    existing = {hole.number: hole for hole in session.execute(
+        select(Hole).where(Hole.course_id == course_id).execution_options(populate_existing=True)
+    ).scalars()}
+    _reject_scored_nine_reassignments(session, existing, holes)
     try:
         for row in holes:
             hole = existing.get(row["number"])
