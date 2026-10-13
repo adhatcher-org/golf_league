@@ -42,6 +42,11 @@ from golf_league.security import (
 )
 from golf_league.services.course_seed import seed_wyandot
 from golf_league.services.email import FakeEmailSender, SmtpEmailSender
+from golf_league.services.scorecard_vision import (
+    OllamaVisionProvider,
+    photo_entry_configured,
+    vision_num_ctx,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +115,17 @@ async def lifespan(app: FastAPI):
             from_name=settings.smtp_from_name,
             tls_mode=settings.smtp_tls_mode,
         )
+    # The vision provider is built once, here, from the resolved settings, only
+    # when photo entry is configured and nothing has been assigned already.
+    # Nothing is called at startup. A test (or any caller) replaces it by
+    # assigning a fake to `app.state.vision_provider`, before or after startup;
+    # a non-None value is never overwritten here.
+    if app.state.vision_provider is None and photo_entry_configured(settings):
+        app.state.vision_provider = OllamaVisionProvider(
+            settings.ollama_url,
+            settings.ollama_vision_model,
+            vision_num_ctx(settings),
+        )
     database_url = settings.database_url
 
     app.state.ready = False
@@ -176,6 +192,8 @@ def create_app(settings=None) -> FastAPI:
     # In-memory sender by default; lifespan replaces it with SmtpEmailSender
     # when the resolved settings name an SMTP_HOST.
     app.state.email_sender = FakeEmailSender()
+    # Scorecard photo reader (R-OCR-PROVIDER); the lifespan fills it in when configured.
+    app.state.vision_provider = None
     app.state.invite_receipts = InviteReceiptStore()
     app.state.invite_form_nonces = InviteFormNonceStore()
     app.state.join_monotonic = time.monotonic

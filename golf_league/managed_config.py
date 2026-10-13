@@ -87,6 +87,13 @@ DEPLOY_FILE_KEYS: dict[str, str | None] = {
     "EXTERNAL_BASE_URL": "external_base_url",
     "MAX_USERS": "max_users",
     "EMAIL_VERIFICATION_REQUIRED": "email_verification_required",
+    # Scorecard photo entry (R-OCR-PROVIDER, R-SCORES); interpreted by
+    # `golf_league.services.scorecard_vision`, never by `Settings` itself.
+    "ANALYSIS_PROVIDER": "analysis_provider",
+    "OLLAMA_URL": "ollama_url",
+    "OLLAMA_VISION_MODEL": "ollama_vision_model",
+    "OLLAMA_VISION_NUM_CTX": "ollama_vision_num_ctx",
+    "LEAGUE_TIMEZONE": "league_timezone",
     # First-boot only; read by `bootstrap_admin`, not a `Settings` field.
     "ADMIN_EMAIL": None,
     "ADMIN_PASSWORD": None,

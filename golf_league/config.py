@@ -82,6 +82,15 @@ class Settings(BaseSettings):
     # Environment-only: where the managed file lives. Never read from that file.
     managed_env_path: str = DEFAULT_MANAGED_ENV_PATH
 
+    # Scorecard photo entry (R-OCR-PROVIDER, R-SCORES). Deploy-time keys: plain
+    # strings with no validator, so a bad value can never stop startup. They are
+    # interpreted only by the helpers in golf_league.services.scorecard_vision.
+    analysis_provider: str = "ollama"
+    ollama_url: str = ""
+    ollama_vision_model: str = ""
+    ollama_vision_num_ctx: str = ""  # empty means 32768
+    league_timezone: str = "America/Chicago"
+
     @classmethod
     def settings_customise_sources(
         cls,

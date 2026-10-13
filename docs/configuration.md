@@ -1,18 +1,20 @@
 # Configuration
 
-Governing decision: `R-DEPLOYMENT` (v2) in the project's Rulings. This page describes what
+Governing decision: `R-DEPLOYMENT` (v3) in the project's Rulings. This page describes what
 the code does; the ruling is the authority for what it must do.
 
 ## Two kinds of setting
 
 **Deploy-time.** Never editable or displayed by the application: `SESSION_SECRET`,
-`DATABASE_URL`, `EXTERNAL_BASE_URL`, `MAX_USERS`, `EMAIL_VERIFICATION_REQUIRED`, `ADMIN_EMAIL`
-and `ADMIN_PASSWORD` (`DEPLOY_FILE_KEYS`). Each is read from the container environment and,
+`DATABASE_URL`, `EXTERNAL_BASE_URL`, `MAX_USERS`, `EMAIL_VERIFICATION_REQUIRED`, `ADMIN_EMAIL`,
+`ADMIN_PASSWORD`, `FORWARDED_ALLOW_IPS` and the scorecard photo keys `ANALYSIS_PROVIDER`,
+`OLLAMA_URL`, `OLLAMA_VISION_MODEL`, `OLLAMA_VISION_NUM_CTX` and `LEAGUE_TIMEZONE`
+(`DEPLOY_FILE_KEYS`; the last five are described under "Scorecard photo keys"). Each is read from the container environment and,
 when the environment does not set it, from the managed file (below). `MANAGED_ENV_PATH` is
 read from the environment only. `SESSION_SECRET` has no default: if neither the environment
 nor the file sets it, startup fails with "SESSION_SECRET is not set" and the file path checked.
 
-**Managed.** Exactly eight keys an administrator may change at `/admin/config`
+**Managed.** Exactly these keys, and no others, an administrator may change at `/admin/config`
 (`golf_league/managed_config.py`, `MANAGED_KEYS`):
 
 | Key | Type | Allowed values | Default |
@@ -28,6 +30,30 @@ nor the file sets it, startup fails with "SESSION_SECRET is not set" and the fil
 
 `LOG_LEVEL` sets the level of the application's own `golf_league` loggers, which write
 redacted lines to stdout. Uvicorn's own loggers are not affected.
+
+## Scorecard photo keys
+
+Five deploy-time keys configure scorecard photo entry (`R-OCR-PROVIDER`, `R-SCORES`). Each is
+read from the container environment, then the managed file, then the default; none is editable,
+displayed or rewritten at `/admin/config`, and none is a secret. `Settings` holds them as plain
+strings and never raises for them; a bad value means photo entry is **not configured** (or, for
+`LEAGUE_TIMEZONE`, the fallback below) and never stops startup. The interpretation is in
+`golf_league/services/scorecard_vision.py`.
+
+| Key | Meaning | Default |
+|---|---|---|
+| `ANALYSIS_PROVIDER` | `ollama` or `openai`; case and surrounding spaces ignored. `openai` is accepted but never configured: no OpenAI call exists. | `ollama` |
+| `OLLAMA_URL` | Base URL of the Ollama server, `http` or `https` with a host (for example `http://ollama.example.invalid:11434`) | empty |
+| `OLLAMA_VISION_MODEL` | Model name passed on every call (for example `ministral-3:8b`; an example only, no model name is a default or appears in code) | empty |
+| `OLLAMA_VISION_NUM_CTX` | Context size in tokens: ASCII digits, 2048 to 131072 | `32768` |
+| `LEAGUE_TIMEZONE` | IANA zone for "today"; an unknown zone falls back to the default and logs one warning naming the key | `America/Chicago` |
+
+Photo entry is configured only when the provider is `ollama`, the URL is valid, the model is
+non-empty and the context size is valid. The provider is built once at startup and nothing is
+called then; `/readyz` and `/healthz` are unaffected. Requests go to `{OLLAMA_URL}/api/chat`
+(standard-library `http.client`; 5 s connect timeout, 180 s total) with `stream` and `think`
+off, a JSON-schema `format` and `temperature` 0. Logs carry the provider, model name, duration
+and an error code only: never the URL, the image, names, scores or model output.
 
 ## Mail transport
 
@@ -56,9 +82,9 @@ retries and no outbox; a user whose mail failed simply asks again.
   atomically (temporary file in the same directory, `fsync`, rename), and a rename cannot
   cross a single-file bind mount.
 - Precedence, highest first: arguments passed to `Settings(...)` directly (tests only); the
-  eight **managed** keys from the file; the container environment; the **deploy-time** keys
-  from the file; the code default. So the file overrides the environment for the eight managed
-  keys, while the environment overrides the file for the deploy-time keys.
+  **managed** keys (`SMTP_*` and `LOG_LEVEL`) from the file; the container environment; the
+  **deploy-time** keys from the file; the code default. So the file overrides the environment for
+  the managed keys, while the environment overrides the file for the deploy-time keys.
 - On Unraid the deploy-time values (including `SESSION_SECRET` and the first-admin values) may
   therefore live in this file in the data directory instead of the container template. Keep it
   mode `0600` and owned by the container user; it is part of the private backup.
@@ -68,8 +94,8 @@ retries and no outbox; a user whose mail failed simply asks again.
   read the same way when the container starts: environment first, then the file, otherwise only
   the container itself is trusted. A file value of `*` is refused. The start-up output prints
   which source was used.
-- An empty value (`ADMIN_PASSWORD=`), in the file or in the environment, counts as unset. Any key outside the eight managed keys
-  and the deploy-time keys has no effect; `MANAGED_ENV_PATH` in the file has no effect.
+- An empty value (`ADMIN_PASSWORD=`), in the file or in the environment, counts as unset. Any key outside the managed keys
+  (`SMTP_*`, `LOG_LEVEL`) and the deploy-time keys listed above has no effect; `MANAGED_ENV_PATH` in the file has no effect.
 - A managed value in the file that fails validation (for example a hand-edited
   `SMTP_PORT=abc`) is ignored and logged by key name only; the environment or default value
   applies. An unreadable file is ignored the same way. Neither stops the application starting.
@@ -101,7 +127,7 @@ then overrides the environment). Submitting a new value and "Clear" together is 
 
 `GET /admin/config` and `POST /admin/config` require a verified admin (anonymous 401,
 non-admin 403) and a CSRF token bound to the session cookie (missing or wrong: 403). A POST
-containing any field outside the eight keys, their clear control and the CSRF token — or the
+containing any field outside the managed keys, their clear control and the CSRF token — or the
 same field twice — is rejected with 422 and writes nothing. Invalid values re-render the
 stored values with an error summary and 422. Success redirects 303 to `/admin/config?saved=1`.
 Responses are `Cache-Control: no-store`.
