@@ -287,6 +287,68 @@ def test_scorecard_pages_pass_static_audit_with_long_names(client):
     assert len(pages) == 11
 
 
+def test_week_score_pages_pass_static_audit_with_long_names(client):
+    """GL-84: the week sheet, the match page (open, locked) and the clear page, in each state."""
+    from datetime import UTC, datetime
+
+    from golf_league.security import generate_csrf_token
+
+    ids = _seed(client, admin=True)
+    _long_names(client)
+    week, state = ids["weeks"][0], client.app.state
+    state.scorecard_utc_now = lambda: datetime(2026, 8, 27, 18, 0, tzinfo=UTC)
+    with Session(client.app.state.engine) as session:
+        matches = list(session.scalars(select(PlayerMatch).order_by(PlayerMatch.id)))
+        sides = [(match.id, match.a_golfer_id, match.b_golfer_id) for match in matches]
+    token = generate_csrf_token(client.cookies.get("session") or "")
+    sheet, base = f"/admin/weeks/{week}/scores", f"/admin/weeks/{week}/matches"
+    pages: list[tuple[str, str]] = []
+
+    def audit(label: str, response, status: int = 200) -> None:
+        assert response.status_code == status, f"{label}: {response.status_code}"
+        pages.append((label, response.text))
+
+    def match_fields(index: int, value: str) -> dict:
+        match_id, a, b = sides[index]
+        return {f"score_{match_id}_{golfer}_{hole}": value for golfer in (a, b) for hole in range(1, 10)}
+
+    audit("sheet (nothing entered)", client.get(sheet))
+    audit("sheet (errors)", client.post(sheet, data={
+        "csrf_token": token, f"revision_{sides[0][0]}": "0", **match_fields(0, "x")}), 422)
+    saved = client.post(sheet, follow_redirects=False, data={
+        "csrf_token": token, f"revision_{sides[0][0]}": "0", f"revision_{sides[1][0]}": "0",
+        **match_fields(0, "5"), **match_fields(1, "6")})
+    assert saved.status_code == 303
+    audit("sheet (saved, with notice)", client.get(saved.headers["location"]))
+    audit("match (open, with saved scores)", client.get(f"{base}/{sides[0][0]}/scores"))
+    audit("match (empty)", client.get(f"{base}/{sides[2][0]}/scores"))
+    audit("match (out of date)", client.post(f"{base}/{sides[0][0]}/scores", data={
+        "csrf_token": token, "revision": "0",
+        **{f"score_{golfer}_{hole}": "4" for golfer in sides[0][1:] for hole in range(1, 10)}}), 409)
+    audit("clear (confirmation)", client.get(f"{base}/{sides[1][0]}/scores/clear"))
+    locked = client.post(f"{base}/{sides[0][0]}/lock", data={"csrf_token": token, "revision": "1"},
+                         follow_redirects=False)
+    assert locked.status_code == 303
+    audit("sheet (a locked match)", client.get(locked.headers["location"]))
+    audit("match (locked)", client.get(f"{base}/{sides[0][0]}/scores"))
+    audit("match (locked, clear refused)", client.get(f"{base}/{sides[0][0]}/scores/clear"), 409)
+    lock_all = client.post(f"{sheet}/lock-all", follow_redirects=False, data={
+        "csrf_token": token, **{f"revision_{match_id}": "0" for match_id, _, _ in sides}})
+    audit("sheet (after lock all, a changed match named)", client.get(lock_all.headers["location"]))
+
+    for label, html in pages:
+        _assert_accessible(label, html)
+        assert "<i>Markup</i>" not in html, f"{label}: unescaped synthetic markup"
+    assert any("Locked on" in html for _, html in pages) and len(pages) == 11
+
+
+def test_week_score_layout_rules_keep_the_page_from_scrolling_sideways():
+    assert "min-width: 0" in _rule(".score-match")  # the grid scrolls; the block never widens the page
+    assert "min-width: 46rem" in _rule(".score-grid--named table")
+    assert "overflow-wrap: anywhere" in _rule('.score-grid--named th[scope="row"]')
+    assert "flex-wrap: wrap" in _rule(".score-match__actions")
+
+
 def test_scorecard_layout_rules_keep_the_page_from_scrolling_sideways():
     # Photo beside the form only on a desktop; each player's grid scrolls in its own region.
     assert "grid-template-columns: minmax(0, 1fr)" in _rule(".scorecard-review")

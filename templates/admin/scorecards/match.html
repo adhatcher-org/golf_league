@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Week {{ week.index }} match scores - Golf League{% endblock %}
+{% block content %}
+<header class="admin-page-heading">
+    <div>
+        <p class="eyebrow">Manage · Scores · Week {{ week.index }}</p>
+        <h1>{{ title }}</h1>
+        <p>{{ view.entered }}. {{ view.lock_line }}.{% if view.changed_line %} {{ view.changed_line }}.{% endif %}</p>
+    </div>
+</header>
+<p><a href="{{ sheet_path }}#match-{{ match.player_match_id }}">Back to week {{ week.index }} scores</a></p>
+{% include "_error_summary.html" %}
+{% if editable %}
+<form class="scorecard-form" method="post" action="{{ match_path }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="revision" value="{{ match.revision }}">
+    {% include "scores/_match_table.html" %}
+    <p><button type="submit">Save scores</button></p>
+</form>
+<h2>Lock or clear</h2>
+<p>Lock the match once you have checked its scores. A locked match cannot be changed by anyone until you unlock it.</p>
+<form method="post" action="{{ match_path|replace('/scores', '') }}/lock">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="revision" value="{{ match.revision }}">
+    <p><button class="button-secondary" type="submit">Lock this match</button></p>
+</form>
+{% if not match.empty %}<p><a href="{{ match_path }}/clear">Clear scores</a></p>{% endif %}
+{% else %}
+{% include "scores/_match_table.html" %}
+{% if match.locked %}
+<p><strong>This match is locked.</strong> Unlock it to change the scores.</p>
+<form method="post" action="{{ match_path|replace('/scores', '') }}/unlock">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <p><button type="submit">Unlock this match</button></p>
+</form>
+{% elif not open_week %}
+<p>This week is {{ week.status }}. Its scores cannot be entered or changed.</p>
+{% endif %}
+{% endif %}
+{% endblock %}

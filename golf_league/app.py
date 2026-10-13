@@ -31,6 +31,7 @@ from golf_league.routers.admin_roster import router as admin_roster_router
 from golf_league.routers.admin_scorecards import router as admin_scorecards_router
 from golf_league.routers.admin_seasons import router as admin_seasons_router
 from golf_league.routers.admin_teams import router as admin_teams_router
+from golf_league.routers.admin_week_scores import router as admin_week_scores_router
 from golf_league.routers.admin_weeks import router as admin_weeks_router
 from golf_league.routers.home import router as home_router
 from golf_league.routers.identity import router as identity_router
@@ -271,6 +272,7 @@ def create_app(settings=None) -> FastAPI:
     app.include_router(admin_weeks_router)
     app.include_router(admin_matches_router)
     app.include_router(admin_scorecards_router)
+    app.include_router(admin_week_scores_router)
 
     # Health endpoints
     @app.get("/healthz")

@@ -1,0 +1,8 @@
+<tr>
+    <th scope="row">{{ row.golfer.name }}{% if row.golfer.is_sub %} (sub){% endif %}</th>
+    {% for cell in row.inputs %}
+    <td><label class="visually-hidden" for="{{ cell.field }}">Hole {{ cell.hole }}, {{ row.golfer.name }}</label>
+        <input class="score-input" type="text" inputmode="numeric" maxlength="2" autocomplete="off" id="{{ cell.field }}" name="{{ cell.field }}" value="{{ cell.value }}"{% if form_id %} form="{{ form_id }}"{% endif %}{% if cell.invalid %} aria-invalid="true"{% endif %}></td>
+    {% endfor %}
+    <td>—</td>
+</tr>

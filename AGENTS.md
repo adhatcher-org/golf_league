@@ -59,7 +59,13 @@ orchestrator repo next door.
   `golf_league/routers/player_schedule.py`; projections are in
   `golf_league/services/player_schedule.py`, with markup in `templates/player/`.
 - Scorecard validation and match grouping are in `golf_league/domain/scorecard.py`;
-  `golf_league/services/scores.py` checks week eligibility and atomically writes hole scores.
+  `golf_league/services/scores.py` checks week eligibility and atomically writes hole scores,
+  and owns updating, locking, unlocking and clearing a match (`match_score_states` holds each
+  match's revision and lock).
+- The admin week sheet, one-match page, lock, unlock, "Lock all" and clear are
+  `golf_league/routers/admin_week_scores.py` with `templates/admin/scorecards/scores.html`,
+  `match.html` and `clear.html`; the shared score-grid partials are in `templates/scores/`, and
+  `golf_league/services/match_entry.py` names the score fields and reads a posted form.
 - Scorecard photo entry (R-SCORES, R-OCR-PROVIDER): the admin pages are
   `golf_league/routers/admin_scorecards.py` with `templates/admin/scorecards/` and the status
   polling script `static/scorecard-status.js`. `golf_league/services/scorecard_image.py` turns an

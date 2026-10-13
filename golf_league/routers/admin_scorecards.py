@@ -54,7 +54,6 @@ from golf_league.services.scores import (
     default_week,
     eligible_weeks,
     league_today,
-    scores_for_week,
     submit_card,
     week_holes,
 )
@@ -409,20 +408,3 @@ async def scorecard_discard(draft_id: int, request: Request,
     discard_draft(session, draft_id, directory=request.app.state.scorecard_dir)
     target = f"{NEW_PATH}?week_id={week_id}" if _text(form, "retry") == "1" else f"{NEW_PATH}?discarded=1"
     return RedirectResponse(target, status_code=303, headers=PRIVATE_HEADERS)
-
-
-# --- what was saved ---------------------------------------------------------
-
-
-@router.get("/admin/weeks/{week_id}/scores")
-async def week_scores(week_id: int, request: Request,
-                      session: Session = Depends(get_session),  # noqa: B008
-                      admin=Depends(require_admin)) -> Response:  # noqa: B008
-    week = session.get(Week, week_id)
-    if week is None:
-        raise HTTPException(status_code=404, detail="Not found")
-    return _page(request, "admin/scorecards/scores.html", {
-        "week": week, "matches": scores_for_week(session, week_id),
-        "hole_numbers": [hole.number for hole in week_holes(session, week_id)],
-        "saved": request.query_params.get("saved") == "1",
-    })

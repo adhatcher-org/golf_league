@@ -1570,3 +1570,38 @@ pre { max-width: 100%; overflow-x: auto; }
     .scorecard-review { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: start; }
     .scorecard-review__photo { position: sticky; top: 1rem; }
 }
+
+/* Week scores (GL-84): one block per match, its grid scrolling inside its own region. */
+.score-pairing { margin: 0 0 2rem; }
+.score-match {
+    display: grid;
+    gap: 0.6rem;
+    min-width: 0;
+    margin: 0 0 1.25rem;
+    padding: 1rem;
+    border: 1px solid var(--line);
+    border-radius: 0.55rem;
+    background: var(--surface);
+}
+
+.score-match h3,
+.score-match p { margin: 0; }
+.score-match__state { color: var(--ink); font-weight: 600; }
+
+.score-match__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+}
+
+.score-match__actions form { width: auto; }
+
+/* A grid with the golfer's name beside the nine holes and the total. */
+.score-grid--named table { min-width: 46rem; }
+.score-grid--named th[scope="row"] {
+    min-width: 9rem;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}

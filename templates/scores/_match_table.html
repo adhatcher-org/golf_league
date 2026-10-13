@@ -1,0 +1,8 @@
+<div class="table-wrap score-grid score-grid--named">
+    <table>
+        <thead><tr><th scope="col">Golfer</th>{% for number in hole_numbers %}<th scope="col">Hole {{ number }}</th>{% endfor %}<th scope="col">Total</th></tr></thead>
+        <tbody>
+            {% for row in view.rows %}{% if row.inputs %}{% include "scores/_match_inputs.html" %}{% else %}{% include "scores/_match_scores.html" %}{% endif %}{% endfor %}
+        </tbody>
+    </table>
+</div>

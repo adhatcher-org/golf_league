@@ -138,21 +138,6 @@ class EntryState:
     opens_on: date | None = None
 
 
-@dataclass(frozen=True)
-class GolferScores:
-    golfer_id: int
-    name: str
-    strokes_by_hole: dict[int, int]
-    total: int
-
-
-@dataclass(frozen=True)
-class MatchScores:
-    player_match_id: int
-    position_label: str
-    golfers: tuple[GolferScores, ...]
-
-
 def league_today(clock: Clock, timezone_name: str) -> date:
     """League-local calendar date for the injected clock's aware instant."""
     return clock().astimezone(ZoneInfo(timezone_name)).date()
@@ -770,32 +755,3 @@ def player_entry_state(session: Session, week_id: int, golfer_id: int | None, to
 def player_entry_states(session: Session, week_ids: Iterable[int], golfer_id: int | None,
                         today: date) -> dict[int, EntryState]:
     return {week_id: player_entry_state(session, week_id, golfer_id, today) for week_id in week_ids}
-
-
-def scores_for_week(session: Session, week_id: int) -> list[MatchScores]:
-    """Stored scores grouped by match then golfer with a derived total."""
-    holes = {hole.id: hole.number for hole in week_holes(session, week_id)}
-    result: list[MatchScores] = []
-    for match in _week_player_matches(session, week_id):
-        scores = list(session.scalars(
-            select(HoleScore).where(HoleScore.player_match_id == match.id).order_by(HoleScore.golfer_id, HoleScore.hole_id)
-        ))
-        if not scores:
-            continue
-        per_golfer: dict[int, dict[int, int]] = {}
-        for score in scores:
-            number = holes.get(score.hole_id)
-            if number is None:
-                number = session.get(Hole, score.hole_id).number
-            per_golfer.setdefault(score.golfer_id, {})[number] = score.strokes
-        golfers = tuple(
-            GolferScores(
-                golfer_id=golfer_id,
-                name=_name(session.get(Golfer, golfer_id)),
-                strokes_by_hole=dict(sorted(strokes.items())),
-                total=sum(strokes.values()),
-            )
-            for golfer_id, strokes in per_golfer.items()
-        )
-        result.append(MatchScores(match.id, match.position_label, golfers))
-    return result

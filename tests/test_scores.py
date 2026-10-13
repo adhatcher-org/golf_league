@@ -40,8 +40,8 @@ from golf_league.services.scores import (
     card_candidates,
     default_week,
     league_today,
-    scores_for_week,
     week_holes,
+    week_sheet,
 )
 from golf_league.services.seasons import SeasonValidationError, update_season
 
@@ -246,9 +246,9 @@ def test_two_golfer_card_writes_eighteen_rows(matchup_db):
         assert len(rows) == 18
         assert {r.entered_by_user_id for r in rows} == {user_id}
         assert all(r.entered_at.tzinfo is not None for r in rows)
-        pages = scores_for_week(session, ids["weeks"][0])
+        pages = [page for page in week_sheet(session, ids["weeks"][0]) if not page.empty]
         assert len(pages) == 1 and pages[0].player_match_id == match.id
-        assert [g.total for g in pages[0].golfers] == [72, 72] or [g.total for g in pages[0].golfers] == [36, 36]
+        assert [g.total for g in pages[0].golfers] == [36, 36]
 
 
 def test_scored_week_refuses_nine_change_even_when_card_arrives_after_preview(matchup_db):
@@ -399,7 +399,7 @@ def test_scored_hole_refuses_nine_reassignment(matchup_db):
         assert session.scalar(select(func.count(HoleScore.id))) == 18
 
 
-def test_scores_for_week_derives_totals(matchup_db):
+def test_the_week_sheet_derives_totals(matchup_db):
     engine, ids = matchup_db
     user_id = _setup(engine, ids)
     with Session(engine) as session:
@@ -408,7 +408,7 @@ def test_scores_for_week_derives_totals(matchup_db):
         entries = [(match.a_golfer_id, dict.fromkeys(numbers, 5)),
                    (match.b_golfer_id, {n: ("4" if n < 5 else 6) for n in numbers})]
         submit_card(session, ids["weeks"][0], entries, user_id, TODAY, acknowledged=False)
-        totals = {g.golfer_id: g.total for g in scores_for_week(session, ids["weeks"][0])[0].golfers}
+        totals = {g.golfer_id: g.total for g in week_sheet(session, ids["weeks"][0])[0].golfers}
         assert totals == {match.a_golfer_id: 45, match.b_golfer_id: 4 * 4 + 5 * 6}
 
 

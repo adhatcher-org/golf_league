@@ -3,28 +3,60 @@
 {% block content %}
 <header class="admin-page-heading">
     <div>
-        <p class="eyebrow">Manage · Scorecards</p>
+        <p class="eyebrow">Manage · Scores</p>
         <h1>Week {{ week.index }} scores</h1>
-        <p>{{ week.play_date.strftime('%b %-d, %Y') }}{% if week.nine %} · {{ week.nine|title }} nine{% endif %}. Saved scores cannot be changed here.</p>
+        <p>{{ week.play_date.strftime('%b %-d, %Y') }}{% if week.nine %} · {{ week.nine|title }} nine{% endif %}. {{ entered }} of {{ sheet|length }} matches entered, {{ locked }} locked.</p>
     </div>
 </header>
-{% if saved %}<p class="notice" role="status">The card was saved. Its photo has been deleted.</p>{% endif %}
-<p><a href="/admin/scorecards/new">Enter another scorecard</a></p>
-{% for match in matches %}
-<section>
-    <h2>Match {{ match.position_label }}: {{ match.golfers|map(attribute='name')|join(' and ') }}</h2>
-    <div class="table-wrap">
-        <table>
-            <thead><tr><th scope="col">Golfer</th>{% for number in hole_numbers %}<th scope="col">Hole {{ number }}</th>{% endfor %}<th scope="col">Total</th></tr></thead>
-            <tbody>
-                {% for golfer in match.golfers %}
-                <tr><th scope="row">{{ golfer.name }}</th>{% for number in hole_numbers %}<td>{{ golfer.strokes_by_hole.get(number, '—') }}</td>{% endfor %}<td>{{ golfer.total }}</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+{% for notice in notices %}<p class="notice" role="status">{{ notice }}</p>{% endfor %}
+{% include "_error_summary.html" %}
+<p><a href="/admin/scorecards/new">Enter a scorecard</a></p>
+{% if not sheet %}<p>No scores can be entered yet: this week has no generated matches.</p>{% endif %}
+{% if sheet and not open_week %}<p>This week is {{ week.status }}. Its scores cannot be entered or changed.</p>{% endif %}
+{% if has_inputs %}
+<form id="{{ form_id }}" class="scorecard-form" method="post" action="/admin/weeks/{{ week.id }}/scores">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% for group in groups %}{% for view in group.matches %}{% if view.has_inputs %}<input type="hidden" name="{{ view.revision_field }}" value="{{ view.match.revision }}">{% endif %}{% endfor %}{% endfor %}
+    <p>Type the scores for the matches not yet entered, then choose "Save scores" at the bottom. A match left blank is skipped. A match you start must be complete.</p>
+</form>
+{% endif %}
+{% for group in groups %}
+<section class="score-pairing" aria-labelledby="pairing-{{ group.team_match_id }}">
+    <h2 id="pairing-{{ group.team_match_id }}">{{ group.title }}</h2>
+    {% for view in group.matches %}
+    <div class="score-match" id="match-{{ view.match.player_match_id }}">
+        <h3>Match {{ view.match.position_label }}: {{ view.match.golfers[0].name }} and {{ view.match.golfers[1].name }}</h3>
+        <p class="score-match__state">{{ view.entered }}. {{ view.lock_line }}.{% if view.changed_line %} {{ view.changed_line }}.{% endif %}</p>
+        {% include "scores/_match_table.html" %}
+        <div class="score-match__actions">
+            <a href="{{ view.base_path }}/scores">Open match<span class="visually-hidden"> {{ view.match.position_label }}: {{ view.match.golfers[0].name }} and {{ view.match.golfers[1].name }}</span></a>
+            {% if view.match.locked %}
+            <form method="post" action="{{ view.base_path }}/unlock">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="button-secondary" type="submit">Unlock<span class="visually-hidden"> match {{ view.match.position_label }}: {{ view.match.golfers[0].name }} and {{ view.match.golfers[1].name }}</span></button>
+            </form>
+            {% elif not view.match.empty %}
+            <form method="post" action="{{ view.base_path }}/lock">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="revision" value="{{ view.match.revision }}">
+                <button class="button-secondary" type="submit">Lock<span class="visually-hidden"> match {{ view.match.position_label }}: {{ view.match.golfers[0].name }} and {{ view.match.golfers[1].name }}</span></button>
+            </form>
+            {% endif %}
+        </div>
     </div>
+    {% endfor %}
 </section>
-{% else %}
-<p>No scores are saved for this week yet.</p>
 {% endfor %}
+{% if has_inputs %}<p><button type="submit" form="{{ form_id }}">Save scores</button></p>{% endif %}
+{% if can_lock_all %}
+<section aria-labelledby="lock-all-title">
+    <h2 id="lock-all-title">Lock all</h2>
+    <p>Locking confirms the scores you have checked on this page. It locks every match that has both players entered and has not changed since you opened the page. A locked match cannot be changed by anyone until you unlock it.</p>
+    <form method="post" action="/admin/weeks/{{ week.id }}/scores/lock-all">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% for match in sheet %}<input type="hidden" name="revision_{{ match.player_match_id }}" value="{{ match.revision }}">{% endfor %}
+        <p><button type="submit">Lock all</button></p>
+    </form>
+</section>
+{% endif %}
 {% endblock %}

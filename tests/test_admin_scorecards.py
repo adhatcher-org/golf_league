@@ -421,10 +421,12 @@ def test_a_corrected_two_golfer_card_saves_18_rows_and_deletes_the_draft(cards):
 
     scores = client.get(response.headers["location"])
     assert scores.status_code == 200 and scores.headers["cache-control"] == "no-store"
-    assert "The card was saved" in scores.text
+    assert "The scores for 1 match were saved." in scores.text
     assert "A1 Example" in scores.text and "B1 Example" in scores.text
     assert "<td>43</td>" in scores.text and "<td>45</td>" in scores.text
-    assert "<form" not in scores.text.split('id="main-content"')[1].split("</main>")[0]  # read-only
+    # The saved match is shown read-only on the week sheet: no input carries either golfer's scores.
+    saved_block = scores.text.split('id="match-')[1]
+    assert "<input class=\"score-input\"" not in saved_block and "Entered. Not locked." in saved_block
     assert f'href="/admin/weeks/{ids["weeks"][0]}/scores"' in client.get("/admin/scorecards/new").text
 
 
@@ -951,7 +953,12 @@ def test_unknown_ids_are_404(cards):
 def test_the_scores_page_with_nothing_saved_says_so(cards):
     client, ids = cards
     page = client.get(f"/admin/weeks/{ids['weeks'][0]}/scores")
-    assert page.status_code == 200 and "No scores are saved for this week yet." in page.text
+    assert page.status_code == 200 and "0 of 4 matches entered, 0 locked." in page.text
+    assert page.text.count("Not entered. Not locked.") == 4
+    # A week with no generated matches says so and offers nothing to save.
+    empty = client.get(f"/admin/weeks/{ids['weeks'][1]}/scores")
+    assert empty.status_code == 200 and "this week has no generated matches" in empty.text
+    assert "Save scores" not in empty.text
 
 
 def test_the_admin_menu_links_to_enter_scorecard_and_players_see_no_link(cards):

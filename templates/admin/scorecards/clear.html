@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Clear match scores - Golf League{% endblock %}
+{% block content %}
+<header class="admin-page-heading">
+    <div>
+        <p class="eyebrow">Manage · Scores · Week {{ week.index }}</p>
+        <h1>Clear these scores?</h1>
+        <p>{{ title }}. {{ view.changed_line }}{% if view.changed_line %}.{% endif %}</p>
+    </div>
+</header>
+{% include "_error_summary.html" %}
+<p>Clearing deletes every score saved for this match. It cannot be undone. The match can then be entered again.</p>
+{% include "scores/_match_table.html" %}
+<form method="post" action="{{ match_path }}/clear">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="revision" value="{{ match.revision }}">
+    <p><button type="submit">Clear these scores</button></p>
+</form>
+<p><a href="{{ match_path }}">Keep the scores</a></p>
+{% endblock %}
