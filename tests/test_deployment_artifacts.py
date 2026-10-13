@@ -52,6 +52,14 @@ def test_swag_template_appends_client_address_and_marks_cookies_secure():
     assert not re.search(r"^\s*proxy_set_header\s+X-Forwarded-For", SWAG, re.MULTILINE)
 
 
+def test_swag_template_lets_the_largest_accepted_upload_reach_the_app():
+    """A 10 MB scorecard photo plus its multipart framing must not be stopped by nginx."""
+    from golf_league.services.scorecard_image import MAX_UPLOAD_BYTES
+
+    megabytes = int(re.search(r"^\s*client_max_body_size\s+(\d+)m;", SWAG, re.MULTILINE).group(1))
+    assert megabytes * 1024 * 1024 > MAX_UPLOAD_BYTES + 64 * 1024
+
+
 def _example_env() -> dict[str, str]:
     values = {}
     for line in EXAMPLE_ENV.splitlines():

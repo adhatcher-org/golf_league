@@ -32,6 +32,12 @@ MIN_NUM_CTX = 2048
 MAX_NUM_CTX = 131072
 DEFAULT_LEAGUE_TIMEZONE = "America/Chicago"
 MAX_PLAYERS = 8
+# Limits on what a reply may make the app store and render. A name is cut to
+# the roster's own name length; a number beyond this is not a score, a total or
+# a hole number, whatever the model meant.
+MAX_NAME_LENGTH = 80
+MAX_NUMBER = 999
+MAX_HEADER_ENTRIES = 24
 # A reply larger than this is not a scorecard reading.
 _MAX_REPLY_BYTES = 4 * 1024 * 1024
 
@@ -208,13 +214,13 @@ _FENCE_RE = re.compile(r"^```[A-Za-z0-9_-]*\s*\n?(.*?)\n?\s*```$", re.DOTALL)
 
 
 def _integer_or_none(value: Any) -> int | None:
-    """An int for an int or an integer-valued float; None for anything else."""
+    """An int for a small int or integer-valued float; None for anything else."""
     if isinstance(value, bool):
         return None
-    if isinstance(value, int):
-        return value
     if isinstance(value, float) and value.is_integer():
-        return int(value)
+        value = int(value)
+    if isinstance(value, int) and abs(value) <= MAX_NUMBER:
+        return value
     return None
 
 
@@ -242,7 +248,7 @@ def _parse_player(raw: Any, hole_count: int) -> ExtractedPlayer:
     if not all(isinstance(flag, bool) for flag in uncertain):
         raise ProviderOutputError("output_shape")
     return ExtractedPlayer(
-        name=name.strip(),
+        name=name.strip()[:MAX_NAME_LENGTH].strip(),
         scores=tuple(_score_cell(cell) for cell in scores),
         uncertain=tuple(uncertain),
         # Optional, untrusted extras: anything unusable is simply absent.
@@ -271,7 +277,8 @@ def parse_card(content: str, *, hole_count: int, model_name: str) -> ExtractedCa
     header = data.get("holes_header")
     holes_header = (
         tuple(
-            item for item in header if isinstance(item, int) and not isinstance(item, bool)
+            item for item in header[:MAX_HEADER_ENTRIES]
+            if isinstance(item, int) and not isinstance(item, bool) and abs(item) <= MAX_NUMBER
         )
         if isinstance(header, list)
         else ()

@@ -164,6 +164,35 @@ def test_zero_players_is_allowed():
     assert parse_card('{"players": []}', hole_count=9, model_name="m").players == ()
 
 
+def test_what_a_reply_can_make_the_app_store_is_bounded():
+    long_name = "N" * 200_000
+    huge = 10 ** 300
+    player = {"name": long_name, "scores": [4] * 9, "uncertain": [False] * 9,
+              "out_total": huge, "handicap_written": -huge}
+    card = parse_card(json.dumps(_reply(player, holes_header=[1, huge, 2] + [3] * 500)), hole_count=9,
+                      model_name="m")
+    assert card.players[0].name == "N" * 80
+    assert card.players[0].out_total is None and card.players[0].handicap_written is None
+    assert card.holes_header == (1, 2) + (3,) * 21  # capped at 24 entries, the absurd one dropped
+    assert parse_card(json.dumps(_reply({**player, "out_total": 999, "handicap_written": -999})),
+                      hole_count=9, model_name="m").players[0].out_total == 999
+
+
+@pytest.mark.parametrize("score", [10 ** 300, 1000, -1000, 1e300])
+def test_an_absurd_score_is_an_output_error(score):
+    player = {"name": "A", "scores": [score] + [4] * 8, "uncertain": [False] * 9}
+    with pytest.raises(ProviderOutputError) as raised:
+        parse_card(json.dumps(_reply(player)), hole_count=9, model_name="m")
+    assert raised.value.code == "output_bad_score"
+
+
+def test_an_oversized_reply_is_an_output_error(server):
+    server.body = b'{"message": {"content": "' + b"x" * (4 * 1024 * 1024) + b'"}}'
+    with pytest.raises(ProviderOutputError) as raised:
+        _read(server)
+    assert raised.value.code == "output_too_large"
+
+
 # --- the request ----------------------------------------------------------------------------
 
 
@@ -261,10 +290,16 @@ def test_refused_connection_is_unavailable():
     assert raised.value.code == "provider_unavailable"
 
 
-def test_unresolvable_host_is_unavailable():
+def test_unresolvable_host_is_unavailable(monkeypatch):
+    # The resolver is replaced, so no name is ever looked up on a real network.
+    def no_such_host(*args, **kwargs):
+        raise socket.gaierror(socket.EAI_NONAME, "synthetic: name not known")
+
+    monkeypatch.setattr(socket, "getaddrinfo", no_such_host)
     provider = OllamaVisionProvider("http://no-such-host.invalid", MODEL, 4096, connect_timeout=1.0)
-    with pytest.raises(ProviderUnavailable):
+    with pytest.raises(ProviderUnavailable) as raised:
         provider.read_scorecard(IMAGE, hole_count=9)
+    assert raised.value.code == "provider_unavailable"
 
 
 def test_bad_url_is_unavailable_without_a_network_call():

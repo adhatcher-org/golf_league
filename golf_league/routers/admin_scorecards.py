@@ -14,6 +14,7 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
 
@@ -38,12 +39,12 @@ from golf_league.services.scorecard_image import MAX_UPLOAD_BYTES, ImageRefused
 from golf_league.services.scorecard_review import (
     ACK_FIELD,
     CARD_ERROR,
-    acknowledgement_needed,
+    acknowledgement_token,
     build_review,
     field_names,
     golfer_options,
     parse_submission,
-    unpaired_golfers,
+    unpaired_on_card,
 )
 from golf_league.services.scorecard_vision import league_timezone_name
 from golf_league.services.scores import (
@@ -237,6 +238,12 @@ async def scorecard_create(request: Request,
         errors = {"photo": _IMAGE_MESSAGES.get(exc.code, _IMAGE_MESSAGES["unsupported_type"])}
     except _Refused as exc:
         errors = {exc.field: exc.message}
+    except (SQLAlchemyError, OSError) as exc:
+        # A busy database or a data directory that cannot be written: nothing was kept.
+        session.rollback()
+        logger.warning("scorecard draft not created type=%s", type(exc).__name__)
+        return _new_page(request, session, admin, week_id=week_id, status_code=503, errors={
+            "photo": "The card could not be started just now. Nothing was saved; try again."})
     else:
         return RedirectResponse(f"/admin/scorecards/{draft.id}", status_code=303, headers=PRIVATE_HEADERS)
     session.rollback()
@@ -329,9 +336,12 @@ async def scorecard_submit(draft_id: int, request: Request,
     values = {name: _text(form, name) for name in field_names(hole_numbers)}
     submission = parse_submission(values, hole_numbers, options)
     errors = dict(submission.errors)
-    if not errors and not submission.acknowledged and acknowledgement_needed(submission, options):
-        names = unpaired_golfers([golfer_id for golfer_id, _ in submission.entries],
-                                 {option.golfer_id: option for option in options})
+    unpaired = [] if errors else unpaired_on_card(submission, options)
+    # The tick counts only for the golfers it was shown beside.
+    acknowledged = bool(unpaired) and submission.acknowledgement == acknowledgement_token(
+        [option.golfer_id for option in unpaired])
+    if unpaired and not acknowledged:
+        names = [option.name for option in unpaired]
         errors[ACK_FIELD] = ("Tick the box to confirm: " + ", ".join(names)
                              + (" is" if len(names) == 1 else " are")
                              + " not paired with an opponent on this card.")
@@ -343,8 +353,7 @@ async def scorecard_submit(draft_id: int, request: Request,
     # first action and re-checks everything inside that one write transaction.
     session.rollback()
     try:
-        submit_card(session, week_id, list(submission.entries), user_id, today,
-                    acknowledged=submission.acknowledged)
+        submit_card(session, week_id, list(submission.entries), user_id, today, acknowledged=acknowledged)
         stored = session.get(ScorecardDraft, draft_id)
         if stored is None:
             session.rollback()
@@ -359,6 +368,14 @@ async def scorecard_submit(draft_id: int, request: Request,
         status_code, errors = _refusal(exc)
         kept = _open_draft(request, session, draft_id)  # a refused submit keeps the draft
         return _review_page(request, session, kept, values=values, errors=errors, status_code=status_code)
+    except (SQLAlchemyError, OSError) as exc:
+        # The database or the photo could not be written. No score was saved;
+        # the form comes back with what the admin typed instead of an error page.
+        session.rollback()
+        logger.warning("scorecard submit failed draft=%d type=%s", draft_id, type(exc).__name__)
+        kept = _open_draft(request, session, draft_id)
+        return _review_page(request, session, kept, values=values, status_code=503, errors={
+            CARD_ERROR: "The scores could not be saved just now. Nothing was saved; submit the card again."})
     logger.info("scorecard submitted draft=%d week=%d", draft_id, week_id)
     return RedirectResponse(f"/admin/weeks/{week_id}/scores?saved=1", status_code=303,
                             headers=PRIVATE_HEADERS)

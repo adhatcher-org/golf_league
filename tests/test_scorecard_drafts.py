@@ -527,6 +527,32 @@ def test_purge_removes_an_old_stray_photo_and_keeps_a_new_one(db):
     assert _files(directory) == sorted([referenced, new_stray.name, "subdirectory"])
 
 
+def test_a_photo_that_cannot_be_removed_never_keeps_expired_text_alive(db, caplog):
+    engine, ids, directory = db
+    stuck = _create(engine, ids, directory, clock=lambda: NOW - timedelta(hours=30))
+    other = _create(engine, ids, directory, clock=lambda: NOW - timedelta(hours=30))
+    run_extraction(_factory(engine), stuck, FakeProvider(), directory=directory)
+    assert _draft(engine, stuck).extracted_json
+    old = (NOW - timedelta(hours=30)).timestamp()
+    for name in _files(directory):
+        os.utime(directory / name, (old, old))
+    os.chmod(directory, 0o500)  # nothing in the directory can be unlinked
+    try:
+        with caplog.at_level(logging.WARNING), Session(engine) as session:
+            assert purge_expired(session, NOW, directory=directory) == 2
+        # Both rows, and the names and scores one of them held, are gone even though no photo could be.
+        assert _draft(engine, stuck) is None and _draft(engine, other) is None
+        assert len(_files(directory)) == 2
+        assert "scorecard photos could not be removed count=" in caplog.text
+        assert str(directory) not in caplog.text
+    finally:
+        os.chmod(directory, 0o700)
+    # Once the directory is writable again the stray sweep removes what was left behind.
+    with Session(engine) as session:
+        assert purge_expired(session, NOW, directory=directory) == 0
+    assert _files(directory) == []
+
+
 def test_purge_with_no_directory_yet_is_harmless(db):
     engine, ids, directory = db
     with Session(engine) as session:

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from golf_league.domain.scorecard import group_by_match, is_blank, validate_strokes
+from golf_league.domain.scorecard import is_blank, validate_strokes
 from golf_league.domain.scorecard_review import (
     NameCandidate,
     card_side,
@@ -156,6 +156,7 @@ class ReviewView:
     warnings: tuple[tuple[str, str], ...]  # (anchor id or "", message), listed at the top
     unpaired: tuple[str, ...]
     needs_acknowledgement: bool
+    acknowledgement_value: str
     acknowledged: bool
 
 
@@ -166,11 +167,19 @@ def _selected_id(values: Mapping[str, str], row: int, by_id: Mapping[int, Golfer
     return None
 
 
-def unpaired_golfers(golfer_ids: Sequence[int], by_id: Mapping[int, GolferOption]) -> list[str]:
-    """Names of the chosen golfers whose opponent is not on the card."""
+def unpaired_ids(golfer_ids: Sequence[int], by_id: Mapping[int, GolferOption]) -> list[int]:
+    """The chosen golfers whose opponent is not on the card, in the order chosen."""
     chosen = list(dict.fromkeys(golfer_ids))
-    return [by_id[golfer_id].name for golfer_id in chosen
-            if by_id[golfer_id].opponent_golfer_id not in chosen]
+    return [golfer_id for golfer_id in chosen if by_id[golfer_id].opponent_golfer_id not in chosen]
+
+
+def acknowledgement_token(golfer_ids: Sequence[int]) -> str:
+    """The checkbox value for one set of unpaired golfers.
+
+    The tick is only honoured for the golfers it was shown beside: change who
+    is on the card and the admin is asked again, with the new names.
+    """
+    return "-".join(str(golfer_id) for golfer_id in sorted(set(golfer_ids)))
 
 
 def _row_warnings(who: str, player: ExtractedPlayer | None, scores: Sequence[int | None],
@@ -249,11 +258,13 @@ def build_review(card: ExtractedCard | None, week: Week, hole_numbers: Sequence[
         top.extend((f"player-{row + 1}", message) for message in warnings)
 
     chosen = [row.golfer_id for row in rows if row.golfer_id is not None]
-    unpaired = unpaired_golfers(chosen, by_id) if len(set(chosen)) >= 2 else []
+    unpaired = unpaired_ids(chosen, by_id) if len(set(chosen)) >= 2 else []
+    token = acknowledgement_token(unpaired)
     return ReviewView(
         rows=tuple(rows), options=tuple(options), hole_numbers=tuple(hole_numbers), warnings=tuple(top),
-        unpaired=tuple(unpaired), needs_acknowledgement=bool(unpaired),
-        acknowledged=values.get(ACK_FIELD, "") == "1",
+        unpaired=tuple(by_id[golfer_id].name for golfer_id in unpaired),
+        needs_acknowledgement=bool(unpaired), acknowledgement_value=token,
+        acknowledged=bool(unpaired) and values.get(ACK_FIELD, "") == token,
     )
 
 
@@ -264,7 +275,7 @@ def build_review(card: ExtractedCard | None, week: Week, hole_numbers: Sequence[
 class Submission:
     entries: tuple[tuple[int, dict[int, int]], ...]
     errors: dict[str, str]  # field name (or CARD_ERROR) to a plain sentence
-    acknowledged: bool
+    acknowledgement: str  # the checkbox value as posted, "" when not ticked
 
     @property
     def invalid_fields(self) -> frozenset[str]:
@@ -314,13 +325,11 @@ def parse_submission(values: Mapping[str, str], hole_numbers: Sequence[int],
             entries.append((golfer_id, scores))
     if not errors and not 2 <= len(entries) <= ROW_COUNT:
         errors[CARD_ERROR] = "A card needs two to four golfers. Fill in at least two players."
-    return Submission(tuple(entries), errors, values.get(ACK_FIELD, "") == "1")
+    return Submission(tuple(entries), errors, values.get(ACK_FIELD, "").strip())
 
 
-def acknowledgement_needed(submission: Submission, options: Sequence[GolferOption]) -> bool:
-    """Whether the card pairs anyone without their opponent (R-SCORES "Grouping is derived")."""
+def unpaired_on_card(submission: Submission, options: Sequence[GolferOption]) -> list[GolferOption]:
+    """The submitted golfers with no opponent on the card (R-SCORES "Grouping is derived")."""
     by_id = {option.golfer_id: option for option in options}
-    return group_by_match(
-        (golfer_id, by_id[golfer_id].player_match_id, by_id[golfer_id].opponent_golfer_id)
-        for golfer_id, _ in submission.entries
-    ).incomplete
+    return [by_id[golfer_id]
+            for golfer_id in unpaired_ids([golfer_id for golfer_id, _ in submission.entries], by_id)]

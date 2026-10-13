@@ -59,7 +59,7 @@
             </fieldset>
             {% endfor %}
             {% if view.needs_acknowledgement %}
-            <label class="scorecard-acknowledge" for="acknowledged"><input class="scorecard-acknowledge__checkbox" type="checkbox" id="acknowledged" name="acknowledged" value="1"{% if view.acknowledged %} checked{% endif %}>
+            <label class="scorecard-acknowledge" for="acknowledged"><input class="scorecard-acknowledge__checkbox" type="checkbox" id="acknowledged" name="acknowledged" value="{{ view.acknowledgement_value }}"{% if view.acknowledged %} checked{% endif %}>
                 <span>I have checked this card: {{ view.unpaired|join(', ') }} {{ 'is' if view.unpaired|length == 1 else 'are' }} not paired with an opponent on it.</span></label>
             {% endif %}
             <p><button type="submit">Submit scores</button></p>

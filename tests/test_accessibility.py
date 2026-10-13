@@ -276,7 +276,7 @@ def test_scorecard_pages_pass_static_audit_with_long_names(client):
     audit("review (manual, after a failed read)", client.get(f"/admin/scorecards/{failed}?manual=1"))
 
     audit("scores (none saved)", client.get(f"/admin/weeks/{week}/scores"))
-    saved = _submit(client, waiting, rows, acknowledged=True)
+    saved = _submit(client, waiting, rows, acknowledged=[golfers[1]])
     assert saved.status_code == 303
     audit("scores (a saved card)", client.get(saved.headers["location"]))
     audit("new (with saved scores)", client.get("/admin/scorecards/new"))

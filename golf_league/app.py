@@ -199,8 +199,10 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Cleanup on shutdown. A read still in flight is not waited for: its draft
-    # stays `extracting` and the next startup marks it interrupted.
+    # Cleanup on shutdown. Queued reads are cancelled. A read already in flight
+    # cannot be interrupted: the interpreter waits for it at exit, so a container
+    # stopped mid-read may run until the stop timeout kills it. Either way its
+    # draft stays `extracting` and the next startup marks it interrupted.
     if owned_executor is not None:
         owned_executor.shutdown(wait=False, cancel_futures=True)
         app.state.scorecard_executor = None

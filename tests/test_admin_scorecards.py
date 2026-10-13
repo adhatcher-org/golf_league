@@ -7,11 +7,12 @@ images are made in memory, and the provider is always a fake.
 import io
 import logging
 import re
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from PIL import Image
 from sqlalchemy import event, func, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from test_matchup_generation import create_generated, seed_fixture
 
@@ -143,8 +144,8 @@ def _draft_id(response) -> int:
     return int(response.headers["location"].rsplit("/", 1)[1])
 
 
-def _form(client, rows, *, holes=range(1, 10), acknowledged=False, **extra) -> dict:
-    """Review-form data: `rows` are `(name, golfer id or "", scores)`."""
+def _form(client, rows, *, holes=range(1, 10), acknowledged=(), **extra) -> dict:
+    """Review-form data: `rows` are `(name, golfer id or "", scores)`; `acknowledged` the unpaired ids ticked."""
     data = {"csrf_token": _token(client), **extra}
     for index, (name, golfer_id, scores) in enumerate(rows):
         data[f"name_{index}"] = name
@@ -152,7 +153,8 @@ def _form(client, rows, *, holes=range(1, 10), acknowledged=False, **extra) -> d
         for hole, score in zip(holes, scores, strict=True):
             data[f"score_{index}_{hole}"] = str(score)
     if acknowledged:
-        data["acknowledged"] = "1"
+        # The checkbox value names the unpaired golfers it was shown beside.
+        data["acknowledged"] = "-".join(str(golfer_id) for golfer_id in sorted(acknowledged))
     return data
 
 
@@ -423,7 +425,8 @@ def test_a_three_golfer_card_needs_the_acknowledgement(cards):
     assert "A2 Example is not paired with an opponent on this card" in refused.text
     assert 'name="acknowledged"' in refused.text
     assert _value(refused.text, "score_2_9") == "5"  # the admin's values are kept
-    assert _submit(client, draft_id, rows, acknowledged=True).status_code == 303
+    assert f'name="acknowledged" value="{golfers[1]}"' in refused.text
+    assert _submit(client, draft_id, rows, acknowledged=[golfers[1]]).status_code == 303
     assert _score_count(client) == 27
 
 
@@ -434,8 +437,37 @@ def test_a_mismatched_pair_needs_the_acknowledgement(cards):
     refused = _submit(client, draft_id, rows)
     assert refused.status_code == 422
     assert "A1 Example, B2 Example are not paired with an opponent on this card" in refused.text
-    assert _submit(client, draft_id, rows, acknowledged=True).status_code == 303
+    assert _submit(client, draft_id, rows, acknowledged=[ids["golfers"][0], ids["golfers"][5]]).status_code == 303
     assert _score_count(client) == 18
+
+
+def test_the_acknowledgement_only_counts_for_the_golfers_it_was_shown_beside(cards):
+    client, ids = cards
+    golfers = ids["golfers"]
+    draft_id = _manual(client, ids["weeks"][0])
+    shown = _submit(client, draft_id, [("", golfers[0], FIVES), ("", golfers[5], FIVES)])  # A1 and B2
+    assert shown.status_code == 422 and "A1 Example, B2 Example are not paired" in shown.text
+    # Ticked for A1 and B2, then the golfers are changed to A3 and B4: asked again, with the new names.
+    changed = [("", golfers[2], FIVES), ("", golfers[7], FIVES)]
+    again = _submit(client, draft_id, changed, acknowledged=[golfers[0], golfers[5]])
+    assert again.status_code == 422 and "A3 Example, B4 Example are not paired" in again.text
+    assert not re.search(r'name="acknowledged"[^>]*checked', again.text)
+    assert _score_count(client) == 0
+    # A bare tick with no golfers named is not enough either.
+    assert client.post(f"/admin/scorecards/{draft_id}/submit", follow_redirects=False,
+                       data={**_form(client, changed), "acknowledged": "1"}).status_code == 422
+    assert _submit(client, draft_id, changed, acknowledged=[golfers[2], golfers[7]]).status_code == 303
+    assert _score_count(client) == 18
+
+
+def test_a_tick_that_still_matches_stays_ticked_when_the_form_comes_back(cards):
+    client, ids = cards
+    golfers = ids["golfers"]
+    draft_id = _manual(client, ids["weeks"][0])
+    rows = [("", golfers[0], ("x",) * 9), ("", golfers[5], FIVES)]  # a bad score keeps the form open
+    response = _submit(client, draft_id, rows, acknowledged=[golfers[0], golfers[5]])
+    assert response.status_code == 422
+    assert re.search(r'name="acknowledged"[^>]*checked', response.text)
 
 
 def test_the_acknowledgement_is_offered_when_the_reading_is_already_unpaired(cards):
@@ -505,7 +537,7 @@ def test_the_same_card_twice_is_409_and_writes_nothing_new(cards):
     assert again.status_code == 409 and "already been submitted" in again.text
     assert _value(again.text, "score_0_1") == "9"
     # A card that shares one golfer with the earlier card is refused whole.
-    shared = _submit(client, second, [("", a1, (9,) * 9), ("", a2, (9,) * 9)], acknowledged=True)
+    shared = _submit(client, second, [("", a1, (9,) * 9), ("", a2, (9,) * 9)], acknowledged=[a1, a2])
     assert shared.status_code == 409
     assert _score_count(client) == 18 and _draft_count(client) == 1  # the refused draft is kept
     with Session(_engine(client)) as session:
@@ -577,7 +609,7 @@ def test_an_expired_draft_is_gone_everywhere(cards):
     assert client.get(f"/admin/scorecards/{draft_id}/status").status_code == 404
     assert _draft_count(client) == 1  # those GETs changed nothing
     rows = [("", ids["golfers"][0], FIVES), ("", ids["golfers"][4], FIVES)]
-    assert _submit(client, draft_id, rows).status_code in (404, 422)
+    assert _submit(client, draft_id, rows).status_code == 404
     assert _score_count(client) == 0
     # Opening the scorecard pages purges it and its photo.
     assert client.get(f"/admin/scorecards/{draft_id}").status_code == 404
@@ -888,9 +920,8 @@ def test_no_season_at_all_says_so(empty_admin_client):
     assert page.status_code == 200 and "There is no season yet." in page.text
 
 
-def test_the_date_used_is_the_injected_clock_never_the_wall_clock(cards):
+def test_a_drafts_times_come_from_the_injected_clock(cards):
     client, ids = cards
-    assert date.today() != NOW.date() or True  # the fixture's weeks are fixed dates in 2026
     draft_id = _manual(client, ids["weeks"][0])
     with Session(_engine(client)) as session:
         draft = session.get(ScorecardDraft, draft_id)
@@ -962,3 +993,66 @@ def test_a_stale_page_for_a_submitted_card_never_reaches_a_later_card(cards):
     assert _submit(client, first, [("", ids["golfers"][1], FIVES), ("", ids["golfers"][5], FIVES)]).status_code == 404
     assert client.get(f"/admin/scorecards/{first}/status").status_code == 404
     assert _draft_count(client) == 1 and _score_count(client) == 18
+
+
+# --- when saving fails -------------------------------------------------------------------------
+
+
+def test_a_photo_that_cannot_be_removed_stops_the_submit_and_saves_nothing(cards, monkeypatch, caplog):
+    client, ids = cards
+    import golf_league.routers.admin_scorecards as router_module
+
+    draft_id = _draft_id(_upload(client, ids["weeks"][0]))
+
+    def refuse(session, draft, *, directory):
+        raise PermissionError("synthetic: /private/path/must-not-be-logged.jpg")
+
+    monkeypatch.setattr(router_module, "delete_draft", refuse)
+    rows = [("A1", ids["golfers"][0], (7,) * 9), ("B1", ids["golfers"][4], (7,) * 9)]
+    with caplog.at_level(logging.WARNING):
+        response = _submit(client, draft_id, rows)
+    assert response.status_code == 503 and "could not be saved just now" in response.text
+    assert _value(response.text, "score_0_1") == "7"  # what the admin typed comes back
+    assert _score_count(client) == 0 and _draft_count(client) == 1 and len(_photos(client)) == 1
+    assert "scorecard submit failed" in caplog.text and "must-not-be-logged" not in caplog.text
+    monkeypatch.undo()
+    assert _submit(client, draft_id, rows).status_code == 303 and _score_count(client) == 18
+
+
+def test_a_failed_commit_saves_no_scores_and_brings_the_form_back(cards, monkeypatch):
+    client, ids = cards
+    import golf_league.routers.admin_scorecards as router_module
+
+    draft_id = _draft_id(_upload(client, ids["weeks"][0]))
+    real_delete = router_module.delete_draft
+
+    def delete_then_fail(session, draft, *, directory):
+        real_delete(session, draft, directory=directory)  # the photo is removed first, as specified
+        raise OperationalError("COMMIT", {}, Exception("synthetic disk failure"))
+
+    monkeypatch.setattr(router_module, "delete_draft", delete_then_fail)
+    rows = [("A1", ids["golfers"][0], (7,) * 9), ("B1", ids["golfers"][4], (7,) * 9)]
+    response = _submit(client, draft_id, rows)
+    assert response.status_code == 503 and _value(response.text, "score_1_9") == "7"
+    assert "No photo." in response.text
+    # No score was written and the draft row came back with the rollback; only the photo is gone.
+    assert _score_count(client) == 0 and _draft_count(client) == 1 and _photos(client) == []
+    monkeypatch.undo()
+    assert _submit(client, draft_id, rows).status_code == 303 and _score_count(client) == 18
+
+
+def test_a_busy_database_during_upload_is_a_plain_503_and_keeps_nothing(cards, monkeypatch, caplog):
+    client, ids = cards
+    import golf_league.routers.admin_scorecards as router_module
+
+    def locked(session, **kwargs):
+        raise OperationalError("INSERT INTO scorecard_drafts", {"image_path": "must-not-be-logged.jpg"},
+                               Exception("database is locked"))
+
+    monkeypatch.setattr(router_module, "create_draft", locked)
+    with caplog.at_level(logging.WARNING):
+        response = _upload(client, ids["weeks"][0])
+    assert response.status_code == 503 and "could not be started just now" in response.text
+    assert _draft_count(client) == 0 and _photos(client) == []
+    assert "scorecard draft not created type=OperationalError" in caplog.text
+    assert "must-not-be-logged" not in caplog.text

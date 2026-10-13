@@ -274,29 +274,54 @@ def discard_draft(session: Session, draft_id: int, *, directory: Path) -> bool:
     return True
 
 
-def purge_expired(session: Session, now: datetime, *, directory: Path) -> int:
-    """Delete every draft that has expired, and every stray photo; commits.
-
-    A stray photo is a file in the scorecard directory that no draft references
-    and that is more than 24 hours old. Returns the number of drafts deleted.
-    """
-    expired = session.scalars(select(ScorecardDraft).where(ScorecardDraft.expires_at <= now)).all()
-    for draft in expired:
-        delete_draft(session, draft, directory=directory)
-    session.commit()
-    if directory.is_dir():
-        referenced = set(session.scalars(
-            select(ScorecardDraft.image_path).where(ScorecardDraft.image_path.is_not(None))
-        ))
-        cutoff = (now - DRAFT_LIFETIME).timestamp()
-        for entry in directory.iterdir():
+def _sweep_stray_photos(session: Session, now: datetime, directory: Path) -> int:
+    """Remove unreferenced photos older than 24 hours; return how many could not be removed."""
+    if not directory.is_dir():
+        return 0
+    referenced = set(session.scalars(
+        select(ScorecardDraft.image_path).where(ScorecardDraft.image_path.is_not(None))
+    ))
+    cutoff = (now - DRAFT_LIFETIME).timestamp()
+    stuck = 0
+    for entry in directory.iterdir():
+        try:
             if entry.is_symlink() or not entry.is_file() or entry.name in referenced:
                 continue
             if entry.stat().st_mtime <= cutoff:
                 entry.unlink(missing_ok=True)
-    if expired:
-        logger.info("scorecard drafts purged count=%d", len(expired))
-    return len(expired)
+        except OSError:
+            stuck += 1
+    return stuck
+
+
+def purge_expired(session: Session, now: datetime, *, directory: Path) -> int:
+    """Delete every draft that has expired, and every stray photo; commits.
+
+    A stray photo is a file in the scorecard directory that no draft references
+    and that is more than 24 hours old. Each draft is deleted in its own
+    transaction, and a photo that cannot be removed never keeps a row (and its
+    extracted text) alive: the row goes, and the photo is left for the stray
+    sweep to retry. Returns the number of drafts deleted.
+    """
+    expired_ids = list(session.scalars(select(ScorecardDraft.id).where(ScorecardDraft.expires_at <= now)))
+    purged = stuck = 0
+    for draft_id in expired_ids:
+        draft = session.get(ScorecardDraft, draft_id)
+        if draft is None:
+            continue
+        try:
+            _remove_image(directory, draft.image_path)
+        except OSError:
+            stuck += 1
+        session.delete(draft)
+        session.commit()
+        purged += 1
+    stuck += _sweep_stray_photos(session, now, directory)
+    if purged:
+        logger.info("scorecard drafts purged count=%d", purged)
+    if stuck:
+        logger.warning("scorecard photos could not be removed count=%d", stuck)
+    return purged
 
 
 def mark_interrupted(session: Session) -> int:
