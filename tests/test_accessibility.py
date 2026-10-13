@@ -217,6 +217,88 @@ def test_admin_and_player_pages_pass_static_audit_with_long_names(client):
         assert "<i>Markup</i>" not in response.text, f"{path}: unescaped synthetic markup"
 
 
+def test_scorecard_pages_pass_static_audit_with_long_names(client):
+    """GL-82: every scorecard page, in each of its states, at the same audit as the rest."""
+    from datetime import UTC, datetime
+
+    from test_admin_scorecards import (
+        DeferredExecutor,
+        FakeProvider,
+        InlineExecutor,
+        _card,
+        _draft_id,
+        _player,
+        _submit,
+        _upload,
+    )
+
+    from golf_league.services.scorecard_vision import ProviderTimeout
+
+    ids = _seed(client, admin=True)
+    _long_names(client)
+    week, golfers, state = ids["weeks"][0], ids["golfers"], client.app.state
+    state.scorecard_utc_now = lambda: datetime(2026, 8, 27, 18, 0, tzinfo=UTC)
+    pages: list[tuple[str, str]] = []
+
+    def audit(label: str, response, status: int = 200) -> None:
+        assert response.status_code == status, f"{label}: {response.status_code}"
+        pages.append((label, response.text))
+
+    state.vision_provider = None
+    audit("new (photo reading not set up)", client.get("/admin/scorecards/new"))
+
+    # A reading with every kind of note: an unread cell, an unclear cell, a
+    # flagged name, a total that disagrees, a wrong-nine header.
+    state.vision_provider = FakeProvider(_card(
+        _player(LONG_FIRST, (6, 6, 6, 6, 6, None, 6, 5, 5), (True,) + (False,) * 8,
+                handicap_written=7, out_total=43),
+        _player("B1", out_total=40), _player("A2", (6,) * 9, out_total=44), _player("B2"),
+        header=tuple(range(10, 19)),
+    ))
+    state.scorecard_executor = DeferredExecutor()
+    waiting = _draft_id(_upload(client, week))
+    audit("status (being read)", client.get(f"/admin/scorecards/{waiting}"))
+    audit("new (with a card in progress)", client.get("/admin/scorecards/new"))
+    state.scorecard_executor.run()
+    review = client.get(f"/admin/scorecards/{waiting}")
+    audit("review (what was read)", review)
+    assert "Not read" in review.text and "Unclear" in review.text and "Check before you submit" in review.text
+
+    rows = [(LONG_FIRST, golfers[0], ("x",) * 9), ("B1", "", (5,) * 9), ("A2", golfers[1], (5,) * 9)]
+    audit("review (errors)", _submit(client, waiting, rows), 422)
+    rows = [(LONG_FIRST, golfers[0], (5,) * 9), ("B1", golfers[4], (5,) * 9), ("A2", golfers[1], (5,) * 9)]
+    audit("review (acknowledgement needed)", _submit(client, waiting, rows), 422)
+
+    state.scorecard_executor = InlineExecutor()
+    state.vision_provider = FakeProvider(ProviderTimeout())
+    failed = _draft_id(_upload(client, week))
+    audit("failed", client.get(f"/admin/scorecards/{failed}"))
+    audit("review (manual, after a failed read)", client.get(f"/admin/scorecards/{failed}?manual=1"))
+
+    audit("scores (none saved)", client.get(f"/admin/weeks/{week}/scores"))
+    saved = _submit(client, waiting, rows, acknowledged=True)
+    assert saved.status_code == 303
+    audit("scores (a saved card)", client.get(saved.headers["location"]))
+    audit("new (with saved scores)", client.get("/admin/scorecards/new"))
+
+    for label, html in pages:
+        _assert_accessible(label, html)
+        assert "<i>Markup</i>" not in html, f"{label}: unescaped synthetic markup"
+    assert len(pages) == 11
+
+
+def test_scorecard_layout_rules_keep_the_page_from_scrolling_sideways():
+    # Photo beside the form only on a desktop; each player's grid scrolls in its own region.
+    assert "grid-template-columns: minmax(0, 1fr)" in _rule(".scorecard-review")
+    assert re.search(r"@media \(min-width: 721px\) \{\s*\.scorecard-review \{[^}]*minmax\(0, 2fr\) minmax\(0, 3fr\)", CSS)
+    assert "min-width: 0" in _rule(".scorecard-player")  # a fieldset would otherwise grow to its table
+    assert "min-width: 0" in _rule(".scorecard-review__photo,\n.scorecard-review__form")
+    assert "max-width: 100%" in _rule(".scorecard-review__photo img")
+    assert "min-width: 34rem" in _rule(".score-grid table")
+    assert "min-height: 2.75rem" in _rule(".score-input")
+    assert "min-height: 2.75rem" in _rule(".scorecard-acknowledge")
+
+
 def test_anonymous_pages_pass_static_audit(client):
     for path in ["/", "/login", "/register", "/reset"]:
         response = client.get(path)

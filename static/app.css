@@ -1474,3 +1474,99 @@ pre { max-width: 100%; overflow-x: auto; }
         text-transform: uppercase;
     }
 }
+
+/* Scorecard entry (GL-82). The photo sits beside the form on a desktop and
+   above it on a phone; each player's score grid scrolls inside its own region. */
+.scorecard-form { width: 100%; }
+.scorecard-form--start { width: min(100%, 30rem); }
+
+.scorecard-review {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+}
+
+.scorecard-review__photo,
+.scorecard-review__form { min-width: 0; }
+
+.scorecard-review__photo img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border: 1px solid var(--line);
+    border-radius: 0.55rem;
+}
+
+.scorecard-warnings h2 {
+    margin: 0 0 0.5rem;
+    color: var(--evergreen-deep);
+    font-family: inherit;
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.scorecard-warnings ul { margin: 0 0 0.75rem; padding-left: 1.2rem; }
+.scorecard-warnings a { color: var(--evergreen-deep); font-weight: 650; overflow-wrap: anywhere; }
+.scorecard-warnings p { margin: 0; color: var(--evergreen-deep); }
+
+/* A fieldset's default min-width is its content's; 0 lets the grid scroll instead. */
+.scorecard-player {
+    display: grid;
+    gap: 0.75rem;
+    min-width: 0;
+    margin: 0;
+    padding: 1rem;
+    border: 1px solid var(--line);
+    border-radius: 0.55rem;
+    background: var(--surface);
+}
+
+.scorecard-player legend { padding: 0 0.35rem; color: var(--ink); font-weight: 700; }
+.scorecard-player p { margin: 0; }
+
+.scorecard-player__warning {
+    padding: 0.55rem 0.75rem;
+    border-left: 3px solid var(--gold);
+    background: #fbf6ea;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+}
+
+.scorecard-player__note { color: var(--ink); font-weight: 600; }
+
+.score-grid table { min-width: 34rem; }
+.score-grid th,
+.score-grid td { padding: 0.45rem 0.3rem; text-align: center; white-space: nowrap; }
+
+.score-input {
+    width: 3.1rem;
+    min-height: 2.75rem;
+    padding: 0.4rem 0.2rem;
+    text-align: center;
+}
+
+.score-input[aria-invalid="true"],
+.scorecard-player select[aria-invalid="true"] { border: 2px solid var(--danger); }
+
+/* Text, so an unclear or unread cell never depends on colour alone. */
+.score-note { display: block; margin-top: 0.2rem; color: var(--ink); font-size: 0.72rem; font-weight: 700; }
+
+.scorecard-acknowledge {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 2.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: 0.55rem;
+}
+
+/* The label carries the 44px box; the checkbox itself stays small. */
+.scorecard-acknowledge__checkbox { width: 1.4rem; min-height: 1.4rem; }
+
+@media (min-width: 721px) {
+    .scorecard-review { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: start; }
+    .scorecard-review__photo { position: sticky; top: 1rem; }
+}

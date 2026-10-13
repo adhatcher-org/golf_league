@@ -30,6 +30,8 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["week_id"], ["weeks.id"], name="fk_scorecard_drafts_week", ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["created_by_user_id"], ["users.id"], name="fk_scorecard_drafts_user"),
         sa.CheckConstraint("status IN ('extracting', 'ready', 'failed')", name="ck_scorecard_drafts_status"),
+        # Never reuse a deleted draft's id: a stale page must not reach another card.
+        sqlite_autoincrement=True,
     )
     with op.batch_alter_table("scorecard_drafts") as batch:
         batch.create_index("ix_scorecard_drafts_week_id", ["week_id"])

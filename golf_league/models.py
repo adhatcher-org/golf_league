@@ -614,6 +614,9 @@ class ScorecardDraft(Base):
     __tablename__ = "scorecard_drafts"
     __table_args__ = (
         CheckConstraint("status IN ('extracting', 'ready', 'failed')", name="ck_scorecard_drafts_status"),
+        # Drafts are deleted constantly. AUTOINCREMENT keeps SQLite from giving a
+        # new draft a deleted one's id, so a stale page can never act on another card.
+        {"sqlite_autoincrement": True},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

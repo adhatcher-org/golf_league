@@ -94,6 +94,27 @@ def test_fresh_upgrade_creates_table_with_enforced_constraints(tmp_path):
         engine.dispose()
 
 
+def test_a_deleted_drafts_id_is_never_reused(tmp_path):
+    """Checked on the migrated schema and on `create_all`, which the service tests use."""
+    from golf_league.models import Base
+
+    migrated, created = _engine(f"sqlite:///{tmp_path / 'm.db'}"), _engine(f"sqlite:///{tmp_path / 'c.db'}")
+    upgrade_to_head(str(migrated.url))
+    Base.metadata.create_all(created)
+    try:
+        for engine in (migrated, created):
+            with engine.begin() as connection:
+                ids = _seed(connection)
+                _insert(connection, ids)
+                first = connection.exec_driver_sql("SELECT id FROM scorecard_drafts").scalar_one()
+                connection.exec_driver_sql("DELETE FROM scorecard_drafts")
+                _insert(connection, ids)
+                assert connection.exec_driver_sql("SELECT id FROM scorecard_drafts").scalar_one() > first
+    finally:
+        migrated.dispose()
+        created.dispose()
+
+
 def test_upgrade_from_prior_head_preserves_data_and_downgrades(tmp_path):
     url = f"sqlite:///{tmp_path / 'prior.db'}"
     config = make_config(url)

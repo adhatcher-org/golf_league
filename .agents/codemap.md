@@ -83,12 +83,12 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/app.py`
 
-- function `_navigation_user` (line 69)
-- function `_configure_scorecards` (line 101)
-- function `_clean_scorecard_drafts` (line 117)
-- function `lifespan` (line 132)
-- function `create_app` (line 210)
-- function `main` (line 295)
+- function `_navigation_user` (line 70)
+- function `_configure_scorecards` (line 102)
+- function `_clean_scorecard_drafts` (line 118)
+- function `lifespan` (line 133)
+- function `create_app` (line 211)
+- function `main` (line 297)
 
 ### `golf_league/config.py`
 
@@ -189,6 +189,20 @@ Private data, ignored files, and source contents are excluded.
 - class `MatchGrouping` (line 38)
 - function `group_by_match` (line 45)
 
+### `golf_league/domain/scorecard_review.py`
+
+- class `NameCandidate` (line 23)
+- class `NameMatch` (line 33)
+- function `normalise_name` (line 43)
+- function `_first` (line 54)
+- function `_full` (line 58)
+- function `_first_and_start_of_last` (line 62)
+- function `_closeness` (line 69)
+- function `match_name` (line 76)
+- function `card_side` (line 111)
+- class `OutMismatch` (line 123)
+- function `out_total_mismatch` (line 131)
+
 ### `golf_league/domain/teams.py`
 
 - function `season_ready_for_matchups` (line 6)
@@ -278,9 +292,9 @@ Private data, ignored files, and source contents are excluded.
 - class `WeekHandicap` (line 564)
 - class `HoleScore` (line 587)
 - class `ScorecardDraft` (line 605)
-- class `LeagueInviteLink` (line 633)
-- class `GolferSetPasswordToken` (line 656)
-- class `InviteRateWindow` (line 673)
+- class `LeagueInviteLink` (line 636)
+- class `GolferSetPasswordToken` (line 659)
+- class `InviteRateWindow` (line 676)
 
 ### `golf_league/routers/__init__.py`
 
@@ -394,6 +408,34 @@ Private data, ignored files, and source contents are excluded.
 - function `edit_golfer_form` (line 158)
 - function `update_golfer_submit` (line 175)
 - function `delete_golfer_submit` (line 292)
+
+### `golf_league/routers/admin_scorecards.py`
+
+- function `_settings` (line 87)
+- function `_now` (line 91)
+- function `_today` (line 95)
+- function `_csrf` (line 99)
+- function `_text` (line 104)
+- function `_number` (line 109)
+- function `_page` (line 117)
+- function `_purge` (line 124)
+- function `_open_draft` (line 133)
+- function `_scored_weeks` (line 144)
+- function `_new_page` (line 153)
+- function `scorecard_new` (line 175)
+- class `_Refused` (line 182)
+  - method `__init__` (line 185)
+- function `_declared_too_large` (line 190)
+- function `_start_draft` (line 200)
+- function `scorecard_create` (line 217)
+- function `_review_page` (line 249)
+- function `scorecard_detail` (line 267)
+- function `scorecard_status` (line 285)
+- function `scorecard_image` (line 293)
+- function `_refusal` (line 304)
+- function `scorecard_submit` (line 318)
+- function `scorecard_discard` (line 368)
+- function `week_scores` (line 386)
 
 ### `golf_league/routers/admin_seasons.py`
 
@@ -777,6 +819,31 @@ Private data, ignored files, and source contents are excluded.
   - method `__init__` (line 33)
 - function `prepare_image` (line 38)
 
+### `golf_league/services/scorecard_review.py`
+
+- function `name_field` (line 34)
+- function `golfer_field` (line 38)
+- function `score_field` (line 42)
+- function `field_names` (line 46)
+- class `GolferOption` (line 56)
+- function `golfer_options` (line 67)
+- function `_is_blank_player` (line 93)
+- function `_read_players` (line 97)
+- function `_suggestions` (line 101)
+- function `initial_values` (line 111)
+- class `CellView` (line 128)
+- class `RowView` (line 137)
+- class `ReviewView` (line 152)
+- function `_selected_id` (line 162)
+- function `unpaired_golfers` (line 169)
+- function `_row_warnings` (line 176)
+- function `build_review` (line 196)
+- class `Submission` (line 264)
+  - method `invalid_fields` (line 270)
+- function `_read_scores` (line 274)
+- function `parse_submission` (line 288)
+- function `acknowledgement_needed` (line 320)
+
 ### `golf_league/services/scorecard_vision.py`
 
 - function `analysis_provider` (line 44)
@@ -943,7 +1010,7 @@ Private data, ignored files, and source contents are excluded.
 ### `migrations/versions/d7e2b9a4c618_scorecard_drafts.py`
 
 - function `upgrade` (line 17)
-- function `downgrade` (line 38)
+- function `downgrade` (line 40)
 
 ### `migrations/versions/e5a1c3d9f2b7_roster.py`
 
@@ -985,6 +1052,9 @@ Private data, ignored files, and source contents are excluded.
 
 
 ### `static/golf-league-icon.svg`
+
+
+### `static/scorecard-status.js`
 
 
 ### `templates/_error_summary.html`
@@ -1030,6 +1100,21 @@ Private data, ignored files, and source contents are excluded.
 
 
 ### `templates/admin/roster/list.html`
+
+
+### `templates/admin/scorecards/failed.html`
+
+
+### `templates/admin/scorecards/new.html`
+
+
+### `templates/admin/scorecards/review.html`
+
+
+### `templates/admin/scorecards/scores.html`
+
+
+### `templates/admin/scorecards/status.html`
 
 
 ### `templates/admin/seasons/form.html`
@@ -1278,18 +1363,20 @@ Private data, ignored files, and source contents are excluded.
 - function `_stage_import` (line 167)
 - function `_admin_pages` (line 186)
 - function `test_admin_and_player_pages_pass_static_audit_with_long_names` (line 210)
-- function `test_anonymous_pages_pass_static_audit` (line 220)
-- function `test_empty_admin_states_pass_static_audit` (line 227)
-- function `test_identity_error_states_are_announced_with_text` (line 234)
-- function `_rules` (line 247)
-- function `test_stylesheet_has_only_the_720px_breakpoint` (line 254)
-- function `test_interactive_touch_targets_are_at_least_44px` (line 268)
-- function `test_wide_tables_scroll_inside_their_own_region` (line 276)
-- function `test_public_token_pages_use_the_styled_layout_and_private_headers` (line 282)
-- function `_rule` (line 313)
-- function `test_hidden_labels_and_wide_content_cannot_widen_the_page` (line 325)
-- function `test_import_review_columns_do_not_use_font_relative_units` (line 334)
-- function `test_phone_tap_targets_for_links_brand_and_my_schedule_cards` (line 339)
+- function `test_scorecard_pages_pass_static_audit_with_long_names` (line 220)
+- function `test_scorecard_layout_rules_keep_the_page_from_scrolling_sideways` (line 290)
+- function `test_anonymous_pages_pass_static_audit` (line 302)
+- function `test_empty_admin_states_pass_static_audit` (line 309)
+- function `test_identity_error_states_are_announced_with_text` (line 316)
+- function `_rules` (line 329)
+- function `test_stylesheet_has_only_the_720px_breakpoint` (line 336)
+- function `test_interactive_touch_targets_are_at_least_44px` (line 350)
+- function `test_wide_tables_scroll_inside_their_own_region` (line 358)
+- function `test_public_token_pages_use_the_styled_layout_and_private_headers` (line 364)
+- function `_rule` (line 395)
+- function `test_hidden_labels_and_wide_content_cannot_widen_the_page` (line 407)
+- function `test_import_review_columns_do_not_use_font_relative_units` (line 416)
+- function `test_phone_tap_targets_for_links_brand_and_my_schedule_cards` (line 421)
 
 ### `tests/test_admin_config.py`
 
@@ -1480,6 +1567,95 @@ Private data, ignored files, and source contents are excluded.
 - function `test_the_second_submission_after_a_tee_change_saves` (line 551)
 - function `test_a_second_submission_may_clear_the_handicap_after_a_tee_change` (line 608)
 - function `test_a_request_omitting_rendered_tee_set_id_cannot_skip_the_two_step` (line 665)
+
+### `tests/test_admin_scorecards.py`
+
+- function `_player` (line 42)
+- function `_card` (line 46)
+- class `FakeProvider` (line 50)
+  - method `__init__` (line 51)
+  - method `read_scorecard` (line 55)
+- class `InlineExecutor` (line 62)
+  - method `submit` (line 63)
+- class `DeferredExecutor` (line 67)
+  - method `__init__` (line 70)
+  - method `submit` (line 73)
+  - method `run` (line 76)
+- function `_jpeg` (line 82)
+- function `cards` (line 89)
+- function `_engine` (line 104)
+- function `_score_count` (line 108)
+- function `_draft_count` (line 113)
+- function `_photos` (line 118)
+- function `_token` (line 123)
+- function `_upload` (line 128)
+- function `_manual` (line 134)
+- function `_draft_id` (line 141)
+- function `_form` (line 146)
+- function `_submit` (line 159)
+- function `_selected` (line 164)
+- function `_value` (line 170)
+- function `_become` (line 174)
+- function `_routes` (line 189)
+- function `test_every_route_refuses_anyone_but_a_verified_admin` (line 199)
+- function `test_every_post_needs_a_csrf_token` (line 214)
+- function `test_another_admin_can_open_and_submit_a_card` (line 224)
+- function `test_the_form_defaults_to_todays_week_and_lists_only_eligible_weeks` (line 237)
+- function `test_tomorrow_the_first_week_is_past_and_no_week_says_so` (line 254)
+- function `test_today_follows_the_league_time_zone_not_utc` (line 261)
+- function `test_a_week_that_cannot_take_a_card_is_422_and_writes_nothing` (line 269)
+- function `test_an_unknown_week_is_404_and_a_missing_week_is_422` (line 287)
+- function `test_a_refused_image_is_422_and_writes_nothing` (line 300)
+- function `test_no_photo_chosen_is_422` (line 308)
+- function `test_an_upload_declared_far_too_large_is_refused_before_it_is_parsed` (line 315)
+- function `test_upload_is_extracting_then_ready_and_the_review_shows_what_was_read` (line 324)
+- function `test_a_slow_read_says_so_without_changing_the_draft` (line 364)
+- function `test_a_corrected_two_golfer_card_saves_18_rows_and_deletes_the_draft` (line 377)
+- function `test_a_four_golfer_card_across_two_matches_saves_36_rows` (line 407)
+- function `test_a_three_golfer_card_needs_the_acknowledgement` (line 416)
+- function `test_a_mismatched_pair_needs_the_acknowledgement` (line 430)
+- function `test_the_acknowledgement_is_offered_when_the_reading_is_already_unpaired` (line 441)
+- function `test_bad_values_are_422_keep_the_admins_values_and_write_nothing` (line 460)
+- function `test_a_tampered_golfer_value_is_refused` (line 488)
+- function `test_the_same_card_twice_is_409_and_writes_nothing_new` (line 497)
+- function `test_a_back_nine_week_uses_holes_10_to_18` (line 515)
+- function `test_a_week_that_stops_being_eligible_refuses_the_submit_and_keeps_the_draft` (line 530)
+- function `test_discard_removes_the_draft_and_the_photo` (line 544)
+- function `test_the_photo_is_private_and_never_cached` (line 556)
+- function `test_an_expired_draft_is_gone_everywhere` (line 571)
+- function `test_a_missing_photo_file_is_404_and_the_review_still_works` (line 587)
+- function `test_cards_in_progress_are_listed` (line 598)
+- function `test_a_provider_failure_offers_retry_manual_and_discard_and_manual_submits` (line 609)
+- function `test_retry_discards_the_failed_card_and_returns_to_the_same_week` (line 630)
+- function `test_with_photo_entry_not_configured_only_manual_entry_works` (line 640)
+- function `_snapshot_handicaps` (line 658)
+- function `_rename` (line 667)
+- function `_review` (line 674)
+- function `test_a_first_name_only_preselects_the_single_golfer_with_that_name` (line 680)
+- function `test_a_close_name_preselects_and_is_flagged` (line 688)
+- function `test_two_golfers_sharing_a_first_name_leave_the_choice_empty_unless_the_handicap_settles_it` (line 695)
+- function `test_a_golfer_read_for_two_rows_is_preselected_for_neither` (line 711)
+- function `test_only_this_weeks_golfers_are_offered` (line 717)
+- function `test_the_out_total_mismatch_shows_the_net_hint_and_still_submits` (line 723)
+- function `test_a_card_whose_out_total_still_disagrees_can_be_submitted` (line 746)
+- function `test_a_mismatch_without_a_written_handicap_has_no_net_hint` (line 756)
+- function `test_a_form_with_errors_stays_at_the_error_summary` (line 764)
+- function `test_the_out_warning_follows_the_admins_corrections_on_a_re_render` (line 775)
+- function `test_a_wrong_nine_header_warns_and_still_submits` (line 783)
+- function `test_a_handicap_mismatch_warns_and_still_submits` (line 792)
+- function `test_more_than_four_players_read_shows_four_and_says_so` (line 808)
+- function `test_names_and_model_text_are_escaped` (line 819)
+- function `test_no_log_record_carries_a_name_a_score_or_image_bytes` (line 830)
+- function `test_gets_never_change_anything` (line 850)
+- function `test_unknown_ids_are_404` (line 862)
+- function `test_the_scores_page_with_nothing_saved_says_so` (line 870)
+- function `test_the_admin_menu_links_to_enter_scorecard_and_players_see_no_link` (line 876)
+- function `test_no_season_at_all_says_so` (line 886)
+- function `test_the_date_used_is_the_injected_clock_never_the_wall_clock` (line 891)
+- function `test_a_purge_failure_never_fails_the_page` (line 900)
+- function `test_a_busy_database_is_409_and_keeps_the_draft_and_the_admins_values` (line 914)
+- function `test_a_draft_discarded_while_it_is_being_submitted_saves_nothing` (line 935)
+- function `test_a_stale_page_for_a_submitted_card_never_reaches_a_later_card` (line 954)
 
 ### `tests/test_app.py`
 
@@ -1869,6 +2045,24 @@ Private data, ignored files, and source contents are excluded.
 - function `test_selected_season_is_validated_and_reserved_makeup_is_distinguished` (line 113)
 - function `test_substitute_without_team_slot_sees_actual_matchup_not_old_assignment` (line 128)
 
+### `tests/test_name_matching.py`
+
+- function `test_normalise_name` (line 27)
+- function `test_a_single_exact_match_preselects_without_a_flag` (line 33)
+- function `test_first_name_only_matches_the_single_candidate_with_that_first_name` (line 37)
+- function `test_a_single_close_match_preselects_and_is_flagged` (line 45)
+- function `test_no_match_leaves_the_choice_empty` (line 50)
+- function `test_two_golfers_with_the_same_first_name_leave_the_choice_empty` (line 55)
+- function `test_a_written_handicap_breaks_a_same_first_name_tie_and_is_flagged` (line 64)
+- function `test_a_handicap_shared_by_both_does_not_break_the_tie` (line 70)
+- function `test_the_handicap_is_never_used_without_a_name_tie` (line 75)
+- function `test_two_close_matches_leave_the_choice_empty` (line 82)
+- function `test_only_the_given_candidates_are_considered_and_duplicates_count_once` (line 87)
+- function `test_card_side` (line 97)
+- function `test_out_total_matching_the_sum_is_no_mismatch` (line 101)
+- function `test_out_total_mismatch_names_both_numbers` (line 108)
+- function `test_a_lower_total_beside_a_handicap_may_be_the_net_score` (line 113)
+
 ### `tests/test_navigation.py`
 
 - function `_navigation` (line 8)
@@ -2085,8 +2279,9 @@ Private data, ignored files, and source contents are excluded.
 - function `_assert_schema` (line 44)
 - function `_insert` (line 61)
 - function `test_fresh_upgrade_creates_table_with_enforced_constraints` (line 69)
-- function `test_upgrade_from_prior_head_preserves_data_and_downgrades` (line 97)
-- function `test_model_and_migration_agree` (line 130)
+- function `test_a_deleted_drafts_id_is_never_reused` (line 97)
+- function `test_upgrade_from_prior_head_preserves_data_and_downgrades` (line 118)
+- function `test_model_and_migration_agree` (line 151)
 
 ### `tests/test_scorecard_drafts.py`
 
