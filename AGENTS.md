@@ -97,7 +97,7 @@ orchestrator repo next door.
 - Server-side validation of IDs and season/course relationships; SQLite FKs, uniqueness
   constraints, atomic transactions for multi-record changes.
 - Migrations: forward-only, data-preserving, tested against a fresh DB and prior-version upgrades.
-  Single chain in `migrations/versions/` (`496c039e7ac0` -> ... -> `b8d4c0e2f671`); check
+  Single chain in `migrations/versions/` (`496c039e7ac0` -> ... -> `e41c7f9a2b36`); check
   `down_revision` before adding one.
 - `lifespan` in `app.py` deliberately swallows engine/migration failures so the process stays up
   and `/readyz` can honestly answer 503. `/healthz` is process-only. Do not turn this into a crash.

@@ -20,6 +20,7 @@ from starlette.datastructures import UploadFile
 
 from golf_league.config import get_settings
 from golf_league.database import get_session
+from golf_league.domain.scorecard import Actor
 from golf_league.models import HoleScore, PlayerMatch, ScorecardDraft, TeamMatch, Week
 from golf_league.security import generate_csrf_token, require_admin, validate_csrf
 from golf_league.services.player_schedule import select_player_season
@@ -49,6 +50,7 @@ from golf_league.services.scorecard_review import (
 from golf_league.services.scorecard_vision import league_timezone_name
 from golf_league.services.scores import (
     ScoreEntryError,
+    blocked_golfers,
     default_week,
     eligible_weeks,
     league_today,
@@ -155,7 +157,7 @@ def _new_page(request: Request, session: Session, admin, *, errors: dict[str, st
               week_id: int | None = None, status_code: int = 200) -> Response:
     season = select_player_season(session)
     today = _today(request)
-    weeks = eligible_weeks(session, season.id, today) if season else []
+    weeks = eligible_weeks(session, season.id, today, Actor(admin.id, True)) if season else []
     chosen = week_id if week_id in {week.id for week in weeks} else None
     if chosen is None and season is not None:
         default = default_week(session, season.id, today)
@@ -201,7 +203,8 @@ async def _declared_too_large(request: Request) -> bool:
 async def _start_draft(request: Request, session: Session, admin, form, week_id: int) -> ScorecardDraft:
     today, clock, state = _today(request), request.app.state.scorecard_utc_now, request.app.state
     if _text(form, "manual") == "1":
-        return create_manual_draft(session, week_id=week_id, user_id=admin.id, today=today, clock=clock)
+        return create_manual_draft(session, week_id=week_id, user_id=admin.id, today=today, clock=clock,
+                                   actor=Actor(admin.id, True))
     if state.vision_provider is None:
         raise _Refused("photo", "Photo reading is not set up. Enter the scores manually.")
     photo = form.get("photo")
@@ -209,7 +212,7 @@ async def _start_draft(request: Request, session: Session, admin, form, week_id:
         raise _Refused("photo", "Choose a photo of the scorecard.")
     raw = await photo.read(MAX_UPLOAD_BYTES + 1)
     draft = create_draft(session, week_id=week_id, user_id=admin.id, raw=raw, today=today, clock=clock,
-                         directory=state.scorecard_dir)
+                         directory=state.scorecard_dir, actor=Actor(admin.id, True))
     start_extraction(state, draft.id)
     return draft
 
@@ -260,8 +263,10 @@ def _review_page(request: Request, session: Session, draft: ScorecardDraft, *,
     hole_numbers = [hole.number for hole in week_holes(session, week.id)]
     options = golfer_options(session, week.id)
     errors = errors or {}
+    # A card only adds: golfers already saved, or in a locked match, are shown as left off.
+    blocked = blocked_golfers(session, week.id, [option.golfer_id for option in options])
     view = build_review(draft_card(draft) if draft.status == "ready" else None, week, hole_numbers,
-                        options, values, frozenset(errors))
+                        options, values, frozenset(errors), blocked)
     path = image_file(request.app.state.scorecard_dir, draft.image_path)
     return _page(request, "admin/scorecards/review.html", {
         "draft": draft, "week": week, "view": view, "errors": errors,
@@ -308,11 +313,19 @@ async def scorecard_image(draft_id: int, request: Request,
                     headers={**PRIVATE_HEADERS, "X-Content-Type-Options": "nosniff"})
 
 
-def _refusal(exc: ScoreEntryError) -> tuple[int, dict[str, str]]:
+def _refusal(exc: ScoreEntryError, names: dict[int, str]) -> tuple[int, dict[str, str]]:
     """Status and message for a card the score service refused."""
-    if exc.code == "already_submitted":
-        return 409, {CARD_ERROR: "This card has already been submitted. Nothing was saved, and the "
-                                 "scores already stored were not changed."}
+    if exc.code == "nothing_left":
+        return 409, {CARD_ERROR: "Every player on this card already has saved scores or is in a locked "
+                                 "match. Nothing was saved."}
+    if exc.code == "left_off":
+        left = [names[golfer_id] for golfer_id in exc.golfer_ids if golfer_id in names]
+        if not left:
+            return 409, {CARD_ERROR: "The players left off this card have changed. Nothing was saved. "
+                                     "Check the card and submit again."}
+        return 409, {CARD_ERROR: ", ".join(left) + (" already has" if len(left) == 1 else " already have")
+                                 + " saved scores or are in a locked match, and are left off this card. "
+                                 "Nothing was saved. Check the remaining players and submit again."}
     if exc.code == "conflict":
         return 409, {CARD_ERROR: "The schedule was being changed at the same moment. Nothing was saved; "
                                  "submit the card again."}
@@ -348,12 +361,14 @@ async def scorecard_submit(draft_id: int, request: Request,
     if errors:
         return _review_page(request, session, draft, values=values, errors=errors, status_code=422)
 
-    today, directory = _today(request), request.app.state.scorecard_dir
+    today, now, directory = _today(request), _now(request), request.app.state.scorecard_dir
+    names = {option.golfer_id: option.name for option in options}
     # End the read transaction: `submit_card` reserves the single writer as its
     # first action and re-checks everything inside that one write transaction.
     session.rollback()
     try:
-        submit_card(session, week_id, list(submission.entries), user_id, today, acknowledged=acknowledged)
+        submit_card(session, week_id, list(submission.entries), Actor(user_id, True), today,
+                    acknowledged=acknowledged, left_off=submission.left_off, now=now)
         stored = session.get(ScorecardDraft, draft_id)
         if stored is None:
             session.rollback()
@@ -365,7 +380,7 @@ async def scorecard_submit(draft_id: int, request: Request,
         session.rollback()
         if exc.code == "not_found":
             raise HTTPException(status_code=404, detail="Not found") from exc
-        status_code, errors = _refusal(exc)
+        status_code, errors = _refusal(exc, names)
         kept = _open_draft(request, session, draft_id)  # a refused submit keeps the draft
         return _review_page(request, session, kept, values=values, errors=errors, status_code=status_code)
     except (SQLAlchemyError, OSError) as exc:

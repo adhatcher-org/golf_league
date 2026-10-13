@@ -7,6 +7,20 @@ MAX_STROKES_PER_HOLE = 15
 MIN_STROKES_PER_HOLE = 1
 
 
+@dataclass(frozen=True)
+class Actor:
+    """Who is entering or changing scores.
+
+    `is_admin` means "acting through an admin page": a router sets it, and a
+    service never infers it from the account. A player needs `golfer_id` (the
+    golfer their account is linked to); a player without one can write nothing.
+    """
+
+    user_id: int
+    is_admin: bool
+    golfer_id: int | None = None
+
+
 def is_blank(value: object) -> bool:
     """A blank cell is a missing score: None or an all-whitespace string."""
     return value is None or (isinstance(value, str) and not value.strip())

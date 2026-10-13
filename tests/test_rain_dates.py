@@ -299,3 +299,103 @@ def test_admin_preview_cancel_and_confirm_contract(admin_client):
         assert check.get(Week, target_id).week_type == "match"
     finally:
         check.close()
+
+
+# --- GL-83: scores hold a week in place (R-SCORES) -----------------------------------------------
+
+
+def _scored_or_locked_case(tmp_path, case):
+    """A committed season whose source week has one saved score, or one lock and no score."""
+    from golf_league.models import Hole, HoleScore, MatchScoreState, User
+
+    engine = make_engine(f"sqlite:///{tmp_path / 'guard.db'}")
+    Base.metadata.create_all(engine)
+    with Session(engine) as session:
+        ids = _create_case(session)
+        user = User(username="admin@example.test", email="admin@example.test", display_name="Admin",
+                    password_hash="x")
+        session.add(user)
+        session.flush()
+        match = ids["players"][0]
+        if case == "score":
+            hole = session.scalar(select(Hole).where(Hole.number == 1))
+            session.add(HoleScore(player_match_id=match.id, golfer_id=match.a_golfer_id, hole_id=hole.id,
+                                  strokes=4, entered_by_user_id=user.id))
+        elif case == "lock":
+            session.add(MatchScoreState(player_match_id=match.id, revision=1, locked_at=NOW,
+                                        locked_by_user_id=user.id))
+        session.commit()
+        return engine, ids["season"], ids["weeks"][8].id, ids["weeks"][9].id
+
+
+@pytest.mark.parametrize("case", ["score", "lock"])
+def test_a_week_with_a_saved_score_or_a_lock_cannot_move_to_a_rain_date(tmp_path, case):
+    engine, season_id, source_id, target_id = _scored_or_locked_case(tmp_path, case)
+    try:
+        with Session(engine) as session:
+            with pytest.raises(ScheduleConflict, match="saved scores or a locked match"):
+                preview_rain_date(session, season_id, source_id, target_id)
+            session.rollback()
+            with pytest.raises(ScheduleConflict, match="Clear the scores and unlock the matches first"):
+                confirm_rain_date(session, season_id, source_id, target_id, expected_fingerprint="stale")
+        with Session(engine) as session:
+            # Nothing moved: the source keeps its matches and status, the target stays a rain date.
+            assert session.get(Week, source_id).status == "scheduled"
+            assert session.get(Week, target_id).week_type == "rain_date"
+            assert len(list(session.scalars(select(TeamMatch).where(TeamMatch.week_id == source_id)))) == 4
+            assert not list(session.scalars(select(TeamMatch).where(TeamMatch.week_id == target_id)))
+    finally:
+        engine.dispose()
+
+
+def test_a_week_with_neither_scores_nor_locks_still_moves(tmp_path):
+    engine, season_id, source_id, target_id = _scored_or_locked_case(tmp_path, "neither")
+    try:
+        with Session(engine) as session:
+            preview = preview_rain_date(session, season_id, source_id, target_id)
+            confirm_rain_date(session, season_id, source_id, target_id,
+                              expected_fingerprint=preview.fingerprint)
+        with Session(engine) as session:
+            assert session.get(Week, source_id).status == "cancelled"
+            assert len(list(session.scalars(select(TeamMatch).where(TeamMatch.week_id == target_id)))) == 4
+    finally:
+        engine.dispose()
+
+
+def test_an_unlocked_then_cleared_week_can_move_again(tmp_path):
+    from golf_league.models import MatchScoreState
+
+    engine, season_id, source_id, target_id = _scored_or_locked_case(tmp_path, "lock")
+    try:
+        with Session(engine) as session:
+            state = session.scalars(select(MatchScoreState)).one()
+            state.locked_at = state.locked_by_user_id = None  # as `unlock_match` leaves it
+            state.revision += 1
+            session.commit()
+            preview = preview_rain_date(session, season_id, source_id, target_id)
+            assert preview.match_count == 4
+    finally:
+        engine.dispose()
+
+
+def test_the_rain_date_page_refuses_a_scored_week_with_409(admin_client):
+    from golf_league.models import Hole, HoleScore, User
+
+    with Session(bind=admin_client.app.state.engine) as session:
+        ids = _create_case(session)
+        admin = session.scalar(select(User))
+        match = ids["players"][0]
+        hole = session.scalar(select(Hole).where(Hole.number == 1))
+        session.add(HoleScore(player_match_id=match.id, golfer_id=match.a_golfer_id, hole_id=hole.id,
+                              strokes=4, entered_by_user_id=admin.id))
+        session.commit()
+        season_id, source_id, target_id = ids["season"], ids["weeks"][8].id, ids["weeks"][9].id
+    csrf = _extract_csrf(admin_client.get(f"/admin/seasons/{season_id}/weeks").text)
+    response = admin_client.post(
+        f"/admin/seasons/{season_id}/weeks/{source_id}/rain-date/preview",
+        data={"csrf_token": csrf, "target_week_id": str(target_id)}, follow_redirects=False,
+    )
+    assert response.status_code == 409
+    assert "cannot be moved to a rain date" in response.text
+    with Session(bind=admin_client.app.state.engine) as session:
+        assert session.get(Week, source_id).status == "scheduled"

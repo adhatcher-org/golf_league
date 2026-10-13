@@ -12,12 +12,14 @@ from test_matchup_generation import create_generated
 from test_matchup_generation import matchup_db as _matchup_db
 
 import golf_league.services.scores as scores_module
+from golf_league.domain.scorecard import Actor
 from golf_league.models import (
     Course,
     Golfer,
     Hole,
     HoleScore,
     HoleYardage,
+    MatchScoreState,
     PlayerMatch,
     Season,
     SeasonGolfer,
@@ -37,16 +39,29 @@ from golf_league.services.scores import (
     ScoreEntryError,
     card_candidates,
     default_week,
-    eligible_weeks,
     league_today,
     scores_for_week,
-    submit_card,
-    week_for_entry,
     week_holes,
 )
 from golf_league.services.seasons import SeasonValidationError, update_season
 
 TODAY = date(2026, 8, 27)
+NOW = datetime(2026, 8, 27, 18, 0, tzinfo=UTC)
+ANY_ADMIN = Actor(0, True)
+
+
+def submit_card(session, week_id, entries, user_id, today, *, acknowledged, left_off=frozenset()):
+    """An admin's card, as every M8 test here submits one."""
+    return scores_module.submit_card(session, week_id, entries, Actor(user_id, True), today,
+                                     acknowledged=acknowledged, left_off=left_off, now=NOW)
+
+
+def week_for_entry(session, week_id, today, actor=ANY_ADMIN):
+    return scores_module.week_for_entry(session, week_id, today, actor)
+
+
+def eligible_weeks(session, season_id, today, actor=ANY_ADMIN):
+    return scores_module.eligible_weeks(session, season_id, today, actor)
 
 matchup_db = _matchup_db
 
@@ -94,21 +109,54 @@ def test_league_today_is_chicago_evening_before_utc_midnight_rollover():
 def test_eligible_and_default_weeks(matchup_db):
     engine, ids = matchup_db
     _setup(engine, ids, extra_weeks=(2,))
+    player = Actor(1, False, ids["golfers"][0])
     with Session(engine) as session:
         # week 2 has no matches; add an unactivated rain date without matches.
         session.add(Week(season_id=ids["season"], index=4, play_date=date(2026, 9, 17), nine=None,
                          week_type="rain_date", status="scheduled"))
         session.commit()
-        assert [w.id for w in eligible_weeks(session, ids["season"], TODAY)] == [ids["weeks"][0], ids["weeks"][2]]
-        assert default_week(session, ids["season"], TODAY).id == ids["weeks"][0]
-        # No week dated today: next eligible by date.
-        assert default_week(session, ids["season"], date(2026, 8, 30)).id == ids["weeks"][2]
-        # Past week excluded; cancelled and played excluded.
-        session.get(Week, ids["weeks"][0]).status = "cancelled"
-        session.get(Week, ids["weeks"][2]).status = "played"
+        first, third = ids["weeks"][0], ids["weeks"][2]  # 27 August and 10 September
+        # An admin has no date limit; a player sees only weeks whose play date has come.
+        for today in (TODAY, date(2026, 12, 1)):
+            assert [w.id for w in eligible_weeks(session, ids["season"], today)] == [first, third]
+        assert [w.id for w in eligible_weeks(session, ids["season"], TODAY, player)] == [first]
+        assert eligible_weeks(session, ids["season"], date(2026, 8, 26), player) == []
+        assert [w.id for w in eligible_weeks(session, ids["season"], date(2026, 9, 10), player)] == [first, third]
+
+        # The default: today's week; then a week of the last six days that still has an open match;
+        # then the next week; a week more than six days back is never the default.
+        assert default_week(session, ids["season"], TODAY).id == first
+        assert default_week(session, ids["season"], date(2026, 8, 28)).id == first
+        assert default_week(session, ids["season"], date(2026, 9, 2)).id == first
+        assert default_week(session, ids["season"], date(2026, 9, 3)).id == third
+        assert default_week(session, ids["season"], date(2026, 8, 20)).id == first
+        assert default_week(session, ids["season"], date(2026, 9, 20)) is None
+        assert [w.id for w in eligible_weeks(session, ids["season"], date(2026, 9, 20))] == [first, third]
+
+        # Cancelled and played weeks are never eligible.
+        session.get(Week, first).status = "cancelled"
+        session.get(Week, third).status = "played"
         session.commit()
         assert eligible_weeks(session, ids["season"], TODAY) == []
         assert default_week(session, ids["season"], TODAY) is None
+
+
+def test_default_week_skips_a_recent_week_with_nothing_left_to_enter(matchup_db):
+    engine, ids = matchup_db
+    user_id = _setup(engine, ids, extra_weeks=(2,))
+    first, third = ids["weeks"][0], ids["weeks"][2]
+    admin = Actor(user_id, True)
+    with Session(engine) as session:
+        matches = _matches(session, first)
+        # Every match but the last is saved; the last is locked empty, so nothing is open.
+        for match in matches[:-1]:
+            submit_card(session, first, _card(session, first, [match.a_golfer_id, match.b_golfer_id]),
+                        user_id, TODAY, acknowledged=False)
+        session.commit()
+        assert default_week(session, ids["season"], date(2026, 8, 28)).id == first  # one match still open
+        scores_module.lock_match(session, first, matches[-1].id, admin, base_revision=0, now=NOW)
+        session.commit()
+        assert default_week(session, ids["season"], date(2026, 8, 28)).id == third
 
 
 def test_activated_rain_date_with_matches_is_included(matchup_db):
@@ -124,18 +172,26 @@ def test_activated_rain_date_with_matches_is_included(matchup_db):
 def test_week_for_entry_codes(matchup_db):
     engine, ids = matchup_db
     _setup(engine, ids)
+    player = Actor(1, False, ids["golfers"][0])
     with Session(engine) as session:
         assert week_for_entry(session, ids["weeks"][0], TODAY).id == ids["weeks"][0]
-        def code(week_id, today=TODAY):
+        def code(week_id, today=TODAY, actor=ANY_ADMIN):
             with pytest.raises(ScoreEntryError) as caught:
-                week_for_entry(session, week_id, today)
+                week_for_entry(session, week_id, today, actor)
             return caught.value.code
         assert code(999999) == "not_found"
-        assert code(ids["weeks"][0], date(2026, 8, 28)) == "past_week"
         assert code(ids["weeks"][1]) == "no_matchup"
+        # There is no past-week refusal: yesterday's week, and one long past, are accepted.
+        for today in (date(2026, 8, 28), date(2026, 12, 1)):
+            assert week_for_entry(session, ids["weeks"][0], today).id == ids["weeks"][0]
+            assert week_for_entry(session, ids["weeks"][0], today, player).id == ids["weeks"][0]
+        # Before the play date an admin may enter and a player may not.
+        assert week_for_entry(session, ids["weeks"][0], date(2026, 8, 26)).id == ids["weeks"][0]
+        assert code(ids["weeks"][0], date(2026, 8, 26), player) == "not_open_yet"
         week = session.get(Week, ids["weeks"][0])
         week.status = "cancelled"
         assert code(week.id) == "cancelled"
+        assert code(week.id, date(2026, 8, 26), player) == "cancelled"  # the week's state is checked first
         week.status = "played"
         assert code(week.id) == "played"
         session.rollback()
@@ -416,12 +472,11 @@ def test_refusals_write_nothing(matchup_db):
         extra = dict(good[1][1])
         extra[10] = 4
         assert _refusal(session, week_id, [good[0], (b, extra)], user_id) == "bad_score"
-        assert _refusal(session, week_id, good, user_id, today=date(2026, 8, 28)) == "past_week"
         assert _refusal(session, ids["weeks"][1], good, user_id) == "no_matchup"
         assert _refusal(session, 999999, good, user_id) == "not_found"
 
 
-def test_second_submit_and_shared_golfer_card_are_already_submitted(matchup_db):
+def test_a_card_only_adds_and_never_changes_a_saved_score(matchup_db):
     engine, ids = matchup_db
     user_id = _setup(engine, ids)
     week_id = ids["weeks"][0]
@@ -431,21 +486,67 @@ def test_second_submit_and_shared_golfer_card_are_already_submitted(matchup_db):
         submit_card(session, week_id, first, user_id, TODAY, acknowledged=False)
         session.commit()
         before = [(r.id, r.golfer_id, r.strokes) for r in session.scalars(select(HoleScore).order_by(HoleScore.id))]
+
+        # The same card again: everyone on it is already saved.
         with pytest.raises(ScoreEntryError) as caught:
             submit_card(session, week_id, _card(session, week_id, [m1.a_golfer_id, m1.b_golfer_id], value=6),
                         user_id, TODAY, acknowledged=False)
-        assert caught.value.code == "already_submitted"
+        assert caught.value.code == "nothing_left"
+        assert set(caught.value.golfer_ids) == {m1.a_golfer_id, m1.b_golfer_id}
         session.rollback()
+
+        # A card sharing one golfer with the saved one is refused until it names who is left off.
         overlap = _card(session, week_id, [m1.a_golfer_id, m2.a_golfer_id, m2.b_golfer_id], value=6)
         with pytest.raises(ScoreEntryError) as caught:
             submit_card(session, week_id, overlap, user_id, TODAY, acknowledged=True)
-        assert caught.value.code == "already_submitted"
+        assert (caught.value.code, caught.value.golfer_ids) == ("left_off", (m1.a_golfer_id,))
         session.rollback()
+        # Naming the wrong golfers, or more than are blocked, is refused again.
+        for stale in ({m1.b_golfer_id}, {m1.a_golfer_id, m2.a_golfer_id}):
+            with pytest.raises(ScoreEntryError) as caught:
+                submit_card(session, week_id, overlap, user_id, TODAY, acknowledged=True, left_off=frozenset(stale))
+            assert caught.value.code == "left_off"
+            session.rollback()
+        assert [(r.id, r.golfer_id, r.strokes)
+                for r in session.scalars(select(HoleScore).order_by(HoleScore.id))] == before
+
+        # Naming exactly the blocked golfer writes the rest and leaves the saved scores alone.
+        result = submit_card(session, week_id, overlap, user_id, TODAY, acknowledged=True,
+                             left_off=frozenset({m1.a_golfer_id}))
+        session.commit()
+        assert result.left_off == (m1.a_golfer_id,) and result.rows_written == 18
+        assert set(result.golfer_ids) == {m2.a_golfer_id, m2.b_golfer_id}
         after = [(r.id, r.golfer_id, r.strokes) for r in session.scalars(select(HoleScore).order_by(HoleScore.id))]
-        assert after == before
+        assert after[:len(before)] == before and len(after) == 36
+
+        # A left-off token when nobody is blocked is refused too.
+        m3 = _matches(session, week_id)[2]
+        with pytest.raises(ScoreEntryError) as caught:
+            submit_card(session, week_id, _card(session, week_id, [m3.a_golfer_id, m3.b_golfer_id]), user_id,
+                        TODAY, acknowledged=False, left_off=frozenset({m1.a_golfer_id}))
+        assert (caught.value.code, caught.value.golfer_ids) == ("left_off", ())
 
 
-def test_unique_key_violation_becomes_already_submitted_without_poisoning(matchup_db, monkeypatch):
+def test_a_golfer_in_a_locked_match_is_left_off_a_card(matchup_db):
+    engine, ids = matchup_db
+    user_id = _setup(engine, ids)
+    week_id = ids["weeks"][0]
+    with Session(engine) as session:
+        m1, m2 = _matches(session, week_id)[:2]
+        scores_module.lock_match(session, week_id, m1.id, Actor(user_id, True), base_revision=0, now=NOW)
+        session.commit()
+        card = _card(session, week_id, [m1.a_golfer_id, m1.b_golfer_id, m2.a_golfer_id, m2.b_golfer_id])
+        with pytest.raises(ScoreEntryError) as caught:
+            submit_card(session, week_id, card, user_id, TODAY, acknowledged=False)
+        assert (caught.value.code, set(caught.value.golfer_ids)) == ("left_off", {m1.a_golfer_id, m1.b_golfer_id})
+        session.rollback()
+        submit_card(session, week_id, card, user_id, TODAY, acknowledged=False,
+                    left_off=frozenset({m1.a_golfer_id, m1.b_golfer_id}))
+        session.commit()
+        assert {r.player_match_id for r in session.scalars(select(HoleScore))} == {m2.id}
+
+
+def test_unique_key_violation_becomes_conflict_without_poisoning(matchup_db, monkeypatch):
     engine, ids = matchup_db
     user_id = _setup(engine, ids)
     week_id = ids["weeks"][0]
@@ -456,13 +557,14 @@ def test_unique_key_violation_becomes_already_submitted_without_poisoning(matchu
                               entered_by_user_id=user_id))
         session.flush()
         # Blind the pre-check so the unique key and the savepoint path are what refuse the card.
-        monkeypatch.setattr(scores_module, "_already_scored", lambda *args: False)
+        monkeypatch.setattr(scores_module, "blocked_golfers", lambda *args: frozenset())
         with pytest.raises(ScoreEntryError) as caught:
             submit_card(session, week_id, _card(session, week_id, [m1.a_golfer_id, m1.b_golfer_id]), user_id,
                         TODAY, acknowledged=False)
-        assert caught.value.code == "already_submitted"
-        # Caller's transaction is still usable and holds its earlier row.
+        assert caught.value.code == "conflict"
+        # Caller's transaction is still usable and holds its earlier row and no state row.
         assert session.scalar(select(func.count(HoleScore.id))) == 1
+        assert session.scalar(select(func.count(MatchScoreState.player_match_id))) == 0
 
 
 def test_busy_writer_is_conflict_and_writes_nothing(matchup_db):
@@ -521,7 +623,7 @@ def test_two_connections_racing_the_same_card_leave_one_card(matchup_db):
                 return True
             except ScoreEntryError as exc:
                 session.rollback()
-                assert exc.code in {"already_submitted", "conflict"}
+                assert exc.code in {"nothing_left", "conflict"}
                 return False
 
     with ThreadPoolExecutor(max_workers=2) as pool:

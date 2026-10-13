@@ -602,6 +602,32 @@ class HoleScore(Base):
     entered_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False, server_default=func.current_timestamp())
 
 
+class MatchScoreState(Base):
+    """What has happened to one match's scores: its revision, last change and lock (R-SCORES).
+
+    At most one row per match. A match with no row is at revision 0 and is not
+    locked. The revision goes up on every save, clear, lock and unlock, so a
+    form can tell whether what it showed is still what is saved.
+    """
+
+    __tablename__ = "match_score_states"
+    __table_args__ = (
+        CheckConstraint("revision >= 1", name="ck_match_score_states_revision"),
+        CheckConstraint("(scores_changed_at IS NULL) = (scores_changed_by_user_id IS NULL)",
+                        name="ck_match_score_states_changed_pair"),
+        CheckConstraint("(locked_at IS NULL) = (locked_by_user_id IS NULL)",
+                        name="ck_match_score_states_locked_pair"),
+    )
+
+    player_match_id: Mapped[int] = mapped_column(ForeignKey("player_matches.id"), primary_key=True,
+                                                 autoincrement=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    scores_changed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    scores_changed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    locked_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    locked_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
 class ScorecardDraft(Base):
     """An uploaded scorecard awaiting review; a draft is not data (R-SCORES).
 

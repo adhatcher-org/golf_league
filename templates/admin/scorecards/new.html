@@ -13,12 +13,13 @@
 {% if season is none %}
 <p>There is no season yet. Create a season and its weekly matchups before entering scores.</p>
 {% elif not weeks %}
-<p>No week can take a scorecard right now. A week needs to be scheduled, dated today or later, and have its matchups generated.</p>
+<p>No week can take a scorecard right now. A week needs to be scheduled and have its matchups generated.</p>
 {% else %}
 <form class="scorecard-form scorecard-form--start" method="post" action="/admin/scorecards" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label for="week_id">Week</label>
     <select id="week_id" name="week_id">
+        {% if chosen_week_id is none %}<option value="" selected>Choose a week</option>{% endif %}
         {% for week in weeks %}<option value="{{ week.id }}"{% if week.id == chosen_week_id %} selected{% endif %}>Week {{ week.index }} · {{ week.play_date.strftime('%b %-d, %Y') }} · {{ week.nine|title }} nine</option>{% endfor %}
     </select>
     {% if configured %}

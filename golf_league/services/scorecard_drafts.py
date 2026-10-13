@@ -24,6 +24,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from golf_league.domain.scorecard import Actor
 from golf_league.models import ScorecardDraft
 from golf_league.services.matchups import Clock
 from golf_league.services.scorecard_image import prepare_image
@@ -86,14 +87,14 @@ def _remove_image(directory: Path, image_path: str | None) -> None:
 
 
 def create_draft(session: Session, *, week_id: int, user_id: int, raw: bytes, today: date,
-                 clock: Clock, directory: Path) -> ScorecardDraft:
+                 clock: Clock, directory: Path, actor: Actor) -> ScorecardDraft:
     """Store a prepared photo and an `extracting` draft; commits.
 
     Raises `ScoreEntryError` for a week that cannot take a card and
     `ImageRefused` for a refused upload, in that order, before anything is
     written. If the row cannot be saved the photo is removed.
     """
-    week_for_entry(session, week_id, today)
+    week_for_entry(session, week_id, today, actor)
     image = prepare_image(raw)
     name = _write_image(directory, image)
     try:
@@ -109,9 +110,9 @@ def create_draft(session: Session, *, week_id: int, user_id: int, raw: bytes, to
 
 
 def create_manual_draft(session: Session, *, week_id: int, user_id: int, today: date,
-                        clock: Clock) -> ScorecardDraft:
+                        clock: Clock, actor: Actor) -> ScorecardDraft:
     """A `ready` draft with no photo and nothing extracted; commits."""
-    week_for_entry(session, week_id, today)
+    week_for_entry(session, week_id, today, actor)
     draft = _new_draft(week_id, user_id, clock, status="ready", image_path=None)
     session.add(draft)
     session.commit()
