@@ -14,9 +14,12 @@ from golf_league.domain.course import validate_hole_grid
 from golf_league.models import (
     Course,
     Hole,
+    HoleScore,
     HoleYardage,
+    PlayerMatch,
     Season,
     SeasonParticipant,
+    TeamMatch,
     TeeRating,
     TeeSet,
     Week,
@@ -260,7 +263,14 @@ def update_season(
     first_week_nine: object,
 ) -> Season | None:
     """Update only GL-30 structural fields; future scheduling is excluded."""
-    season = get_season(session, season_id)
+    from golf_league.services.schedule import ScheduleConflict, reserve_schedule_write
+
+    try:
+        reserve_schedule_write(session)
+    except ScheduleConflict as exc:
+        session.rollback()
+        raise SeasonValidationError({"course_id": "The season is being changed. Retry."}) from exc
+    season = session.get(Season, season_id, populate_existing=True)
     if season is None:
         return None
     errors, parsed = _validate_season_fields(
@@ -274,6 +284,16 @@ def update_season(
         first_week_nine=first_week_nine,
     )
     parsed_course_id = parsed.get("course_id")
+    if (parsed_course_id is not None and int(parsed_course_id) != season.course_id
+            and session.execute(
+                select(HoleScore.id)
+                .join(PlayerMatch, PlayerMatch.id == HoleScore.player_match_id)
+                .join(TeamMatch, TeamMatch.id == PlayerMatch.team_match_id)
+                .join(Week, Week.id == TeamMatch.week_id)
+                .where(Week.season_id == season_id)
+                .limit(1)
+            ).first() is not None):
+        errors["course_id"] = "Cannot change the course after scores have been submitted."
     if (
         parsed_course_id is not None
         and int(parsed_course_id) != season.course_id
