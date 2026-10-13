@@ -83,10 +83,12 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/app.py`
 
-- function `_navigation_user` (line 63)
-- function `lifespan` (line 96)
-- function `create_app` (line 167)
-- function `main` (line 246)
+- function `_navigation_user` (line 69)
+- function `_configure_scorecards` (line 101)
+- function `_clean_scorecard_drafts` (line 117)
+- function `lifespan` (line 132)
+- function `create_app` (line 210)
+- function `main` (line 295)
 
 ### `golf_league/config.py`
 
@@ -275,9 +277,10 @@ Private data, ignored files, and source contents are excluded.
 - class `PlayerMatch` (line 539)
 - class `WeekHandicap` (line 564)
 - class `HoleScore` (line 587)
-- class `LeagueInviteLink` (line 605)
-- class `GolferSetPasswordToken` (line 628)
-- class `InviteRateWindow` (line 645)
+- class `ScorecardDraft` (line 605)
+- class `LeagueInviteLink` (line 633)
+- class `GolferSetPasswordToken` (line 656)
+- class `InviteRateWindow` (line 673)
 
 ### `golf_league/routers/__init__.py`
 
@@ -745,6 +748,35 @@ Private data, ignored files, and source contents are excluded.
 - function `confirm_nine` (line 583)
 - function `confirm_shift` (line 598)
 
+### `golf_league/services/scorecard_drafts.py`
+
+- function `scorecard_directory` (line 53)
+- function `_ensure_directory` (line 58)
+- function `image_file` (line 63)
+- function `_write_image` (line 70)
+- function `_remove_image` (line 79)
+- function `create_draft` (line 88)
+- function `create_manual_draft` (line 111)
+- function `_new_draft` (line 122)
+- function `card_to_json` (line 132)
+- function `draft_card` (line 144)
+- function `run_extraction` (line 161)
+- function `_store_result` (line 196)
+- function `_session_factory` (line 219)
+- function `start_extraction` (line 224)
+- function `get_draft` (line 249)
+- function `list_open_drafts` (line 253)
+- function `delete_draft` (line 259)
+- function `discard_draft` (line 266)
+- function `purge_expired` (line 277)
+- function `mark_interrupted` (line 302)
+
+### `golf_league/services/scorecard_image.py`
+
+- class `ImageRefused` (line 30)
+  - method `__init__` (line 33)
+- function `prepare_image` (line 38)
+
 ### `golf_league/services/scorecard_vision.py`
 
 - function `analysis_provider` (line 44)
@@ -907,6 +939,11 @@ Private data, ignored files, and source contents are excluded.
 
 - function `upgrade` (line 20)
 - function `downgrade` (line 100)
+
+### `migrations/versions/d7e2b9a4c618_scorecard_drafts.py`
+
+- function `upgrade` (line 17)
+- function `downgrade` (line 38)
 
 ### `migrations/versions/e5a1c3d9f2b7_roster.py`
 
@@ -2040,6 +2077,97 @@ Private data, ignored files, and source contents are excluded.
 - function `test_rejected_without_raising` (line 29)
 - function `test_group_by_match_complete_card` (line 34)
 - function `test_group_by_match_one_side_or_cross_match_is_incomplete` (line 40)
+
+### `tests/test_scorecard_draft_migration.py`
+
+- function `_engine` (line 17)
+- function `_seed` (line 29)
+- function `_assert_schema` (line 44)
+- function `_insert` (line 61)
+- function `test_fresh_upgrade_creates_table_with_enforced_constraints` (line 69)
+- function `test_upgrade_from_prior_head_preserves_data_and_downgrades` (line 97)
+- function `test_model_and_migration_agree` (line 130)
+
+### `tests/test_scorecard_drafts.py`
+
+- function `clock` (line 67)
+- function `_jpeg` (line 71)
+- class `FakeProvider` (line 77)
+  - method `__init__` (line 80)
+  - method `read_scorecard` (line 85)
+- class `InlineExecutor` (line 94)
+  - method `__init__` (line 97)
+  - method `submit` (line 100)
+- class `_State` (line 105)
+  - method `__init__` (line 108)
+- function `db` (line 116)
+- function `_factory` (line 129)
+- function `_create` (line 133)
+- function `_draft` (line 141)
+- function `_count` (line 146)
+- function `_files` (line 151)
+- function `test_the_scorecard_directory_is_beside_the_managed_file` (line 158)
+- function `test_only_names_this_module_writes_resolve_to_a_file` (line 165)
+- function `test_a_written_name_resolves_inside_the_directory` (line 169)
+- function `test_create_draft_stores_a_private_photo_and_an_extracting_row` (line 176)
+- function `test_two_uploads_of_the_same_photo_get_different_names` (line 196)
+- function `test_create_draft_refuses_a_week_that_cannot_take_a_card` (line 206)
+- function `test_create_draft_refuses_a_bad_image_without_writing` (line 225)
+- function `test_the_week_is_checked_before_the_image` (line 233)
+- function `test_a_failed_row_insert_removes_the_photo` (line 239)
+- function `test_create_manual_draft_is_ready_with_no_photo` (line 251)
+- function `test_extraction_stores_the_reading_and_the_model_name` (line 268)
+- function `test_a_provider_error_fails_the_draft_with_its_code` (line 289)
+- function `test_an_unexpected_exception_in_the_provider_does_not_escape` (line 298)
+- function `test_a_draft_discarded_during_the_read_stays_discarded` (line 309)
+- function `test_a_draft_failed_during_the_read_is_not_overwritten_by_a_late_result` (line 323)
+- function `test_a_draft_that_is_not_extracting_is_left_alone` (line 340)
+- function `test_a_missing_photo_fails_the_draft_without_calling_the_provider` (line 352)
+- function `test_a_week_with_no_holes_fails_the_draft_without_calling_the_provider` (line 362)
+- function `test_a_database_that_cannot_be_opened_does_not_escape` (line 374)
+- function `test_storing_the_result_is_retried_when_the_writer_is_busy` (line 385)
+- function `test_no_hole_scores_are_written_by_a_draft` (line 401)
+- function `test_start_extraction_runs_the_job_on_the_executor` (line 412)
+- function `test_start_extraction_on_a_real_single_worker_thread` (line 421)
+- function `test_with_no_provider_the_draft_becomes_manual_and_nothing_is_called` (line 437)
+- function `test_get_and_list_open_drafts_show_every_admins_drafts_own_first` (line 451)
+- function `test_delete_draft_removes_photo_then_row_and_leaves_the_commit_to_the_caller` (line 469)
+- function `test_discard_draft_removes_photo_and_row_and_tolerates_a_missing_photo` (line 485)
+- function `test_purge_removes_a_24_hour_old_draft_and_keeps_a_23_hour_old_one` (line 496)
+- function `test_purge_removes_an_old_stray_photo_and_keeps_a_new_one` (line 513)
+- function `test_purge_with_no_directory_yet_is_harmless` (line 530)
+- function `test_mark_interrupted_fails_extracting_drafts_and_leaves_ready_ones` (line 537)
+- function `test_deleting_a_week_removes_its_drafts` (line 549)
+- function `test_no_log_record_carries_image_bytes_a_name_or_a_score` (line 568)
+- function `_settings` (line 592)
+- function `test_startup_sets_the_directory_and_a_single_worker_and_shuts_it_down` (line 597)
+- function `test_an_assigned_executor_and_directory_are_kept` (line 611)
+- function `test_startup_fails_interrupted_drafts_and_purges_expired_ones` (line 621)
+- function `test_a_cleanup_failure_at_startup_never_stops_the_application` (line 653)
+
+### `tests/test_scorecard_image.py`
+
+- function `_picture` (line 18)
+- function `_encode` (line 22)
+- function `_opened` (line 28)
+- function `_exif_with_gps` (line 34)
+- function `_refusal` (line 42)
+- function `test_each_accepted_format_becomes_a_clean_jpeg_within_2048` (line 50)
+- function `test_exif_gps_and_other_metadata_are_removed` (line 58)
+- function `test_an_icc_profile_does_not_survive` (line 72)
+- function `test_a_rotated_exif_image_comes_out_upright` (line 77)
+- function `test_a_small_image_is_not_enlarged` (line 91)
+- function `test_a_tall_image_is_scaled_on_its_long_edge` (line 95)
+- function `test_a_transparent_png_is_flattened_onto_white` (line 99)
+- function `test_a_phone_jpeg_with_a_second_picture_is_accepted` (line 104)
+- function `test_more_than_10_mb_is_too_large_and_exactly_10_mb_is_judged_by_content` (line 113)
+- function `test_other_image_formats_are_unsupported` (line 120)
+- function `test_non_images_are_unsupported` (line 128)
+- function `test_a_truncated_jpeg_is_unsupported` (line 132)
+- function `test_the_type_is_judged_from_content_only` (line 137)
+- function `test_too_many_pixels_is_refused_before_decoding` (line 144)
+- function `test_exactly_the_pixel_limit_is_accepted` (line 151)
+- function `test_a_decompression_bomb_is_too_many_pixels` (line 157)
 
 ### `tests/test_scores.py`
 

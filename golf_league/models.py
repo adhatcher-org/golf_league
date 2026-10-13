@@ -602,6 +602,34 @@ class HoleScore(Base):
     entered_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False, server_default=func.current_timestamp())
 
 
+class ScorecardDraft(Base):
+    """An uploaded scorecard awaiting review; a draft is not data (R-SCORES).
+
+    The photo and this row are deleted on submit, on discard and 24 hours after
+    upload. `image_path` is a bare file name inside the scorecard directory and
+    is null for a manual draft. `extracted_json` holds only the structured
+    reading, never raw model text.
+    """
+
+    __tablename__ = "scorecard_drafts"
+    __table_args__ = (
+        CheckConstraint("status IN ('extracting', 'ready', 'failed')", name="ck_scorecard_drafts_status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # A draft never outlives its week: deleting the week removes the row, and the
+    # orphan sweep in `purge_expired` removes the photo.
+    week_id: Mapped[int] = mapped_column(ForeignKey("weeks.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False)
+    model_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    image_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extracted_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+
+
 class LeagueInviteLink(Base):
     """Shared invitation; only its irreversible digest is persisted."""
 

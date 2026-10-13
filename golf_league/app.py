@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -42,6 +43,11 @@ from golf_league.security import (
 )
 from golf_league.services.course_seed import seed_wyandot
 from golf_league.services.email import FakeEmailSender, SmtpEmailSender
+from golf_league.services.scorecard_drafts import (
+    mark_interrupted,
+    purge_expired,
+    scorecard_directory,
+)
 from golf_league.services.scorecard_vision import (
     OllamaVisionProvider,
     photo_entry_configured,
@@ -92,6 +98,36 @@ async def _navigation_user(request: Request, call_next):
     return await call_next(request)
 
 
+def _configure_scorecards(app: FastAPI, settings) -> ThreadPoolExecutor | None:
+    """Set the photo directory and the background worker; return a worker made here.
+
+    Scorecard photos live beside the managed file, in the data directory. Like
+    the vision provider, a value assigned beforehand (a test's inline executor
+    or directory) is kept.
+    """
+    if app.state.scorecard_dir is None:
+        app.state.scorecard_dir = scorecard_directory(settings.managed_env_path)
+    if app.state.scorecard_executor is not None:
+        return None
+    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="scorecard")
+    app.state.scorecard_executor = executor
+    return executor
+
+
+def _clean_scorecard_drafts(app: FastAPI, engine) -> None:
+    """Startup cleanup of scorecard drafts (R-SCORES "Retention").
+
+    A draft left mid-read by the previous process is failed, and anything past
+    its 24 hours is deleted. A failure is logged and never stops startup.
+    """
+    try:
+        with Session(bind=engine) as session:
+            mark_interrupted(session)
+            purge_expired(session, app.state.scorecard_utc_now(), directory=app.state.scorecard_dir)
+    except Exception as exc:
+        logger.warning("scorecard draft cleanup failed at startup type=%s", type(exc).__name__)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Use provided settings or fall back to get_settings()
@@ -126,6 +162,7 @@ async def lifespan(app: FastAPI):
             settings.ollama_vision_model,
             vision_num_ctx(settings),
         )
+    owned_executor = _configure_scorecards(app, settings)
     database_url = settings.database_url
 
     app.state.ready = False
@@ -151,6 +188,8 @@ async def lifespan(app: FastAPI):
         finally:
             bootstrap_session.close()
 
+        _clean_scorecard_drafts(app, engine)
+
         app.state.ready = True
     except Exception as exc:
         logger.exception("startup failed: database/migration error")
@@ -159,7 +198,11 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Cleanup on shutdown
+    # Cleanup on shutdown. A read still in flight is not waited for: its draft
+    # stays `extracting` and the next startup marks it interrupted.
+    if owned_executor is not None:
+        owned_executor.shutdown(wait=False, cancel_futures=True)
+        app.state.scorecard_executor = None
     if engine is not None:
         engine.dispose()
 
@@ -194,6 +237,12 @@ def create_app(settings=None) -> FastAPI:
     app.state.email_sender = FakeEmailSender()
     # Scorecard photo reader (R-OCR-PROVIDER); the lifespan fills it in when configured.
     app.state.vision_provider = None
+    # Scorecard drafts: the lifespan fills in the photo directory and the
+    # background worker; tests assign their own before startup. The clock is
+    # injected so "today" and the 24-hour expiry can be tested.
+    app.state.scorecard_dir = None
+    app.state.scorecard_executor = None
+    app.state.scorecard_utc_now = lambda: datetime.now(UTC)
     app.state.invite_receipts = InviteReceiptStore()
     app.state.invite_form_nonces = InviteFormNonceStore()
     app.state.join_monotonic = time.monotonic
