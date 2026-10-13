@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Enter scorecard - Golf League{% endblock %}
+{% block content %}
+<header class="admin-page-heading">
+    <div>
+        <p class="eyebrow">Manage · Scorecards</p>
+        <h1>Enter scorecard</h1>
+        <p>Choose the week, then photograph the card. You review and correct every name and score before anything is saved.</p>
+    </div>
+</header>
+{% if discarded %}<p class="notice" role="status">The card was discarded. Its photo has been deleted.</p>{% endif %}
+{% include "_error_summary.html" %}
+{% if season is none %}
+<p>There is no season yet. Create a season and its weekly matchups before entering scores.</p>
+{% elif not weeks %}
+<p>No week can take a scorecard right now. A week needs to be scheduled, dated today or later, and have its matchups generated.</p>
+{% else %}
+<form class="scorecard-form scorecard-form--start" method="post" action="/admin/scorecards" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label for="week_id">Week</label>
+    <select id="week_id" name="week_id">
+        {% for week in weeks %}<option value="{{ week.id }}"{% if week.id == chosen_week_id %} selected{% endif %}>Week {{ week.index }} · {{ week.play_date.strftime('%b %-d, %Y') }} · {{ week.nine|title }} nine</option>{% endfor %}
+    </select>
+    {% if configured %}
+    <label for="photo">Scorecard photo</label>
+    <input type="file" id="photo" name="photo" accept="image/*" capture="environment">
+    <p>JPEG, PNG or HEIC, up to 10 MB. The photo is deleted when you submit or discard the card, and after 24 hours at the latest.</p>
+    <p><button type="submit">Upload photo</button></p>
+    <p><button class="button-secondary" type="submit" name="manual" value="1">Enter scores manually</button></p>
+    {% else %}
+    <p><strong>Photo reading is not set up.</strong> You can still enter the scores from a card by hand.</p>
+    <p><button type="submit" name="manual" value="1">Enter scores manually</button></p>
+    {% endif %}
+</form>
+{% endif %}
+{% if drafts %}
+<h2>Cards in progress</h2>
+<p>A card stays here until it is submitted or discarded, or for 24 hours.</p>
+<ul>
+    {% for item in drafts %}
+    <li><a href="/admin/scorecards/{{ item.draft.id }}">Card {{ item.draft.id }}{% if item.week %}, week {{ item.week.index }}{% endif %}</a>:
+        {% if item.draft.status == 'extracting' %}being read{% elif item.draft.status == 'failed' %}could not be read{% else %}ready to review{% endif %}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+{% if scored_weeks %}
+<h2>Saved scores</h2>
+<ul>
+    {% for week in scored_weeks %}<li><a href="/admin/weeks/{{ week.id }}/scores">Week {{ week.index }} · {{ week.play_date.strftime('%b %-d, %Y') }}</a></li>{% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

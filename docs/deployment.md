@@ -116,6 +116,20 @@ container. Because the file lives in the mounted directory it survives image rep
 - Staged roster imports expire 90 days after staging and are deleted by the admin-only purge
   action on the import pages; nothing is purged automatically.
 
+## Scorecard photo entry
+
+Photo entry is off until `OLLAMA_URL` and `OLLAMA_VISION_MODEL` are set (`docs/configuration.md`,
+"Scorecard photo keys"); without them the upload page offers manual entry only. Before turning it
+on:
+
+- **Raise the proxy's upload limit.** `deploy/swag.example.conf` sets `client_max_body_size 11m`
+  for the 10 MB photo limit. A SWAG conf copied from an earlier template still says `3m`, and
+  nginx then answers a normal phone photo with its own 413 page before the app is reached. Change
+  the live conf and reload SWAG.
+- **The container must reach the Ollama server** at `OLLAMA_URL` on the container network.
+- Photos awaiting review are kept under `<data dir>/scorecards/` for at most 24 hours and are not
+  part of any backup (`docs/backup-restore.md`).
+
 ## Rollout checklist (for the authorized deployment)
 
 The full ordered procedure, including verification and rollback, is `docs/deployment-runbook.md`;

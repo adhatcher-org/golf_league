@@ -60,6 +60,16 @@ orchestrator repo next door.
   `golf_league/services/player_schedule.py`, with markup in `templates/player/`.
 - Scorecard validation and match grouping are in `golf_league/domain/scorecard.py`;
   `golf_league/services/scores.py` checks week eligibility and atomically writes hole scores.
+- Scorecard photo entry (R-SCORES, R-OCR-PROVIDER): the admin pages are
+  `golf_league/routers/admin_scorecards.py` with `templates/admin/scorecards/` and the status
+  polling script `static/scorecard-status.js`. `golf_league/services/scorecard_image.py` turns an
+  upload into a clean JPEG; `golf_league/services/scorecard_drafts.py` holds the short-lived
+  `scorecard_drafts` rows and photos (under `<data dir>/scorecards/`) and runs the read on one
+  background worker; `golf_league/services/scorecard_vision.py` is the only provider module (the
+  Ollama client and the five deploy-time keys); `golf_league/services/scorecard_review.py` builds
+  the review form and reads a submitted one, using the pure name matching and card checks in
+  `golf_league/domain/scorecard_review.py`. Tests replace `app.state.vision_provider`,
+  `app.state.scorecard_executor` and `app.state.scorecard_utc_now`.
 - Managed configuration (the R-DEPLOYMENT eight-key allowlist, the atomic managed `.env`
   file and its validation) is `golf_league/managed_config.py`; `Settings` in
   `golf_league/config.py` reads the eight managed keys from that file above the environment,
@@ -108,10 +118,13 @@ orchestrator repo next door.
   open or modify real `.env` files.
 - Runtime: single non-root container, SQLite persistence under `/data`, startup migrations,
   redacted stdout/stderr logs.
-- Hole scores for a submitted scorecard are in scope under R-SCORES. Out of scope unless a work item
-  explicitly adds it: rounds, results, standings, statistics, scoring rulesets, automatic team
-  formation/pairings, handicap recomputation, AI/provider modules. Do not restore PDF parsing,
-  public roster, export, undo/redo, or load balancing.
+- Hole scores for a submitted scorecard are in scope under R-SCORES, and so is the one provider
+  module that reads a scorecard photo (`golf_league/services/scorecard_vision.py`) under
+  R-OCR-PROVIDER: no other feature may call a model, no model name appears in code, and no request
+  handler calls the provider. Out of scope unless a work item explicitly adds it: rounds, results,
+  standings, statistics, scoring rulesets, automatic team formation/pairings, handicap
+  recomputation, any other AI/provider module. Do not restore PDF parsing, public roster, export,
+  undo/redo, or load balancing.
 - Product decisions (tee mapping, handicap units, and the rest) live in exactly one place:
   `Plan/Rulings.md` in the vault, one versioned ruling per topic. The guide's older Q1-Q9/D1-D9
   table and the frozen Decision Register are history, not answers. Treat a "suggested default"

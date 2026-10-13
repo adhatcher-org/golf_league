@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Week {{ week.index }} scores - Golf League{% endblock %}
+{% block content %}
+<header class="admin-page-heading">
+    <div>
+        <p class="eyebrow">Manage · Scorecards</p>
+        <h1>Week {{ week.index }} scores</h1>
+        <p>{{ week.play_date.strftime('%b %-d, %Y') }}{% if week.nine %} · {{ week.nine|title }} nine{% endif %}. Saved scores cannot be changed here.</p>
+    </div>
+</header>
+{% if saved %}<p class="notice" role="status">The card was saved. Its photo has been deleted.</p>{% endif %}
+<p><a href="/admin/scorecards/new">Enter another scorecard</a></p>
+{% for match in matches %}
+<section>
+    <h2>Match {{ match.position_label }}: {{ match.golfers|map(attribute='name')|join(' and ') }}</h2>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th scope="col">Golfer</th>{% for number in hole_numbers %}<th scope="col">Hole {{ number }}</th>{% endfor %}<th scope="col">Total</th></tr></thead>
+            <tbody>
+                {% for golfer in match.golfers %}
+                <tr><th scope="row">{{ golfer.name }}</th>{% for number in hole_numbers %}<td>{{ golfer.strokes_by_hole.get(number, '—') }}</td>{% endfor %}<td>{{ golfer.total }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% else %}
+<p>No scores are saved for this week yet.</p>
+{% endfor %}
+{% endblock %}

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Golf League{% endblock %}</title>
-    <link rel="stylesheet" href="/static/app.css?v=20261009-release-fixes-1">
+    <link rel="stylesheet" href="/static/app.css?v=20261013-scorecards-1">
 </head>
 <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
@@ -29,6 +29,7 @@
                         <a href="/admin/courses">Courses</a>
                         <a href="/admin/seasons">Seasons</a>
                         <a href="/admin/invites">League invites</a>
+                        <a href="/admin/scorecards/new">Enter scorecard</a>
                         <a href="/admin/seasons/new">New season</a>
                         <a href="/admin/config">Configuration</a>
                     </div>
@@ -55,5 +56,6 @@
     </footer>
 
     <script src="/static/app.js?v=20261006-opponent-contact-1"></script>
+    {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -258,7 +258,9 @@ def test_managed_file_outranks_environment_which_outranks_default(tmp_path, monk
 
 
 _DEPLOY_ENV = ("SESSION_SECRET", "DATABASE_URL", "EXTERNAL_BASE_URL", "MAX_USERS",
-               "EMAIL_VERIFICATION_REQUIRED", "ADMIN_EMAIL", "ADMIN_PASSWORD")
+               "EMAIL_VERIFICATION_REQUIRED", "ADMIN_EMAIL", "ADMIN_PASSWORD",
+               "ANALYSIS_PROVIDER", "OLLAMA_URL", "OLLAMA_VISION_MODEL",
+               "OLLAMA_VISION_NUM_CTX", "LEAGUE_TIMEZONE")
 FILE_SECRET = "synthetic-file-session-secret-4b1d"
 FILE_ADMIN_PASSWORD = "synthetic-file-admin-password-8e2"
 
@@ -589,3 +591,31 @@ def test_admin_form_leaves_deploy_key_lines_intact(admin_client):
     refused = _form(admin_client, SESSION_SECRET="synthetic-overwrite-attempt")
     assert admin_client.post("/admin/config", data=refused, follow_redirects=False).status_code == 422
     assert FILE_SECRET in path.read_text(encoding="utf-8")
+
+
+_VISION_LINES = (
+    "ANALYSIS_PROVIDER=ollama\n"
+    "OLLAMA_URL=http://ollama.example.invalid:11434\n"
+    "OLLAMA_VISION_MODEL=example-model:1b\n"
+    "OLLAMA_VISION_NUM_CTX=4096\n"
+    "LEAGUE_TIMEZONE=America/New_York\n"
+)
+
+
+def test_admin_form_neither_shows_nor_rewrites_the_photo_keys(admin_client):
+    path = _managed_path(admin_client)
+    path.write_text(_VISION_LINES, encoding="utf-8")
+
+    page = admin_client.get("/admin/config")
+    for name in ("ANALYSIS_PROVIDER", "OLLAMA_URL", "OLLAMA_VISION_MODEL",
+                 "OLLAMA_VISION_NUM_CTX", "LEAGUE_TIMEZONE"):
+        assert f'name="{name}"' not in page.text
+    assert "ollama.example.invalid" not in page.text and "example-model" not in page.text
+
+    data = _form(admin_client, SMTP_HOST="relay.example.test")
+    assert admin_client.post("/admin/config", data=data, follow_redirects=False).status_code == 303
+    assert path.read_text(encoding="utf-8") == _VISION_LINES + 'SMTP_HOST="relay.example.test"\n'
+
+    refused = _form(admin_client, OLLAMA_URL="http://attacker.example.invalid")
+    assert admin_client.post("/admin/config", data=refused, follow_redirects=False).status_code == 422
+    assert "attacker" not in path.read_text(encoding="utf-8")
