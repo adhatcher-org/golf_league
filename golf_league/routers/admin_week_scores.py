@@ -372,8 +372,8 @@ def _match_page(request: Request, session: Session, week: Week, player_match_id:
     if values is None:  # the saved scores, for an edit
         values = {score_field(golfer.golfer_id, hole): str(strokes)
                   for golfer in match.golfers for hole, strokes in golfer.strokes_by_hole.items()}
-    elif typed_on is not None:
-        revision = typed_on
+    else:  # never a revision the typed values were not typed on: blank is refused as out of date
+        revision = "" if typed_on is None else typed_on
     view = _match_view(request, match, hole_numbers, field=score_field, values=values, invalid=set(errors),
                        input_ids={golfer.golfer_id for golfer in match.golfers} if editable else set())
     fields = [cell["field"] for row in view["rows"] for cell in row["inputs"] or []]
@@ -427,10 +427,12 @@ async def match_scores_save(week_id: int, player_match_id: int, request: Request
               for golfer_id, _ in golfers for hole in hole_numbers}
     scores, errors = parse_scores(values, golfers, hole_numbers)
     base_revision = parse_revision(_text(form, "revision"))
+    # A form with no readable revision, or with mistakes typed on an older page, is out of date
+    # before anything else: it goes back with the saved values, never with what was typed.
+    if base_revision is None or (errors and not match.locked and base_revision != match.revision):
+        return _refused_match(request, session, week_id, player_match_id, None,
+                              ScoreEntryError("out_of_date", "", player_match_id=player_match_id))
     if errors and not match.locked:
-        if base_revision != match.revision:  # typed on an older page: say so before the mistakes
-            return _refused_match(request, session, week_id, player_match_id, None,
-                                  ScoreEntryError("out_of_date", "", player_match_id=player_match_id))
         return _match_page(request, session, week, player_match_id, values=values, errors=errors,
                            status_code=422, typed_on=base_revision)
     actor, today, now = Actor(admin.id, True), _today(request), _now(request)

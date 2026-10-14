@@ -571,6 +571,26 @@ def test_typed_values_go_back_with_the_revision_they_were_typed_on(sheet, monkey
     assert set(_strokes(client, ids["matches"][0]).values()) == {45}
 
 
+@pytest.mark.parametrize("revision", [None, "", "abc", "-1", "9999999999"])
+def test_a_match_form_without_a_readable_revision_goes_back_with_the_saved_values(sheet, monkeypatch, revision):
+    client, ids = sheet
+    match_id = ids["matches"][0]
+    a1 = ids["sides"][match_id][0]
+    assert _save_sheet(client, ids, {0: _both(ids, 0)}).status_code == 303            # revision 1: fives
+    # Even when the write would also have met a conflict, nothing typed comes back to be saved again.
+    _refuse(monkeypatch, "save_match_scores", ScoreEntryError("conflict", ""))
+    form = _match_data(client, ids, 0, (SIXES, SIXES), 1)
+    if revision is None:
+        del form["revision"]
+    else:
+        form["revision"] = revision
+    response = client.post(_match_path(ids, 0), data=form, follow_redirects=False)
+    assert response.status_code == 409 and "were changed after you opened this page" in response.text
+    assert f'name="score_{a1}_1" value="5"' in response.text and 'value="6"' not in response.text
+    assert _save_form_revision(response.text) == "1"  # the saved values, on their own revision
+    assert set(_strokes(client, match_id).values()) == {45}
+
+
 def test_mistakes_on_an_out_of_date_sheet_are_409_before_the_mistakes(sheet):
     client, ids = sheet
     match_id = ids["matches"][0]
