@@ -699,6 +699,37 @@ def test_the_week_sheet_lists_every_match_in_order_with_scores_change_and_lock(d
         assert week_sheet(session, 999999) == []
 
 
+def test_the_week_sheet_never_shows_a_revision_newer_than_its_scores(db, monkeypatch):
+    engine, ids, actors = db
+    with Session(engine) as session:
+        _save(session, ids, "m1", actors["a1"], 0, value=4)
+        session.commit()  # revision 1: fours
+    import golf_league.services.scores as scores_module
+
+    original, saved_elsewhere = scores_module._rows_by_golfer, []
+
+    def rows_then_a_save_elsewhere(session, match_id, **options):
+        rows = original(session, match_id, **options)
+        if match_id == ids["m1"] and not saved_elsewhere:  # someone saves sixes right after the read
+            saved_elsewhere.append(True)
+            with Session(engine) as other:
+                _save(other, ids, "m1", actors["b1"], 1, value=6)
+                other.commit()  # revision 2: sixes
+        return rows
+
+    monkeypatch.setattr(scores_module, "_rows_by_golfer", rows_then_a_save_elsewhere)
+    with Session(engine) as session:
+        shown = next(m for m in week_sheet(session, ids["week"]) if m.player_match_id == ids["m1"])
+    monkeypatch.undo()
+    assert saved_elsewhere
+    assert shown.revision == 1 and all(set(g.strokes_by_hole.values()) == {4} for g in shown.golfers)
+    # Saving what that page showed, on the revision it showed, is refused; the sixes stay.
+    with Session(engine) as session:
+        assert _code(lambda: _save(session, ids, "m1", actors["a1"], shown.revision, value=4)) == "out_of_date"
+        session.rollback()
+        assert {row[2] for row in _rows(session, ids["m1"])} == {6}
+
+
 def test_player_entry_state_covers_every_state(db):
     engine, ids, actors = db
     a1 = actors["a1"].golfer_id

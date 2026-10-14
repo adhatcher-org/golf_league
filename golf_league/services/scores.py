@@ -204,9 +204,14 @@ def _is_locked(state: MatchScoreState | None) -> bool:
     return state is not None and state.locked_at is not None
 
 
-def _rows_by_golfer(session: Session, player_match_id: int) -> dict[int, list[HoleScore]]:
+def _rows_by_golfer(session: Session, player_match_id: int, *,
+                    refresh: bool = False) -> dict[int, list[HoleScore]]:
+    """A match's saved rows by golfer; `refresh` reads every value from the database again."""
     rows: dict[int, list[HoleScore]] = {}
-    for row in session.scalars(select(HoleScore).where(HoleScore.player_match_id == player_match_id)):
+    query = select(HoleScore).where(HoleScore.player_match_id == player_match_id)
+    if refresh:
+        query = query.execution_options(populate_existing=True)
+    for row in session.scalars(query):
         rows.setdefault(row.golfer_id, []).append(row)
     return rows
 
@@ -701,7 +706,14 @@ def clear_match_scores(session: Session, week_id: int, player_match_id: int, act
 
 
 def week_sheet(session: Session, week_id: int) -> list[SheetMatch]:
-    """Every match of the week in schedule order, with its scores, last change and lock."""
+    """Every match of the week in schedule order, with its scores, last change and lock.
+
+    A page's form carries the revision shown here, so it must never be newer
+    than the scores shown beside it. These reads run outside a transaction, so
+    for each match the state is read from the database first and the scores
+    after it: a save landing in between pairs newer scores with an older
+    revision, which the write then refuses as out of date, never the reverse.
+    """
     hole_number = {hole.id: hole.number for hole in week_holes(session, week_id)}
     matches = session.execute(
         select(PlayerMatch, TeamMatch)
@@ -721,7 +733,9 @@ def week_sheet(session: Session, week_id: int) -> list[SheetMatch]:
 
     sheet: list[SheetMatch] = []
     for match, pairing in matches:
-        rows = _rows_by_golfer(session, match.id)
+        state = session.get(MatchScoreState, match.id, populate_existing=True)  # first; see above
+        revision, locked = _revision(state), _is_locked(state)
+        rows = _rows_by_golfer(session, match.id, refresh=True)
         golfers = []
         for golfer_id, is_sub in ((match.a_golfer_id, match.a_is_sub), (match.b_golfer_id, match.b_is_sub)):
             saved = rows.get(golfer_id, [])
@@ -735,14 +749,13 @@ def week_sheet(session: Session, week_id: int) -> list[SheetMatch]:
                 strokes_by_hole=strokes, total=sum(strokes.values()) if saved else None,
                 entered_by_user_id=entered_by, entered_by_name=user_name(entered_by),
             ))
-        state = _state(session, match.id)
         counts = [len(golfer.strokes_by_hole) for golfer in golfers]
         sheet.append(SheetMatch(
             player_match_id=match.id, team_match_id=pairing.id,
             home_team_name=session.get(Team, pairing.home_team_id).name,
             away_team_name=session.get(Team, pairing.away_team_id).name,
             position_label=match.position_label, golfers=(golfers[0], golfers[1]),
-            revision=_revision(state), locked=_is_locked(state),
+            revision=revision, locked=locked,
             locked_at=state.locked_at if state else None,
             locked_by_name=user_name(state.locked_by_user_id) if state else None,
             scores_changed_at=state.scores_changed_at if state else None,
