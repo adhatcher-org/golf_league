@@ -558,8 +558,13 @@ def test_typed_values_go_back_with_the_revision_they_were_typed_on(sheet, monkey
     _refuse(monkeypatch, "save_match_scores", OperationalError("UPDATE", {}, Exception("database is locked")))
     response = _save_match(client, ids, 0, (SIXES, SIXES), 0)
     assert response.status_code == 503 and _save_form_revision(response.text) == "0"
-    # The lock form on that page carries the same revision: it cannot lock scores the admin never saw.
-    assert response.text.count('name="revision" value="0"') == 2 and 'name="revision" value="1"' not in response.text
+    # That page shows sixes that are not saved, so it offers no lock and no clear of the saved fives.
+    assert "The scores shown above are not saved." in response.text
+    assert "Lock this match" not in response.text and "Clear scores" not in response.text
+    assert 'name="revision" value="1"' not in response.text
+    # Opened again, the match shows what is saved and can be locked.
+    page = client.get(_match_path(ids, 0)).text
+    assert "Lock this match" in page and "Clear scores" in page and "are not saved" not in page
     _refuse(monkeypatch, "save_match_scores", ScoreEntryError("conflict", ""))
     response = _save_match(client, ids, 0, (SIXES, SIXES), 0)
     assert response.status_code == 409 and _save_form_revision(response.text) == "0"
@@ -578,6 +583,25 @@ def test_mistakes_on_an_out_of_date_sheet_are_409_before_the_mistakes(sheet):
     response = client.post(_path(ids), data=data, follow_redirects=False)
     assert response.status_code == 409 and "was changed after you opened this page" in response.text
     assert 'value="99"' not in response.text and _score_count(client) == 0
+
+
+def test_a_week_sheet_may_post_as_many_fields_as_the_week_has(sheet, monkeypatch):
+    client, ids = sheet
+    import golf_league.routers.admin_week_scores as router_module
+
+    # 28 teams give 56 matches: 1,008 score inputs, 56 revisions and the token pass the parser's 1,000.
+    assert router_module._field_limit(56, 9) >= 56 * 18 + 56 + 1 > 1000
+    assert router_module._field_limit(4, 9) == 1000 and router_module._field_limit(4, 0) == 1000
+    # With the parser's own limit made tiny, the four-match sheet still posts: the limit follows the week.
+    monkeypatch.setattr(router_module, "_FORM_FIELDS_FLOOR", 10)
+    everything = {index: _both(ids, index) for index in range(4)}
+    assert len(_sheet_data(client, ids, everything)) == 4 * 18 + 4 + 1
+    assert _save_sheet(client, ids, everything).status_code == 303 and _score_count(client) == 72
+    lock_all = {f"revision_{match_id}": "1" for match_id in ids["matches"]}
+    assert _post(client, _path(ids, "/lock-all"), **lock_all).status_code == 303
+    # More fields than the week can have is still refused.
+    padded = {**_sheet_data(client, ids, {}), **{f"extra_{n}": "1" for n in range(100)}}
+    assert client.post(_path(ids), data=padded, follow_redirects=False).status_code == 400
 
 
 def _enter_and_clear_elsewhere(client, ids, index):

@@ -17,14 +17,18 @@
     {% include "scores/_match_table.html" %}
     <p><button type="submit">Save scores</button></p>
 </form>
+{% if typed %}
+<p>The scores shown above are not saved. To lock or clear this match, <a href="{{ match_path }}">open it again</a> to see what is saved.</p>
+{% else %}
 <h2>Lock or clear</h2>
 <p>Lock the match once you have checked its scores. A locked match cannot be changed by anyone until you unlock it.</p>
 <form method="post" action="{{ match_path|replace('/scores', '') }}/lock">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <input type="hidden" name="revision" value="{{ revision }}">
+    <input type="hidden" name="revision" value="{{ match.revision }}">
     <p><button class="button-secondary" type="submit">Lock this match</button></p>
 </form>
 {% if not match.empty %}<p><a href="{{ match_path }}/clear">Clear scores</a></p>{% endif %}
+{% endif %}
 {% else %}
 {% include "scores/_match_table.html" %}
 {% if match.locked %}

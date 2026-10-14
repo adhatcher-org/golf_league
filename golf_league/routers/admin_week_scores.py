@@ -62,6 +62,8 @@ _OUT_OF_DATE = ("These scores were changed after you opened this page. Nothing w
                 "The saved scores are shown below; make your change again.")
 _SAVE_AGAIN = "Scores were being changed at the same moment. Nothing was saved; save again."
 _NOT_SAVED = "The scores could not be saved just now. Nothing was saved; save again."
+# The form parser's own limit; a week sheet posts every input of every match, so it may need more.
+_FORM_FIELDS_FLOOR = 1000
 
 
 def _sheet_path(week_id: int) -> str:
@@ -75,6 +77,15 @@ def _match_path(week_id: int, player_match_id: int) -> str:
 def _redirect(week_id: int, query: str, player_match_id: int | None = None) -> Response:
     anchor = f"#match-{player_match_id}" if player_match_id is not None else ""
     return RedirectResponse(f"{_sheet_path(week_id)}?{query}{anchor}", status_code=303, headers=PRIVATE_HEADERS)
+
+
+def _field_limit(match_count: int, hole_count: int) -> int:
+    """How many fields a week's forms may post: bounded by the week's own size.
+
+    The sheet posts, for every match, two golfers' scores and a revision
+    (blank inputs included), so a large week passes the parser's default.
+    """
+    return max(_FORM_FIELDS_FLOOR, match_count * (2 * hole_count + 1) + 8)
 
 
 def _week(session: Session, week_id: int) -> Week:
@@ -307,11 +318,12 @@ def _read_sheet(form, sheet: list[SheetMatch], hole_numbers: list[int]):
 async def week_scores_save(week_id: int, request: Request,
                            session: Session = Depends(get_session),  # noqa: B008
                            admin=Depends(require_admin)) -> Response:  # noqa: B008
-    form = await request.form()
-    _csrf(request, form.get("csrf_token", ""))
     week = _week(session, week_id)
+    sheet = week_sheet(session, week_id)
     hole_numbers = [hole.number for hole in week_holes(session, week_id)]
-    values, errors, entries, stale, typed_on = _read_sheet(form, week_sheet(session, week_id), hole_numbers)
+    form = await request.form(max_fields=_field_limit(len(sheet), len(hole_numbers)))
+    _csrf(request, form.get("csrf_token", ""))
+    values, errors, entries, stale, typed_on = _read_sheet(form, sheet, hole_numbers)
     if stale:
         return _refused_sheet(request, session, week_id, values, stale, typed_on)
     if not errors and not entries:
@@ -348,13 +360,15 @@ def _match_page(request: Request, session: Session, week: Week, player_match_id:
     """The match page: the saved scores, or `values` as typed on revision `typed_on`.
 
     Typed values go back with the revision they were typed on, never a newer
-    one, so saving them again cannot overwrite a change made in between.
+    one, so saving them again cannot overwrite a change made in between. A
+    page showing typed values offers no lock and no clear: those act on what
+    is saved, which is not what such a page shows.
     """
     match = _sheet_match(session, week.id, player_match_id)
     hole_numbers = [hole.number for hole in week_holes(session, week.id)]
     errors = errors or {}
     editable = not match.locked and _takes_scores(week)
-    revision = match.revision
+    revision, typed = match.revision, values is not None
     if values is None:  # the saved scores, for an edit
         values = {score_field(golfer.golfer_id, hole): str(strokes)
                   for golfer in match.golfers for hole, strokes in golfer.strokes_by_hole.items()}
@@ -368,6 +382,7 @@ def _match_page(request: Request, session: Session, week: Week, player_match_id:
         "title": _name(match), "errors": errors, "field_ids": {name: name for name in fields},
         "sheet_path": _sheet_path(week.id), "match_path": _match_path(week.id, player_match_id),
         "open_week": _takes_scores(week), "closed_reason": _closed_reason(week), "revision": revision,
+        "typed": typed,
     }, status_code)
 
 
@@ -487,11 +502,12 @@ async def match_unlock(week_id: int, player_match_id: int, request: Request,
 async def week_lock_all(week_id: int, request: Request,
                         session: Session = Depends(get_session),  # noqa: B008
                         admin=Depends(require_admin)) -> Response:  # noqa: B008
-    form = await request.form()
-    _csrf(request, form.get("csrf_token", ""))
     _week(session, week_id)
+    sheet = week_sheet(session, week_id)
+    form = await request.form(max_fields=_field_limit(len(sheet), 0))
+    _csrf(request, form.get("csrf_token", ""))
     revisions = {}
-    for match in week_sheet(session, week_id):
+    for match in sheet:
         shown = parse_revision(_text(form, revision_field(match.player_match_id)))
         if shown is not None:
             revisions[match.player_match_id] = shown
