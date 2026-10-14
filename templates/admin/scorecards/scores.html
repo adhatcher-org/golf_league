@@ -12,7 +12,7 @@
 {% include "_error_summary.html" %}
 <p><a href="/admin/scorecards/new">Enter a scorecard</a></p>
 {% if not sheet %}<p>No scores can be entered yet: this week has no generated matches.</p>{% endif %}
-{% if sheet and not open_week %}<p>This week is {{ week.status }}. Its scores cannot be entered or changed.</p>{% endif %}
+{% if sheet and not open_week %}<p>{{ closed_reason }} Its scores cannot be entered or changed.</p>{% endif %}
 {% if has_inputs %}
 <form id="{{ form_id }}" class="scorecard-form" method="post" action="/admin/weeks/{{ week.id }}/scores">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

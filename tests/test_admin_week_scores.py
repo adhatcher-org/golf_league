@@ -514,6 +514,80 @@ def test_clear_needs_the_confirmation_and_deletes_only_that_match(sheet):
     assert set(_strokes(client, first).values()) == {54}
 
 
+# --- a form with mistakes never comes back on a newer revision ----------------------
+
+
+def _save_form_revision(html: str) -> str:
+    """The revision the match page's save form carries (the lock form has its own)."""
+    return re.search(r'<form class="scorecard-form"[^>]*>.*?name="revision" value="(\d*)"', html, re.S).group(1)
+
+
+def test_mistakes_on_an_out_of_date_match_form_are_409_and_cannot_overwrite_the_newer_scores(sheet):
+    client, ids = sheet
+    match_id = ids["matches"][0]
+    a1 = ids["sides"][match_id][0]
+    assert _save_sheet(client, ids, {0: _both(ids, 0)}).status_code == 303            # revision 1: fives
+    assert _save_match(client, ids, 0, (SIXES, SIXES), 1).status_code == 303          # someone else: sixes
+
+    # The first admin's page still shows fives on revision 1; they mistype one cell.
+    old_form = _match_data(client, ids, 0, (FIVES, FIVES), 1)
+    old_form[f"score_{a1}_1"] = "99"
+    response = client.post(_match_path(ids, 0), data=old_form, follow_redirects=False)
+    assert response.status_code == 409 and "were changed after you opened this page" in response.text
+    assert f'name="score_{a1}_1" value="6"' in response.text and 'value="99"' not in response.text
+    # Correcting the cell and posting the old form again is still refused.
+    old_form[f"score_{a1}_1"] = "5"
+    assert client.post(_match_path(ids, 0), data=old_form, follow_redirects=False).status_code == 409
+    assert set(_strokes(client, match_id).values()) == {54}
+
+
+def test_typed_values_go_back_with_the_revision_they_were_typed_on(sheet, monkeypatch):
+    client, ids = sheet
+    assert _save_sheet(client, ids, {0: _both(ids, 0)}).status_code == 303            # revision 1
+    # Mistakes on the current revision: 422, and the form keeps that revision.
+    form = _match_data(client, ids, 0, (SIXES, SIXES), 1)
+    form[f"score_{ids['sides'][ids['matches'][0]][0]}_1"] = "0"
+    response = client.post(_match_path(ids, 0), data=form, follow_redirects=False)
+    assert response.status_code == 422 and _save_form_revision(response.text) == "1"
+    # A failed save hands the typed values back on the revision they were typed on, not the current one.
+    _refuse(monkeypatch, "save_match_scores", OperationalError("UPDATE", {}, Exception("database is locked")))
+    response = _save_match(client, ids, 0, (SIXES, SIXES), 0)
+    assert response.status_code == 503 and _save_form_revision(response.text) == "0"
+    _refuse(monkeypatch, "save_match_scores", ScoreEntryError("conflict", ""))
+    response = _save_match(client, ids, 0, (SIXES, SIXES), 0)
+    assert response.status_code == 409 and _save_form_revision(response.text) == "0"
+    assert set(_strokes(client, ids["matches"][0]).values()) == {45}
+
+
+def test_mistakes_on_an_out_of_date_sheet_are_409_before_the_mistakes(sheet):
+    client, ids = sheet
+    match_id = ids["matches"][0]
+    a1 = ids["sides"][match_id][0]
+    # The match was entered and cleared by someone else, so it is empty again on revision 2.
+    assert _save_sheet(client, ids, {0: _both(ids, 0)}).status_code == 303
+    assert _post(client, _match_path(ids, 0, "/scores/clear"), revision="1").status_code == 303
+    data = _sheet_data(client, ids, {0: _both(ids, 0, SIXES)})                         # typed on revision 0
+    data[f"score_{match_id}_{a1}_1"] = "99"
+    response = client.post(_path(ids), data=data, follow_redirects=False)
+    assert response.status_code == 409 and "was changed after you opened this page" in response.text
+    assert 'value="99"' not in response.text and _score_count(client) == 0
+
+
+def test_a_week_that_is_not_a_match_week_takes_no_scores_even_with_matches(sheet):
+    client, ids = sheet
+    with Session(_engine(client)) as session:
+        session.get(Week, ids["week"]).week_type = "play_with_team"
+        session.commit()
+    page = client.get(_path(ids)).text
+    assert "This week is not a match week." in page and "score-input" not in page and "Save scores" not in page
+    assert _save_sheet(client, ids, {0: _both(ids, 0)}).status_code == 422
+    match_page = client.get(_match_path(ids, 0)).text
+    assert "This week is not a match week." in match_page and "score-input" not in match_page
+    response = _save_match(client, ids, 0, (FIVES, FIVES), 0)
+    assert response.status_code == 422 and "not a match week" in response.text
+    assert _score_count(client) == 0
+
+
 # --- refusals the pages cannot cause themselves -------------------------------------
 
 

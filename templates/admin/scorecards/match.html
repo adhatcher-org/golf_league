@@ -13,7 +13,7 @@
 {% if editable %}
 <form class="scorecard-form" method="post" action="{{ match_path }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <input type="hidden" name="revision" value="{{ match.revision }}">
+    <input type="hidden" name="revision" value="{{ revision }}">
     {% include "scores/_match_table.html" %}
     <p><button type="submit">Save scores</button></p>
 </form>
@@ -34,7 +34,7 @@
     <p><button type="submit">Unlock this match</button></p>
 </form>
 {% elif not open_week %}
-<p>This week is {{ week.status }}. Its scores cannot be entered or changed.</p>
+<p>{{ closed_reason }} Its scores cannot be entered or changed.</p>
 {% endif %}
 {% endif %}
 {% endblock %}

@@ -100,7 +100,14 @@ def _day(request: Request, moment: datetime | None) -> str:
 
 
 def _takes_scores(week: Week) -> bool:
-    return week.status == "scheduled"
+    return week.status == "scheduled" and week.week_type == "match"
+
+
+def _closed_reason(week: Week) -> str:
+    """Why a week takes no scores, for the page; empty when it does."""
+    if week.status != "scheduled":
+        return f"This week is {week.status}."
+    return "" if week.week_type == "match" else "This week is not a match week."
 
 
 def _match_view(request: Request, match: SheetMatch, hole_numbers: list[int], *, input_ids: set[int],
@@ -201,6 +208,7 @@ def _sheet_page(request: Request, session: Session, week: Week, *, values: dict[
         "can_lock_all": any(match.complete and not match.locked for match in sheet),
         "notices": _sheet_notices(request, sheet) if status_code == 200 else [],
         "errors": errors, "field_ids": field_ids, "form_id": SHEET_FORM, "open_week": open_week,
+        "closed_reason": _closed_reason(week),
     }, status_code)
 
 
@@ -233,8 +241,10 @@ def _read_sheet(form, sheet: list[SheetMatch], hole_numbers: list[int]):
     """Read a posted week sheet: typed values, field errors, the matches to save, and a stale match.
 
     A match left wholly blank is skipped. Scores typed for a golfer who has
-    since been saved, or whose match was locked, mean the page was out of
-    date: that match is returned as stale so nothing is saved or silently dropped.
+    since been saved, or whose match was locked, or typed on a page showing an
+    older revision of the match, mean the page was out of date: that match is
+    returned as stale so nothing is saved or silently dropped, and a form with
+    mistakes is never handed back carrying a newer revision than it was typed on.
     """
     values: dict[str, str] = {}
     errors: dict[str, str] = {}
@@ -255,14 +265,16 @@ def _read_sheet(form, sheet: list[SheetMatch], hole_numbers: list[int]):
                                     player_match_id=match.player_match_id)
         if not missing or not any_typed(values, missing, hole_numbers, field):
             continue
+        shown = parse_revision(_text(form, revision_field(match.player_match_id)))
+        if stale is None and shown != match.revision:
+            stale = ScoreEntryError("out_of_date", "", player_match_id=match.player_match_id)
         golfers = [(golfer.golfer_id, golfer.name) for golfer in match.golfers if golfer.golfer_id in missing]
         scores, problems = parse_scores(values, golfers, hole_numbers, field)
         errors.update(problems)
         # A golfer already saved keeps their scores; the write needs the match whole.
         scores.update({golfer.golfer_id: dict(golfer.strokes_by_hole)
                        for golfer in match.golfers if golfer.golfer_id not in missing})
-        entries.append((match.player_match_id, scores,
-                        parse_revision(_text(form, revision_field(match.player_match_id)))))
+        entries.append((match.player_match_id, scores, shown))
     return values, errors, entries, stale
 
 
@@ -306,14 +318,22 @@ async def week_scores_save(week_id: int, request: Request,
 
 def _match_page(request: Request, session: Session, week: Week, player_match_id: int, *,
                 values: dict[str, str] | None = None, errors: dict[str, str] | None = None,
-                status_code: int = 200) -> Response:
+                status_code: int = 200, typed_on: int | None = None) -> Response:
+    """The match page: the saved scores, or `values` as typed on revision `typed_on`.
+
+    Typed values go back with the revision they were typed on, never a newer
+    one, so saving them again cannot overwrite a change made in between.
+    """
     match = _sheet_match(session, week.id, player_match_id)
     hole_numbers = [hole.number for hole in week_holes(session, week.id)]
     errors = errors or {}
     editable = not match.locked and _takes_scores(week)
+    revision = match.revision
     if values is None:  # the saved scores, for an edit
         values = {score_field(golfer.golfer_id, hole): str(strokes)
                   for golfer in match.golfers for hole, strokes in golfer.strokes_by_hole.items()}
+    elif typed_on is not None:
+        revision = typed_on
     view = _match_view(request, match, hole_numbers, field=score_field, values=values, invalid=set(errors),
                        input_ids={golfer.golfer_id for golfer in match.golfers} if editable else set())
     fields = [cell["field"] for row in view["rows"] for cell in row["inputs"] or []]
@@ -321,7 +341,7 @@ def _match_page(request: Request, session: Session, week: Week, player_match_id:
         "week": week, "view": view, "match": match, "hole_numbers": hole_numbers, "editable": editable,
         "title": _name(match), "errors": errors, "field_ids": {name: name for name in fields},
         "sheet_path": _sheet_path(week.id), "match_path": _match_path(week.id, player_match_id),
-        "open_week": _takes_scores(week),
+        "open_week": _takes_scores(week), "closed_reason": _closed_reason(week), "revision": revision,
     }, status_code)
 
 
@@ -333,7 +353,8 @@ async def match_scores(week_id: int, player_match_id: int, request: Request,
 
 
 def _refused_match(request: Request, session: Session, week_id: int, player_match_id: int,
-                   values: dict[str, str] | None, exc: ScoreEntryError) -> Response:
+                   values: dict[str, str] | None, exc: ScoreEntryError, *,
+                   typed_on: int | None = None) -> Response:
     """The match page after the score service refused a write; nothing was written."""
     if exc.code == "not_found":
         raise HTTPException(status_code=404, detail="Not found") from exc
@@ -346,9 +367,9 @@ def _refused_match(request: Request, session: Session, week_id: int, player_matc
                            errors={"match": "This match was locked. Nothing was saved."})
     if exc.code == "conflict":
         return _match_page(request, session, week, player_match_id, values=values, status_code=409,
-                           errors={"match": _SAVE_AGAIN})
+                           errors={"match": _SAVE_AGAIN}, typed_on=typed_on)
     return _match_page(request, session, week, player_match_id, values=values, status_code=422,
-                       errors={"match": exc.message})
+                       errors={"match": exc.message}, typed_on=typed_on)
 
 
 @router.post("/admin/weeks/{week_id}/matches/{player_match_id}/scores")
@@ -364,11 +385,14 @@ async def match_scores_save(week_id: int, player_match_id: int, request: Request
     values = {score_field(golfer_id, hole): _text(form, score_field(golfer_id, hole))
               for golfer_id, _ in golfers for hole in hole_numbers}
     scores, errors = parse_scores(values, golfers, hole_numbers)
-    if errors and not match.locked:
-        return _match_page(request, session, week, player_match_id, values=values, errors=errors,
-                           status_code=422)
-    actor, today, now = Actor(admin.id, True), _today(request), _now(request)
     base_revision = parse_revision(_text(form, "revision"))
+    if errors and not match.locked:
+        if base_revision != match.revision:  # typed on an older page: say so before the mistakes
+            return _refused_match(request, session, week_id, player_match_id, None,
+                                  ScoreEntryError("out_of_date", "", player_match_id=player_match_id))
+        return _match_page(request, session, week, player_match_id, values=values, errors=errors,
+                           status_code=422, typed_on=base_revision)
+    actor, today, now = Actor(admin.id, True), _today(request), _now(request)
     session.rollback()
     try:
         save_match_scores(session, week_id, player_match_id, scores, actor, today,
@@ -376,13 +400,13 @@ async def match_scores_save(week_id: int, player_match_id: int, request: Request
         session.commit()
     except ScoreEntryError as exc:
         session.rollback()
-        return _refused_match(request, session, week_id, player_match_id, values, exc)
+        return _refused_match(request, session, week_id, player_match_id, values, exc, typed_on=base_revision)
     except (SQLAlchemyError, OSError) as exc:
         session.rollback()
         logger.warning("match save failed week=%d match=%d type=%s", week_id, player_match_id,
                        type(exc).__name__)
         return _match_page(request, session, _week(session, week_id), player_match_id, values=values,
-                           status_code=503, errors={"match": _NOT_SAVED})
+                           status_code=503, errors={"match": _NOT_SAVED}, typed_on=base_revision)
     logger.info("match saved week=%d match=%d user=%d", week_id, player_match_id, actor.user_id)
     return _redirect(week_id, "saved=1", player_match_id)
 

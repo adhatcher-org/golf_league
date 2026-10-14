@@ -164,6 +164,19 @@ def _has_matches(session: Session, week_id: int) -> bool:
     ) is not None
 
 
+def _plays_in_week(session: Session, week_id: int, golfer_id: int | None) -> bool:
+    """Whether the golfer is a side of one of the week's matches."""
+    if golfer_id is None:
+        return False
+    return session.scalar(
+        select(PlayerMatch.id)
+        .join(TeamMatch, TeamMatch.id == PlayerMatch.team_match_id)
+        .where(TeamMatch.week_id == week_id,
+               (PlayerMatch.a_golfer_id == golfer_id) | (PlayerMatch.b_golfer_id == golfer_id))
+        .limit(1)
+    ) is not None
+
+
 def _match_in_week(session: Session, week_id: int, player_match_id: int) -> PlayerMatch | None:
     return session.scalar(
         select(PlayerMatch)
@@ -231,8 +244,10 @@ def week_holes(session: Session, week_id: int) -> list[Hole]:
 def week_for_entry(session: Session, week_id: int, today: date, actor: Actor) -> Week:
     """Return the week or raise ScoreEntryError; performs reads only.
 
-    A player may enter from the week's play date onward with no end date; an
-    admin has no date limit. The lock on a match is the only cutoff.
+    Only a scheduled match week with generated matches takes scores. A player
+    must be linked to a golfer who is a side of one of the week's matches, and
+    may enter from the week's play date onward with no end date; an admin has
+    no date limit. The lock on a match is the only cutoff.
     """
     week = session.get(Week, week_id)
     if week is None:
@@ -241,20 +256,29 @@ def week_for_entry(session: Session, week_id: int, today: date, actor: Actor) ->
         raise ScoreEntryError("cancelled", "That week is cancelled.")
     if week.status == "played":
         raise ScoreEntryError("played", "That week is already played.")
+    if week.week_type != "match":
+        raise ScoreEntryError("no_matchup", "That week is not a match week.")
     if not _has_matches(session, week.id):
         raise ScoreEntryError("no_matchup", "That week has no generated matches.")
+    if not actor.is_admin and not _plays_in_week(session, week.id, actor.golfer_id):
+        raise ScoreEntryError("not_allowed", "This account cannot enter scores for that week.")
     if not actor.is_admin and week.play_date > today:
         raise ScoreEntryError("not_open_yet", "Scores for that week cannot be entered yet.")
     return week
 
 
 def eligible_weeks(session: Session, season_id: int, today: date, actor: Actor) -> list[Week]:
-    """Scheduled weeks with generated matches, by date then index; for a player, not future ones."""
-    query = select(Week).where(Week.season_id == season_id, Week.status == "scheduled")
+    """Scheduled match weeks with generated matches, by date then index.
+
+    For a player: only weeks they play in, and not future ones.
+    """
+    query = select(Week).where(Week.season_id == season_id, Week.status == "scheduled",
+                               Week.week_type == "match")
     if not actor.is_admin:
         query = query.where(Week.play_date <= today)
     weeks = session.scalars(query.order_by(Week.play_date, Week.index))
-    return [week for week in weeks if _has_matches(session, week.id)]
+    return [week for week in weeks if _has_matches(session, week.id)
+            and (actor.is_admin or _plays_in_week(session, week.id, actor.golfer_id))]
 
 
 def _has_open_match(session: Session, week_id: int, hole_count: int) -> bool:
@@ -294,10 +318,16 @@ def writable_golfers(session: Session, match: PlayerMatch, actor: Actor) -> froz
 
     An admin, or a player who is a side of the match: both golfers. Any other
     player: only a golfer whose saved scores they first entered themselves (the
-    scorekeeper's right over the card they submitted).
+    scorekeeper's right over the card they submitted). A player has no rights
+    at all unless their account is linked to a golfer who plays in the week.
     """
     sides = (match.a_golfer_id, match.b_golfer_id)
-    if actor.is_admin or (actor.golfer_id is not None and actor.golfer_id in sides):
+    if actor.is_admin:
+        return frozenset(sides)
+    week_id = session.get(TeamMatch, match.team_match_id).week_id
+    if not _plays_in_week(session, week_id, actor.golfer_id):
+        return frozenset()
+    if actor.golfer_id in sides:
         return frozenset(sides)
     rows = _rows_by_golfer(session, match.id)
     return frozenset(

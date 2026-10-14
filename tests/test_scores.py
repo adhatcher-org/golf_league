@@ -120,6 +120,18 @@ def test_eligible_and_default_weeks(matchup_db):
         for today in (TODAY, date(2026, 12, 1)):
             assert [w.id for w in eligible_weeks(session, ids["season"], today)] == [first, third]
         assert [w.id for w in eligible_weeks(session, ids["season"], TODAY, player)] == [first]
+        # A player sees no week they do not play in, and an account with no golfer sees none.
+        session.get(Week, third).play_date = TODAY
+        session.flush()
+        in_third = {g for m in _matches(session, third) for g in (m.a_golfer_id, m.b_golfer_id)}
+        assert ids["golfers"][0] in in_third
+        assert [w.id for w in eligible_weeks(session, ids["season"], TODAY, player)] == [first, third]
+        assert eligible_weeks(session, ids["season"], TODAY, Actor(1, False, None)) == []
+        # A week changed to another type no longer takes scores, even with its matches still there.
+        session.get(Week, third).week_type = "play_with_team"
+        session.flush()
+        assert [w.id for w in eligible_weeks(session, ids["season"], TODAY, player)] == [first]
+        session.rollback()
         assert eligible_weeks(session, ids["season"], date(2026, 8, 26), player) == []
         assert [w.id for w in eligible_weeks(session, ids["season"], date(2026, 9, 10), player)] == [first, third]
 

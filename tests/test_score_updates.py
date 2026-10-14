@@ -262,6 +262,46 @@ def test_a_scorekeeper_may_change_only_the_golfers_they_first_entered(db):
         assert _code(lambda: _save(session, ids, "m2", actors["a3"], 1, value=9)) == "not_allowed"
 
 
+def test_a_scorekeeper_loses_the_right_when_no_longer_a_linked_golfer_in_the_week(db):
+    engine, ids, actors = db
+    keeper = actors["a2"]
+    m1_a, m1_b = ids["sides"][ids["m1"]]
+    m2_a, m2_b = ids["sides"][ids["m2"]]
+    with Session(engine) as session:
+        card = [(g, _scores(session, ids["week"], [g])[g]) for g in (m2_a, m2_b, m1_a, m1_b)]
+        submit_card(session, ids["week"], card, keeper, TODAY, acknowledged=False, now=NOW)
+        session.commit()
+        before = _rows(session)
+        match_one = next(m for m in _matches(session, ids["week"]) if m.id == ids["m1"])
+        in_week = {golfer_id for sides in ids["sides"].values() for golfer_id in sides}
+        outsider = next(g for g in session.scalars(select(Golfer.id).order_by(Golfer.id)) if g not in in_week)
+        # The same account with its golfer unlinked, or linked to a golfer who does not play that week.
+        for former in (Actor(keeper.user_id, False, None), Actor(keeper.user_id, False, outsider)):
+            assert writable_golfers(session, match_one, former) == frozenset()
+            for match_key in ("m1", "m2"):
+                assert _code(lambda former=former, match_key=match_key:
+                             _save(session, ids, match_key, former, 1, value=9)) == "not_allowed"
+                session.rollback()
+        assert _rows(session) == before
+        # Linked and playing in the week, the keeper still has the right.
+        assert _save(session, ids, "m1", keeper, 1, value=6).rows_updated == 18
+
+
+def test_a_week_that_is_not_a_match_week_takes_no_scores_even_with_matches(db):
+    engine, ids, actors = db
+    with Session(engine) as session:
+        session.get(Week, ids["week"]).week_type = "play_with_team"
+        session.commit()
+        for actor in (actors["admin"], actors["a1"]):
+            assert _code(lambda actor=actor: _save(session, ids, "m1", actor, 0)) == "no_matchup"
+            session.rollback()
+        entries = [(g, _scores(session, ids["week"], [g])[g]) for g in ids["sides"][ids["m1"]]]
+        assert _code(lambda: submit_card(session, ids["week"], entries, actors["admin"], TODAY,
+                                         acknowledged=False, now=NOW)) == "no_matchup"
+        session.rollback()
+        assert _rows(session) == []
+
+
 def test_a_scorekeeper_has_no_right_over_a_golfer_someone_else_entered(db):
     engine, ids, actors = db
     keeper = actors["a2"]
