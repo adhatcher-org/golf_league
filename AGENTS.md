@@ -59,7 +59,13 @@ orchestrator repo next door.
   `golf_league/routers/player_schedule.py`; projections are in
   `golf_league/services/player_schedule.py`, with markup in `templates/player/`.
 - Scorecard validation and match grouping are in `golf_league/domain/scorecard.py`;
-  `golf_league/services/scores.py` checks week eligibility and atomically writes hole scores.
+  `golf_league/services/scores.py` checks week eligibility and atomically writes hole scores,
+  and owns updating, locking, unlocking and clearing a match (`match_score_states` holds each
+  match's revision and lock).
+- The admin week sheet, one-match page, lock, unlock, "Lock all" and clear are
+  `golf_league/routers/admin_week_scores.py` with `templates/admin/scorecards/scores.html`,
+  `match.html` and `clear.html`; the shared score-grid partials are in `templates/scores/`, and
+  `golf_league/services/match_entry.py` names the score fields and reads a posted form.
 - Scorecard photo entry (R-SCORES, R-OCR-PROVIDER): the admin pages are
   `golf_league/routers/admin_scorecards.py` with `templates/admin/scorecards/` and the status
   polling script `static/scorecard-status.js`. `golf_league/services/scorecard_image.py` turns an
@@ -97,7 +103,7 @@ orchestrator repo next door.
 - Server-side validation of IDs and season/course relationships; SQLite FKs, uniqueness
   constraints, atomic transactions for multi-record changes.
 - Migrations: forward-only, data-preserving, tested against a fresh DB and prior-version upgrades.
-  Single chain in `migrations/versions/` (`496c039e7ac0` -> ... -> `b8d4c0e2f671`); check
+  Single chain in `migrations/versions/` (`496c039e7ac0` -> ... -> `e41c7f9a2b36`); check
   `down_revision` before adding one.
 - `lifespan` in `app.py` deliberately swallows engine/migration failures so the process stays up
   and `/readyz` can honestly answer 503. `/healthz` is process-only. Do not turn this into a crash.

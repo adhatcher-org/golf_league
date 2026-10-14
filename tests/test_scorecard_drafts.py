@@ -23,6 +23,7 @@ from test_matchup_generation import matchup_db as _matchup_db
 import golf_league.app as app_module
 from golf_league.app import create_app
 from golf_league.config import Settings
+from golf_league.domain.scorecard import Actor
 from golf_league.models import Hole, HoleScore, HoleYardage, ScorecardDraft, User, Week
 from golf_league.services import scorecard_drafts
 from golf_league.services.scorecard_drafts import (
@@ -132,7 +133,7 @@ def _factory(engine):
 
 def _create(engine, ids, directory, **overrides) -> int:
     values = {"week_id": ids["week"], "user_id": ids["user"], "raw": _jpeg(), "today": TODAY,
-              "clock": clock, "directory": directory}
+              "clock": clock, "directory": directory, "actor": Actor(ids["user"], True)}
     values.update(overrides)
     with Session(engine) as session:
         return create_draft(session, **values).id
@@ -200,14 +201,14 @@ def test_two_uploads_of_the_same_photo_get_different_names(db):
     assert len(_files(directory)) == 2
 
 
-@pytest.mark.parametrize("case,code", [("past", "past_week"), ("cancelled", "cancelled"),
+@pytest.mark.parametrize("case,code", [("player_too_early", "not_open_yet"), ("cancelled", "cancelled"),
                                        ("played", "played"), ("no_matchup", "no_matchup"),
                                        ("missing", "not_found")])
 def test_create_draft_refuses_a_week_that_cannot_take_a_card(db, case, code):
     engine, ids, directory = db
-    week_id, today = ids["week"], TODAY
-    if case == "past":
-        today = date(2026, 8, 28)
+    week_id, today, actor = ids["week"], TODAY, Actor(ids["user"], True)
+    if case == "player_too_early":
+        today, actor = date(2026, 8, 26), Actor(ids["user"], False, ids["golfers"][0])
     elif case == "no_matchup":
         week_id = ids["weeks"][1]
     elif case == "missing":
@@ -217,9 +218,18 @@ def test_create_draft_refuses_a_week_that_cannot_take_a_card(db, case, code):
             session.get(Week, week_id).status = case
             session.commit()
     with pytest.raises(ScoreEntryError) as caught:
-        _create(engine, ids, directory, week_id=week_id, today=today)
+        _create(engine, ids, directory, week_id=week_id, today=today, actor=actor)
     assert caught.value.code == code
     assert _count(engine) == 0 and _files(directory) == []
+
+
+def test_a_draft_can_be_started_after_the_play_date(db):
+    engine, ids, directory = db
+    for today in (date(2026, 8, 28), date(2026, 10, 1)):
+        draft_id = _create(engine, ids, directory, today=today)
+        assert _draft(engine, draft_id).status == "extracting"
+    player = Actor(ids["user"], False, ids["golfers"][0])
+    assert _draft(engine, _create(engine, ids, directory, today=date(2026, 8, 28), actor=player)) is not None
 
 
 def test_create_draft_refuses_a_bad_image_without_writing(db):
@@ -244,7 +254,7 @@ def test_a_failed_row_insert_removes_the_photo(db, monkeypatch):
         monkeypatch.setattr(session, "commit", fail)
         with pytest.raises(RuntimeError):
             create_draft(session, week_id=ids["week"], user_id=ids["user"], raw=_jpeg(), today=TODAY,
-                         clock=clock, directory=directory)
+                         clock=clock, directory=directory, actor=Actor(ids["user"], True))
     assert _count(engine) == 0 and _files(directory) == []
 
 
@@ -252,14 +262,15 @@ def test_create_manual_draft_is_ready_with_no_photo(db):
     engine, ids, directory = db
     with Session(engine) as session:
         draft_id = create_manual_draft(session, week_id=ids["week"], user_id=ids["user"], today=TODAY,
-                                       clock=clock).id
+                                       clock=clock, actor=Actor(ids["user"], True)).id
     draft = _draft(engine, draft_id)
     assert draft.status == "ready" and draft.image_path is None and not draft.extracted_json
     assert draft.expires_at == NOW + timedelta(hours=24)
     assert draft_card(draft) is None
     assert _files(directory) == []
     with Session(engine) as session, pytest.raises(ScoreEntryError):
-        create_manual_draft(session, week_id=ids["weeks"][1], user_id=ids["user"], today=TODAY, clock=clock)
+        create_manual_draft(session, week_id=ids["weeks"][1], user_id=ids["user"], today=TODAY, clock=clock,
+                            actor=Actor(ids["user"], True))
 
 
 # --- run_extraction -----------------------------------------------------------------------
@@ -500,7 +511,8 @@ def test_purge_removes_a_24_hour_old_draft_and_keeps_a_23_hour_old_one(db):
     manual_old = None
     with Session(engine) as session:
         manual_old = create_manual_draft(session, week_id=ids["week"], user_id=ids["user"], today=TODAY,
-                                         clock=lambda: NOW - timedelta(hours=30)).id
+                                         clock=lambda: NOW - timedelta(hours=30),
+                                         actor=Actor(ids["user"], True)).id
     young_image = _draft(engine, young).image_path
     with Session(engine) as session:
         assert purge_expired(session, NOW, directory=directory) == 2

@@ -26,6 +26,7 @@ from golf_league.services.scores import card_candidates
 
 ROW_COUNT = 4
 ACK_FIELD = "acknowledged"
+LEFT_OFF_FIELD = "left_off"
 CARD_ERROR = "card"
 _MATCH_NOTES = {"check": "Check this match", "handicap": "Matched by handicap"}
 _SIDE_HOLES = {"front": "holes 1 to 9", "back": "holes 10 to 18"}
@@ -45,7 +46,7 @@ def score_field(row: int, hole: int) -> str:
 
 def field_names(hole_numbers: Sequence[int]) -> list[str]:
     """Every field the review form may submit, besides the CSRF token."""
-    names = [ACK_FIELD]
+    names = [ACK_FIELD, LEFT_OFF_FIELD]
     for row in range(ROW_COUNT):
         names += [name_field(row), golfer_field(row)]
         names += [score_field(row, hole) for hole in hole_numbers]
@@ -146,6 +147,7 @@ class RowView:
     warnings: tuple[str, ...]
     autofocus: bool
     golfer_invalid: bool
+    left_off: bool  # already saved, or in a locked match: a card only adds
 
 
 @dataclass(frozen=True)
@@ -158,6 +160,7 @@ class ReviewView:
     needs_acknowledgement: bool
     acknowledgement_value: str
     acknowledged: bool
+    left_off_value: str  # names the left-off golfers this form shows; posted back with it
 
 
 def _selected_id(values: Mapping[str, str], row: int, by_id: Mapping[int, GolferOption]) -> int | None:
@@ -202,10 +205,25 @@ def _row_warnings(who: str, player: ExtractedPlayer | None, scores: Sequence[int
     return warnings, mismatch is not None
 
 
+def parse_token(text: str) -> frozenset[int]:
+    """The golfer IDs in a posted token; anything malformed names nobody."""
+    parts = text.strip().split("-") if text.strip() else []
+    if not all(part.isascii() and part.isdecimal() and len(part) <= 18 for part in parts):
+        return frozenset()
+    return frozenset(int(part) for part in parts)
+
+
 def build_review(card: ExtractedCard | None, week: Week, hole_numbers: Sequence[int],
                  options: Sequence[GolferOption], values: Mapping[str, str] | None = None,
-                 invalid_fields: frozenset[str] = frozenset()) -> ReviewView:
-    """The review form: `values` are the admin's own on a re-render, else what was read."""
+                 invalid_fields: frozenset[str] = frozenset(),
+                 blocked: frozenset[int] = frozenset()) -> ReviewView:
+    """The review form: `values` are the admin's own on a re-render, else what was read.
+
+    `blocked` are the week's golfers who already have saved scores or are in a
+    locked match. A row choosing one of them stays on the form, marked as left
+    off, and `left_off_value` names exactly those golfers so a submit can only
+    drop the ones this form showed.
+    """
     if values is None:
         values = initial_values(card, hole_numbers, options)
     by_id = {option.golfer_id: option for option in options}
@@ -253,6 +271,7 @@ def build_review(card: ExtractedCard | None, week: Week, hole_numbers: Sequence[
             # With errors to fix, the page stays at the error summary instead.
             warnings=tuple(warnings), autofocus=total_disagrees and not focused and not invalid_fields,
             golfer_invalid=golfer_field(row) in invalid_fields,
+            left_off=golfer_id is not None and golfer_id in blocked,
         ))
         focused = focused or total_disagrees
         top.extend((f"player-{row + 1}", message) for message in warnings)
@@ -265,6 +284,7 @@ def build_review(card: ExtractedCard | None, week: Week, hole_numbers: Sequence[
         unpaired=tuple(by_id[golfer_id].name for golfer_id in unpaired),
         needs_acknowledgement=bool(unpaired), acknowledgement_value=token,
         acknowledged=bool(unpaired) and values.get(ACK_FIELD, "") == token,
+        left_off_value=acknowledgement_token([golfer_id for golfer_id in chosen if golfer_id in blocked]),
     )
 
 
@@ -276,6 +296,7 @@ class Submission:
     entries: tuple[tuple[int, dict[int, int]], ...]
     errors: dict[str, str]  # field name (or CARD_ERROR) to a plain sentence
     acknowledgement: str  # the checkbox value as posted, "" when not ticked
+    left_off: frozenset[int] = frozenset()  # the golfers the form showed as left off
 
     @property
     def invalid_fields(self) -> frozenset[str]:
@@ -325,7 +346,8 @@ def parse_submission(values: Mapping[str, str], hole_numbers: Sequence[int],
             entries.append((golfer_id, scores))
     if not errors and not 2 <= len(entries) <= ROW_COUNT:
         errors[CARD_ERROR] = "A card needs two to four golfers. Fill in at least two players."
-    return Submission(tuple(entries), errors, values.get(ACK_FIELD, "").strip())
+    return Submission(tuple(entries), errors, values.get(ACK_FIELD, "").strip(),
+                      parse_token(values.get(LEFT_OFF_FIELD, "")))
 
 
 def unpaired_on_card(submission: Submission, options: Sequence[GolferOption]) -> list[GolferOption]:

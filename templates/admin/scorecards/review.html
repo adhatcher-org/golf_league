@@ -29,6 +29,7 @@
         <p>Fill in two to four players. A player with no name, golfer or scores is left out. Only the nine hole scores are saved.</p>
         <form class="scorecard-form" method="post" action="/admin/scorecards/{{ draft.id }}/submit">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="left_off" value="{{ view.left_off_value }}">
             {% for row in view.rows %}
             <fieldset class="scorecard-player" id="player-{{ row.number }}">
                 <legend>Player {{ row.number }}</legend>
@@ -40,6 +41,7 @@
                     <option value="">Choose a golfer</option>
                     {% for option in view.options %}<option value="{{ option.golfer_id }}"{% if option.golfer_id == row.golfer_id %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
                 </select>
+                {% if row.left_off %}<p class="scorecard-player__note">Already saved or locked: left off this card.</p>{% endif %}
                 {% if row.match_note %}<p class="scorecard-player__note">{{ row.match_note }}.</p>{% endif %}
                 {% if row.handicap_written is not none or row.out_total is not none %}
                 <p>Read from the card, for reference only:{% if row.handicap_written is not none %} handicap {{ row.handicap_written }}{% endif %}{% if row.handicap_written is not none and row.out_total is not none %},{% endif %}{% if row.out_total is not none %} Out total {{ row.out_total }}{% endif %}.</p>

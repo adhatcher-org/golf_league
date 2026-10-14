@@ -144,7 +144,7 @@ def _draft_id(response) -> int:
     return int(response.headers["location"].rsplit("/", 1)[1])
 
 
-def _form(client, rows, *, holes=range(1, 10), acknowledged=(), **extra) -> dict:
+def _form(client, rows, *, holes=range(1, 10), acknowledged=(), left_off=(), **extra) -> dict:
     """Review-form data: `rows` are `(name, golfer id or "", scores)`; `acknowledged` the unpaired ids ticked."""
     data = {"csrf_token": _token(client), **extra}
     for index, (name, golfer_id, scores) in enumerate(rows):
@@ -155,6 +155,9 @@ def _form(client, rows, *, holes=range(1, 10), acknowledged=(), **extra) -> dict
     if acknowledged:
         # The checkbox value names the unpaired golfers it was shown beside.
         data["acknowledged"] = "-".join(str(golfer_id) for golfer_id in sorted(acknowledged))
+    if left_off:
+        # The hidden field names the golfers the form showed as left off.
+        data["left_off"] = "-".join(str(golfer_id) for golfer_id in sorted(left_off))
     return data
 
 
@@ -253,11 +256,32 @@ def test_the_form_defaults_to_todays_week_and_lists_only_eligible_weeks(cards):
     assert f'<option value="{ids["weeks"][0]}" selected>' in ignored
 
 
-def test_tomorrow_the_first_week_is_past_and_no_week_says_so(cards):
+def test_the_default_week_follows_the_round_and_an_older_week_can_still_be_chosen(cards):
     client, ids = cards
+    first = ids["weeks"][0]
+    # The day after the round its week still has matches to enter, so it is still the default.
     client.app.state.scorecard_utc_now = lambda: NOW + timedelta(days=1)
+    assert f'<option value="{first}" selected>' in client.get("/admin/scorecards/new").text
+    # Three weeks later no week is the default, but the week is still offered.
+    client.app.state.scorecard_utc_now = lambda: NOW + timedelta(days=21)
+    late = client.get("/admin/scorecards/new").text
+    assert '<option value="" selected>Choose a week</option>' in late
+    assert f'<option value="{first}">Week 1' in late
+    assert _upload(client, "").status_code == 422
+    # Once the week is cancelled nothing can take a card, and the page says so.
+    with Session(_engine(client)) as session:
+        session.get(Week, first).status = "cancelled"
+        session.commit()
     page = client.get("/admin/scorecards/new")
     assert "No week can take a scorecard" in page.text and "<select" not in page.text
+
+
+def test_a_card_can_be_entered_long_after_the_round(cards):
+    client, ids = cards
+    client.app.state.scorecard_utc_now = lambda: NOW + timedelta(days=21)
+    draft_id = _draft_id(_upload(client, ids["weeks"][0]))
+    rows = [("A1", ids["golfers"][0], FIVES), ("B1", ids["golfers"][4], FIVES)]
+    assert _submit(client, draft_id, rows).status_code == 303 and _score_count(client) == 18
 
 
 def test_today_follows_the_league_time_zone_not_utc(cards):
@@ -267,13 +291,11 @@ def test_today_follows_the_league_time_zone_not_utc(cards):
     assert f'<option value="{ids["weeks"][0]}" selected>' in client.get("/admin/scorecards/new").text
 
 
-@pytest.mark.parametrize("case", ["past", "cancelled", "played", "no_matchup"])
+@pytest.mark.parametrize("case", ["cancelled", "played", "no_matchup"])
 def test_a_week_that_cannot_take_a_card_is_422_and_writes_nothing(cards, case):
     client, ids = cards
     week_id = ids["weeks"][0]
-    if case == "past":
-        client.app.state.scorecard_utc_now = lambda: NOW + timedelta(days=1)
-    elif case == "no_matchup":
+    if case == "no_matchup":
         week_id = ids["weeks"][1]
     else:
         with Session(_engine(client)) as session:
@@ -399,10 +421,12 @@ def test_a_corrected_two_golfer_card_saves_18_rows_and_deletes_the_draft(cards):
 
     scores = client.get(response.headers["location"])
     assert scores.status_code == 200 and scores.headers["cache-control"] == "no-store"
-    assert "The card was saved" in scores.text
+    assert "The scores for 1 match were saved." in scores.text
     assert "A1 Example" in scores.text and "B1 Example" in scores.text
     assert "<td>43</td>" in scores.text and "<td>45</td>" in scores.text
-    assert "<form" not in scores.text.split('id="main-content"')[1].split("</main>")[0]  # read-only
+    # The saved match is shown read-only on the week sheet: no input carries either golfer's scores.
+    saved_block = scores.text.split('id="match-')[1]
+    assert "<input class=\"score-input\"" not in saved_block and "Entered. Not locked." in saved_block
     assert f'href="/admin/weeks/{ids["weeks"][0]}/scores"' in client.get("/admin/scorecards/new").text
 
 
@@ -411,8 +435,10 @@ def test_a_four_golfer_card_across_two_matches_saves_36_rows(cards):
     draft_id = _manual(client, ids["weeks"][0])
     golfers = ids["golfers"]
     rows = [("", golfers[0], FIVES), ("", golfers[4], FIVES), ("", golfers[1], FIVES), ("", golfers[5], FIVES)]
-    assert _submit(client, draft_id, rows).status_code == 303
+    response = _submit(client, draft_id, rows)
+    assert response.status_code == 303 and response.headers["location"].endswith("/scores?saved=2")
     assert _score_count(client) == 36
+    assert "The scores for 2 matches were saved." in client.get(response.headers["location"]).text
 
 
 def test_a_three_golfer_card_needs_the_acknowledgement(cards):
@@ -526,22 +552,49 @@ def test_a_tampered_golfer_value_is_refused(cards):
     assert _score_count(client) == 0
 
 
-def test_the_same_card_twice_is_409_and_writes_nothing_new(cards):
+def test_a_card_only_adds_and_golfers_already_saved_are_left_off(cards):
     client, ids = cards
     a1, b1, a2 = ids["golfers"][0], ids["golfers"][4], ids["golfers"][1]
     rows = [("", a1, FIVES), ("", b1, FIVES)]
     assert _submit(client, _manual(client, ids["weeks"][0]), rows).status_code == 303
 
+    # The same two golfers again: everyone on the card is already saved.
     second = _manual(client, ids["weeks"][0])
     again = _submit(client, second, [("", a1, (9,) * 9), ("", b1, (9,) * 9)])
-    assert again.status_code == 409 and "already been submitted" in again.text
+    assert again.status_code == 409
+    assert "Every player on this card already has saved scores or is in a locked match" in again.text
     assert _value(again.text, "score_0_1") == "9"
-    # A card that shares one golfer with the earlier card is refused whole.
-    shared = _submit(client, second, [("", a1, (9,) * 9), ("", a2, (9,) * 9)], acknowledged=[a1, a2])
-    assert shared.status_code == 409
-    assert _score_count(client) == 18 and _draft_count(client) == 1  # the refused draft is kept
+
+    # A card sharing one golfer with the saved card comes back naming who is left off.
+    shared_rows = [("", a1, (9,) * 9), ("", a2, (9,) * 9)]
+    shared = _submit(client, second, shared_rows, acknowledged=[a1, a2])
+    assert shared.status_code == 409 and _score_count(client) == 18 and _draft_count(client) == 1
+    assert "A1 Example already has saved scores or are in a locked match" in shared.text
+    assert "Nothing was saved." in shared.text
+    assert shared.text.count("Already saved or locked: left off this card.") == 1
+    assert f'name="left_off" value="{a1}"' in shared.text
+    assert _value(shared.text, "score_1_9") == "9"  # what was typed is kept
+    # A form that names the wrong golfer as left off is refused again.
+    wrong = _submit(client, second, shared_rows, acknowledged=[a1, a2], left_off=[a2])
+    assert wrong.status_code == 409 and _score_count(client) == 18
+
+    # Submitted again as shown, the rest is written and the saved scores are untouched.
+    done = _submit(client, second, shared_rows, acknowledged=[a1, a2], left_off=[a1])
+    assert done.status_code == 303 and _draft_count(client) == 0
     with Session(_engine(client)) as session:
-        assert set(session.scalars(select(HoleScore.strokes))) == {5}  # the first card is unchanged
+        by_golfer = dict(session.execute(
+            select(HoleScore.golfer_id, func.sum(HoleScore.strokes)).group_by(HoleScore.golfer_id)).all())
+    assert by_golfer == {a1: 45, b1: 45, a2: 81}
+
+
+def test_the_review_form_shows_a_saved_golfer_as_left_off_before_any_submit(cards):
+    client, ids = cards
+    a1, b1 = ids["golfers"][0], ids["golfers"][4]
+    assert _submit(client, _manual(client, ids["weeks"][0]), [("", a1, FIVES), ("", b1, FIVES)]).status_code == 303
+    client.app.state.vision_provider = FakeProvider(_card(_player("A1"), _player("B1"), _player("A2"), _player("B2")))
+    review = client.get(f"/admin/scorecards/{_draft_id(_upload(client, ids['weeks'][0]))}").text
+    assert review.count("Already saved or locked: left off this card.") == 2
+    assert f'name="left_off" value="{a1}-{b1}"' in review
 
 
 def test_a_back_nine_week_uses_holes_10_to_18(cards):
@@ -902,7 +955,12 @@ def test_unknown_ids_are_404(cards):
 def test_the_scores_page_with_nothing_saved_says_so(cards):
     client, ids = cards
     page = client.get(f"/admin/weeks/{ids['weeks'][0]}/scores")
-    assert page.status_code == 200 and "No scores are saved for this week yet." in page.text
+    assert page.status_code == 200 and "0 of 4 matches entered, 0 locked." in page.text
+    assert page.text.count("Not entered. Not locked.") == 4
+    # A week with no generated matches says so and offers nothing to save.
+    empty = client.get(f"/admin/weeks/{ids['weeks'][1]}/scores")
+    assert empty.status_code == 200 and "this week has no generated matches" in empty.text
+    assert "Save scores" not in empty.text
 
 
 def test_the_admin_menu_links_to_enter_scorecard_and_players_see_no_link(cards):
