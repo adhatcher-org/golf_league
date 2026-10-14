@@ -178,8 +178,13 @@ def _sheet_notices(request: Request, sheet: list[SheetMatch]) -> list[str]:
 
 
 def _sheet_page(request: Request, session: Session, week: Week, *, values: dict[str, str] | None = None,
-                errors: dict[str, str] | None = None, status_code: int = 200) -> Response:
+                errors: dict[str, str] | None = None, status_code: int = 200,
+                typed_on: dict[int, int | None] | None = None) -> Response:
+    """The week sheet. `typed_on` maps a match whose typed `values` are kept to the revision they
+    were typed on: the form goes back with that revision, never a newer one, so saving it again is
+    still checked against what the person saw."""
     sheet = week_sheet(session, week.id)
+    typed_on = typed_on or {}
     hole_numbers = [hole.number for hole in week_holes(session, week.id)]
     values, errors = values or {}, errors or {}
     open_week = _takes_scores(week)
@@ -193,6 +198,8 @@ def _sheet_page(request: Request, session: Session, week: Week, *, values: dict[
         view = _match_view(request, match, hole_numbers, input_ids=input_ids, field=field, values=values,
                            invalid=set(errors))
         view["revision_field"] = revision_field(match.player_match_id)
+        revision = typed_on.get(match.player_match_id, match.revision)
+        view["revision"] = "" if revision is None else revision
         view["base_path"] = f"/admin/weeks/{week.id}/matches/{match.player_match_id}"
         for row in view["rows"]:
             field_ids.update({cell["field"]: cell["field"] for cell in row["inputs"] or []})
@@ -220,62 +227,80 @@ async def week_scores(week_id: int, request: Request,
 
 
 def _refused_sheet(request: Request, session: Session, week_id: int, values: dict[str, str],
-                   exc: ScoreEntryError) -> Response:
-    """The sheet after the score service refused a save; nothing was written."""
+                   refused: list[ScoreEntryError], typed_on: dict[int, int | None]) -> Response:
+    """The sheet after a save was refused; nothing was written.
+
+    Every match that was changed or locked meanwhile is named and shown as it
+    is saved now. What was typed for the other matches is kept, with the
+    revision it was typed on.
+    """
     week = _week(session, week_id)
-    if exc.code in ("out_of_date", "locked"):
+    first = refused[0]
+    if first.code == "conflict":
+        return _sheet_page(request, session, week, values=values, status_code=409, typed_on=typed_on,
+                           errors={"sheet": _SAVE_AGAIN})
+    if first.code not in ("out_of_date", "locked"):
+        return _sheet_page(request, session, week, values=values, status_code=422, typed_on=typed_on,
+                           errors={"sheet": first.message})
+    kept, kept_on, errors = dict(values), dict(typed_on), {}
+    for number, exc in enumerate(refused):
         match = _sheet_match(session, week_id, exc.player_match_id)
-        # That match is shown as it is saved now; what was typed for the others is kept.
         prefix = f"score_{match.player_match_id}_"
-        kept = {name: value for name, value in values.items() if not name.startswith(prefix)}
+        kept = {name: value for name, value in kept.items() if not name.startswith(prefix)}
+        kept_on.pop(match.player_match_id, None)
         reason = ("was locked" if exc.code == "locked" else "was changed") + " after you opened this page"
-        return _sheet_page(request, session, week, values=kept, status_code=409, errors={
-            "sheet": f"{_name(match)} {reason}. Nothing was saved. It is shown below as it is saved now; "
-                     "check it and save the other matches again."})
-    if exc.code == "conflict":
-        return _sheet_page(request, session, week, values=values, status_code=409, errors={"sheet": _SAVE_AGAIN})
-    return _sheet_page(request, session, week, values=values, status_code=422, errors={"sheet": exc.message})
+        errors[f"sheet-{number}"] = f"{_name(match)} {reason}."
+    if len(refused) == 1:
+        errors["sheet-0"] += (" Nothing was saved. It is shown below as it is saved now; "
+                              "check it and save the other matches again.")
+    else:
+        errors["sheet"] = ("Nothing was saved. Those matches are shown below as they are saved now; "
+                           "check them and save the other matches again.")
+    return _sheet_page(request, session, week, values=kept, status_code=409, typed_on=kept_on, errors=errors)
 
 
 def _read_sheet(form, sheet: list[SheetMatch], hole_numbers: list[int]):
-    """Read a posted week sheet: typed values, field errors, the matches to save, and a stale match.
+    """Read a posted week sheet.
 
-    A match left wholly blank is skipped. Scores typed for a golfer who has
-    since been saved, or whose match was locked, or typed on a page showing an
-    older revision of the match, mean the page was out of date: that match is
-    returned as stale so nothing is saved or silently dropped, and a form with
-    mistakes is never handed back carrying a newer revision than it was typed on.
+    Returns the typed values, the field errors, the matches to save, every
+    stale match, and for each match with typed values the revision they were
+    typed on. A match left wholly blank is skipped. Scores typed for a golfer
+    who has since been saved, or whose match was locked, or typed on a page
+    showing another revision of the match, mean the page was out of date:
+    each such match is returned as stale, so nothing is saved or silently
+    dropped and no form goes back carrying a newer revision than it was typed on.
     """
     values: dict[str, str] = {}
     errors: dict[str, str] = {}
     entries = []
-    stale: ScoreEntryError | None = None
+    stale: dict[int, ScoreEntryError] = {}
+    typed_on: dict[int, int | None] = {}
     for match in sheet:
         def field(golfer_id: int, hole: int, match_id: int = match.player_match_id) -> str:
             return sheet_score_field(match_id, golfer_id, hole)
 
-        missing = _missing(match)
+        match_id, missing = match.player_match_id, _missing(match)
         values.update({field(golfer_id, hole): _text(form, field(golfer_id, hole))
                        for golfer_id in missing for hole in hole_numbers})
         taken = [golfer.golfer_id for golfer in match.golfers if golfer.golfer_id not in missing]
         posted = {field(golfer_id, hole): _text(form, field(golfer_id, hole))
                   for golfer_id in taken for hole in hole_numbers}
-        if stale is None and any_typed(posted, taken, hole_numbers, field):
-            stale = ScoreEntryError("locked" if match.locked else "out_of_date", "",
-                                    player_match_id=match.player_match_id)
+        if any_typed(posted, taken, hole_numbers, field):
+            stale[match_id] = ScoreEntryError("locked" if match.locked else "out_of_date", "",
+                                              player_match_id=match_id)
         if not missing or not any_typed(values, missing, hole_numbers, field):
             continue
-        shown = parse_revision(_text(form, revision_field(match.player_match_id)))
-        if stale is None and shown != match.revision:
-            stale = ScoreEntryError("out_of_date", "", player_match_id=match.player_match_id)
+        typed_on[match_id] = parse_revision(_text(form, revision_field(match_id)))
+        if typed_on[match_id] != match.revision:
+            stale.setdefault(match_id, ScoreEntryError("out_of_date", "", player_match_id=match_id))
         golfers = [(golfer.golfer_id, golfer.name) for golfer in match.golfers if golfer.golfer_id in missing]
         scores, problems = parse_scores(values, golfers, hole_numbers, field)
         errors.update(problems)
         # A golfer already saved keeps their scores; the write needs the match whole.
         scores.update({golfer.golfer_id: dict(golfer.strokes_by_hole)
                        for golfer in match.golfers if golfer.golfer_id not in missing})
-        entries.append((match.player_match_id, scores, shown))
-    return values, errors, entries, stale
+        entries.append((match_id, scores, typed_on[match_id]))
+    return values, errors, entries, list(stale.values()), typed_on
 
 
 @router.post("/admin/weeks/{week_id}/scores")
@@ -286,13 +311,14 @@ async def week_scores_save(week_id: int, request: Request,
     _csrf(request, form.get("csrf_token", ""))
     week = _week(session, week_id)
     hole_numbers = [hole.number for hole in week_holes(session, week_id)]
-    values, errors, entries, stale = _read_sheet(form, week_sheet(session, week_id), hole_numbers)
-    if stale is not None:
-        return _refused_sheet(request, session, week_id, values, stale)
+    values, errors, entries, stale, typed_on = _read_sheet(form, week_sheet(session, week_id), hole_numbers)
+    if stale:
+        return _refused_sheet(request, session, week_id, values, stale, typed_on)
     if not errors and not entries:
         errors["sheet"] = "Enter the scores for at least one match."
     if errors:
-        return _sheet_page(request, session, week, values=values, errors=errors, status_code=422)
+        return _sheet_page(request, session, week, values=values, errors=errors, status_code=422,
+                           typed_on=typed_on)
 
     actor, today, now = Actor(admin.id, True), _today(request), _now(request)
     session.rollback()  # end the read transaction: the write reserves the single writer first
@@ -303,12 +329,12 @@ async def week_scores_save(week_id: int, request: Request,
         session.rollback()
         if exc.code == "not_found" and exc.player_match_id is None:
             raise HTTPException(status_code=404, detail="Not found") from exc
-        return _refused_sheet(request, session, week_id, values, exc)
+        return _refused_sheet(request, session, week_id, values, [exc], typed_on)
     except (SQLAlchemyError, OSError) as exc:
         session.rollback()
         logger.warning("week sheet save failed week=%d type=%s", week_id, type(exc).__name__)
         return _sheet_page(request, session, _week(session, week_id), values=values, status_code=503,
-                           errors={"sheet": _NOT_SAVED})
+                           typed_on=typed_on, errors={"sheet": _NOT_SAVED})
     logger.info("week sheet saved week=%d matches=%d user=%d", week_id, len(entries), actor.user_id)
     return _redirect(week_id, f"saved={len(entries)}")
 

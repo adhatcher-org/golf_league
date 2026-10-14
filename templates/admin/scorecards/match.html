@@ -21,7 +21,7 @@
 <p>Lock the match once you have checked its scores. A locked match cannot be changed by anyone until you unlock it.</p>
 <form method="post" action="{{ match_path|replace('/scores', '') }}/lock">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <input type="hidden" name="revision" value="{{ match.revision }}">
+    <input type="hidden" name="revision" value="{{ revision }}">
     <p><button class="button-secondary" type="submit">Lock this match</button></p>
 </form>
 {% if not match.empty %}<p><a href="{{ match_path }}/clear">Clear scores</a></p>{% endif %}

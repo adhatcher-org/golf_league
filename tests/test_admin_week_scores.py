@@ -18,7 +18,12 @@ from test_scores import _matches
 
 from golf_league.domain.scorecard import Actor
 from golf_league.models import Golfer, HoleScore, MatchScoreState, User, Week
-from golf_league.services.scores import ScoreEntryError, save_match_scores, week_holes
+from golf_league.services.scores import (
+    ScoreEntryError,
+    clear_match_scores,
+    save_match_scores,
+    week_holes,
+)
 
 cards = _cards
 SIXES = (6,) * 9
@@ -553,6 +558,8 @@ def test_typed_values_go_back_with_the_revision_they_were_typed_on(sheet, monkey
     _refuse(monkeypatch, "save_match_scores", OperationalError("UPDATE", {}, Exception("database is locked")))
     response = _save_match(client, ids, 0, (SIXES, SIXES), 0)
     assert response.status_code == 503 and _save_form_revision(response.text) == "0"
+    # The lock form on that page carries the same revision: it cannot lock scores the admin never saw.
+    assert response.text.count('name="revision" value="0"') == 2 and 'name="revision" value="1"' not in response.text
     _refuse(monkeypatch, "save_match_scores", ScoreEntryError("conflict", ""))
     response = _save_match(client, ids, 0, (SIXES, SIXES), 0)
     assert response.status_code == 409 and _save_form_revision(response.text) == "0"
@@ -571,6 +578,63 @@ def test_mistakes_on_an_out_of_date_sheet_are_409_before_the_mistakes(sheet):
     response = client.post(_path(ids), data=data, follow_redirects=False)
     assert response.status_code == 409 and "was changed after you opened this page" in response.text
     assert 'value="99"' not in response.text and _score_count(client) == 0
+
+
+def _enter_and_clear_elsewhere(client, ids, index):
+    """Someone else enters and clears a match, leaving it empty again on revision 2."""
+    match_id = ids["matches"][index]
+    with Session(_engine(client)) as session:
+        admin = Actor(session.scalar(select(User.id).where(User.is_admin)), True)
+        numbers = [hole.number for hole in week_holes(session, ids["week"])]
+        scores = {golfer_id: dict.fromkeys(numbers, 4) for golfer_id in ids["sides"][match_id]}
+        save_match_scores(session, ids["week"], match_id, scores, admin, NOW.date(), base_revision=0, now=NOW)
+        session.commit()
+        clear_match_scores(session, ids["week"], match_id, admin, base_revision=1, now=NOW)
+        session.commit()
+
+
+def test_every_out_of_date_match_on_the_sheet_is_named_and_none_goes_back_on_a_newer_revision(sheet):
+    client, ids = sheet
+    first, second, third = ids["matches"][:3]
+    data = _sheet_data(client, ids, {0: _both(ids, 0, SIXES), 1: _both(ids, 1, (7,) * 9), 2: _both(ids, 2, (8,) * 9)})
+    _enter_and_clear_elsewhere(client, ids, 0)
+    _enter_and_clear_elsewhere(client, ids, 1)
+
+    response = client.post(_path(ids), data=data, follow_redirects=False)
+    assert response.status_code == 409 and _score_count(client) == 0
+    for name in ("Match 1: A1 Example and B1 Example", "Match 2: A2 Example and B2 Example"):
+        assert f"{name} was changed after you opened this page." in response.text
+    assert "Match 3" not in response.text.split("error-summary")[1].split("</div>")[0]
+    # Neither stale match keeps what was typed; the match that is still current does, on its own revision.
+    assert 'value="6"' not in _block(response.text, first) and 'value="7"' not in _block(response.text, second)
+    assert f'name="score_{third}_{ids["sides"][third][0]}_1" value="8"' in response.text
+    assert f'name="revision_{third}" value="0"' in response.text
+    # Posting the page that was first opened again is refused again: nothing slips through on a retry.
+    assert client.post(_path(ids), data=data, follow_redirects=False).status_code == 409
+    assert _score_count(client) == 0
+
+
+def test_typed_values_kept_on_the_sheet_go_back_with_the_revision_they_were_typed_on(sheet, monkeypatch):
+    client, ids = sheet
+    second = ids["matches"][1]
+    import golf_league.routers.admin_week_scores as router_module
+
+    def changed_meanwhile(*args, **kwargs):
+        _enter_and_clear_elsewhere(client, ids, 1)  # match 2 moves to revision 2 during the save
+        raise ScoreEntryError("conflict", "")
+
+    monkeypatch.setattr(router_module, "save_week", changed_meanwhile)
+    data = _sheet_data(client, ids, {0: _both(ids, 0, SIXES), 1: _both(ids, 1, (7,) * 9)})
+    response = client.post(_path(ids), data=data, follow_redirects=False)
+    assert response.status_code == 409 and "Nothing was saved; save again." in response.text
+    # Match 2's sevens are still in the form, on the revision they were typed on, not the new one.
+    assert f'name="score_{second}_{ids["sides"][second][0]}_1" value="7"' in response.text
+    assert f'name="revision_{second}" value="0"' in response.text
+    monkeypatch.undo()
+    # Saving that form again is checked against what the admin saw, so match 2 is refused.
+    response = client.post(_path(ids), data=data, follow_redirects=False)
+    assert response.status_code == 409 and "Match 2: A2 Example and B2 Example was changed" in response.text
+    assert _score_count(client) == 0
 
 
 def test_a_week_that_is_not_a_match_week_takes_no_scores_even_with_matches(sheet):

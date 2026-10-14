@@ -16,7 +16,7 @@
 {% if has_inputs %}
 <form id="{{ form_id }}" class="scorecard-form" method="post" action="/admin/weeks/{{ week.id }}/scores">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    {% for group in groups %}{% for view in group.matches %}{% if view.has_inputs %}<input type="hidden" name="{{ view.revision_field }}" value="{{ view.match.revision }}">{% endif %}{% endfor %}{% endfor %}
+    {% for group in groups %}{% for view in group.matches %}{% if view.has_inputs %}<input type="hidden" name="{{ view.revision_field }}" value="{{ view.revision }}">{% endif %}{% endfor %}{% endfor %}
     <p>Type the scores for the matches not yet entered, then choose "Save scores" at the bottom. A match left blank is skipped. A match you start must be complete.</p>
 </form>
 {% endif %}
