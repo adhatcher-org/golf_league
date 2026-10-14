@@ -366,8 +366,8 @@ async def scorecard_submit(draft_id: int, request: Request,
     # first action and re-checks everything inside that one write transaction.
     session.rollback()
     try:
-        submit_card(session, week_id, list(submission.entries), Actor(user_id, True), today,
-                    acknowledged=acknowledged, left_off=submission.left_off, now=now)
+        result = submit_card(session, week_id, list(submission.entries), Actor(user_id, True), today,
+                             acknowledged=acknowledged, left_off=submission.left_off, now=now)
         stored = session.get(ScorecardDraft, draft_id)
         if stored is None:
             session.rollback()
@@ -391,8 +391,9 @@ async def scorecard_submit(draft_id: int, request: Request,
         return _review_page(request, session, kept, values=values, status_code=503, errors={
             CARD_ERROR: "The scores could not be saved just now. Nothing was saved; submit the card again."})
     logger.info("scorecard submitted draft=%d week=%d", draft_id, week_id)
-    return RedirectResponse(f"/admin/weeks/{week_id}/scores?saved=1", status_code=303,
-                            headers=PRIVATE_HEADERS)
+    # The week page says how many matches the card wrote to: one card may span two.
+    return RedirectResponse(f"/admin/weeks/{week_id}/scores?saved={len(result.player_match_ids)}",
+                            status_code=303, headers=PRIVATE_HEADERS)
 
 
 @router.post("/admin/scorecards/{draft_id}/discard")

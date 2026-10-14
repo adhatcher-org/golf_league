@@ -435,8 +435,10 @@ def test_a_four_golfer_card_across_two_matches_saves_36_rows(cards):
     draft_id = _manual(client, ids["weeks"][0])
     golfers = ids["golfers"]
     rows = [("", golfers[0], FIVES), ("", golfers[4], FIVES), ("", golfers[1], FIVES), ("", golfers[5], FIVES)]
-    assert _submit(client, draft_id, rows).status_code == 303
+    response = _submit(client, draft_id, rows)
+    assert response.status_code == 303 and response.headers["location"].endswith("/scores?saved=2")
     assert _score_count(client) == 36
+    assert "The scores for 2 matches were saved." in client.get(response.headers["location"]).text
 
 
 def test_a_three_golfer_card_needs_the_acknowledgement(cards):
