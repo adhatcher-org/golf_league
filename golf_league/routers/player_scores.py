@@ -20,7 +20,8 @@ from sqlalchemy.orm import Session
 from golf_league.database import get_session
 from golf_league.domain.scorecard import Actor
 from golf_league.models import PlayerMatch, User, Week
-from golf_league.routers.admin_scorecards import (
+from golf_league.routers.admin_week_scores import _day
+from golf_league.routers.scorecard_flow import (
     PRIVATE_HEADERS,
     _csrf,
     _now,
@@ -28,7 +29,6 @@ from golf_league.routers.admin_scorecards import (
     _text,
     _today,
 )
-from golf_league.routers.admin_week_scores import _day
 from golf_league.security import require_verified_user
 from golf_league.services.match_entry import parse_revision, parse_scores, score_field
 from golf_league.services.scores import (

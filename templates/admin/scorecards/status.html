@@ -8,12 +8,6 @@
         <p>Week {{ week.index }} · {{ week.play_date.strftime('%b %-d, %Y') }}</p>
     </div>
 </header>
-<p role="status" data-scorecard-status-url="/admin/scorecards/{{ draft.id }}/status">The photo is being read. This usually takes under a minute, and up to three minutes the first time. This page checks every two seconds.</p>
-{% if slow %}<p class="notice"><strong>This is taking longer than expected.</strong> You can keep waiting, or discard the card and start again.</p>{% endif %}
-<p><a href="/admin/scorecards/{{ draft.id }}">Refresh this page</a></p>
-<form method="post" action="/admin/scorecards/{{ draft.id }}/discard">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <p><button class="button-secondary" type="submit">Discard this card</button></p>
-</form>
+{% include "scorecards/_status.html" %}
 {% endblock %}
 {% block scripts %}<script src="/static/scorecard-status.js?v=20261013-scorecards-1"></script>{% endblock %}

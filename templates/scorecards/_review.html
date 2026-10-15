@@ -1,0 +1,65 @@
+{# The review form for a card; takes `base_path` (R-SCORES). #}
+{% include "_error_summary.html" %}
+{% if view.warnings %}
+<div class="notice scorecard-warnings" role="status" aria-labelledby="warnings-title">
+    <h2 id="warnings-title">Check before you submit</h2>
+    <ul>
+        {% for anchor, message in view.warnings %}<li>{% if anchor %}<a href="#{{ anchor }}">{{ message }}</a>{% else %}{{ message }}{% endif %}</li>{% endfor %}
+    </ul>
+    <p>These are warnings. They do not stop you submitting.</p>
+</div>
+{% endif %}
+<div class="scorecard-review">
+    <section class="scorecard-review__photo" aria-labelledby="photo-title">
+        <h2 id="photo-title">Photo</h2>
+        {% if has_photo %}<img src="{{ base_path }}/{{ draft.id }}/image" alt="The uploaded scorecard photo">
+        {% else %}<p>No photo. Enter the names and scores from the card.</p>{% endif %}
+    </section>
+    <section class="scorecard-review__form" aria-labelledby="scores-title">
+        <h2 id="scores-title">Players and scores</h2>
+        <p>Fill in two to four players. A player with no name, golfer or scores is left out. Only the nine hole scores are saved.</p>
+        <form class="scorecard-form" method="post" action="{{ base_path }}/{{ draft.id }}/submit">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="left_off" value="{{ view.left_off_value }}">
+            {% for row in view.rows %}
+            <fieldset class="scorecard-player" id="player-{{ row.number }}">
+                <legend>Player {{ row.number }}</legend>
+                {% for message in row.warnings %}<p class="scorecard-player__warning"><strong>Check this player:</strong> {{ message }}</p>{% endfor %}
+                <label for="name_{{ row.index }}">Name as written on the card</label>
+                <input type="text" id="name_{{ row.index }}" name="name_{{ row.index }}" value="{{ row.name }}" maxlength="80" autocomplete="off">
+                <label for="golfer_{{ row.index }}">Golfer</label>
+                <select id="golfer_{{ row.index }}" name="golfer_{{ row.index }}"{% if row.golfer_invalid %} aria-invalid="true"{% endif %}>
+                    <option value="">Choose a golfer</option>
+                    {% for option in view.options %}<option value="{{ option.golfer_id }}"{% if option.golfer_id == row.golfer_id %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
+                </select>
+                {% if row.left_off %}<p class="scorecard-player__note">Already saved or locked: left off this card.</p>{% endif %}
+                {% if row.match_note %}<p class="scorecard-player__note">{{ row.match_note }}.</p>{% endif %}
+                {% if row.handicap_written is not none or row.out_total is not none %}
+                <p>Read from the card, for reference only:{% if row.handicap_written is not none %} handicap {{ row.handicap_written }}{% endif %}{% if row.handicap_written is not none and row.out_total is not none %},{% endif %}{% if row.out_total is not none %} Out total {{ row.out_total }}{% endif %}.</p>
+                {% endif %}
+                <div class="table-wrap score-grid">
+                    <table>
+                        <thead><tr>{% for cell in row.cells %}<th scope="col">Hole {{ cell.hole }}</th>{% endfor %}</tr></thead>
+                        <tbody><tr>
+                            {% for cell in row.cells %}
+                            <td><label class="visually-hidden" for="{{ cell.field }}">Hole {{ cell.hole }}, player {{ row.number }}</label>
+                                <input class="score-input" type="text" inputmode="numeric" maxlength="2" autocomplete="off" id="{{ cell.field }}" name="{{ cell.field }}" value="{{ cell.value }}"{% if row.autofocus and loop.first %} autofocus{% endif %}{% if cell.note %} aria-describedby="{{ cell.field }}_note"{% endif %}{% if cell.invalid %} aria-invalid="true"{% endif %}>
+                                {% if cell.note %}<small class="score-note" id="{{ cell.field }}_note">{{ cell.note }}</small>{% endif %}</td>
+                            {% endfor %}
+                        </tr></tbody>
+                    </table>
+                </div>
+            </fieldset>
+            {% endfor %}
+            {% if view.needs_acknowledgement %}
+            <label class="scorecard-acknowledge" for="acknowledged"><input class="scorecard-acknowledge__checkbox" type="checkbox" id="acknowledged" name="acknowledged" value="{{ view.acknowledgement_value }}"{% if view.acknowledged %} checked{% endif %}>
+                <span>I have checked this card: {{ view.unpaired|join(', ') }} {{ 'is' if view.unpaired|length == 1 else 'are' }} not paired with an opponent on it.</span></label>
+            {% endif %}
+            <p><button type="submit">Submit scores</button></p>
+        </form>
+        <form method="post" action="{{ base_path }}/{{ draft.id }}/discard">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <p><button class="button-secondary" type="submit">Discard this card</button></p>
+        </form>
+    </section>
+</div>

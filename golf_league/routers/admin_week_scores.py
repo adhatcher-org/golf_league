@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from golf_league.database import get_session
 from golf_league.domain.scorecard import Actor
 from golf_league.models import Week
-from golf_league.routers.admin_scorecards import (
+from golf_league.routers.scorecard_flow import (
     PRIVATE_HEADERS,
     _csrf,
     _now,

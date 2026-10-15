@@ -74,7 +74,10 @@ orchestrator repo next door.
   `golf_league/services/player_schedule.py` is home's "Week N: Enter scores".
 - Scorecard photo entry (R-SCORES, R-OCR-PROVIDER): the admin pages are
   `golf_league/routers/admin_scorecards.py` with `templates/admin/scorecards/` and the status
-  polling script `static/scorecard-status.js`. `golf_league/services/scorecard_image.py` turns an
+  polling script `static/scorecard-status.js`. The five draft pages (page, status, photo, submit,
+  discard) are shared through `golf_league/routers/scorecard_flow.py`, parameterised by a `Flow`,
+  with the bodies in `templates/scorecards/_review.html`, `_status.html` and `_failed.html`;
+  `open_draft` there decides who may open a draft. `golf_league/services/scorecard_image.py` turns an
   upload into a clean JPEG; `golf_league/services/scorecard_drafts.py` holds the short-lived
   `scorecard_drafts` rows and photos (under `<data dir>/scorecards/`) and runs the read on one
   background worker; `golf_league/services/scorecard_vision.py` is the only provider module (the

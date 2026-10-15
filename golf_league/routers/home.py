@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 from golf_league.config import get_settings
 from golf_league.database import get_session
 from golf_league.models import User
-from golf_league.routers.admin_scorecards import _today
 from golf_league.routers.player_scores import enter_path
+from golf_league.routers.scorecard_flow import _today
 from golf_league.security import get_optional_user
 from golf_league.services.player_schedule import get_home_view, home_entry_prompt
 

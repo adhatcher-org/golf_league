@@ -8,16 +8,5 @@
         <p>Week {{ week.index }} · {{ week.play_date.strftime('%b %-d, %Y') }}</p>
     </div>
 </header>
-<p class="error" role="alert">{{ reason }}</p>
-<p>Nothing was saved. You can try another photo, type the scores in yourself, or discard this card.</p>
-<form method="post" action="/admin/scorecards/{{ draft.id }}/discard">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <input type="hidden" name="retry" value="1">
-    <p><button type="submit">Retry with a new photo</button></p>
-</form>
-<p><a class="button-link" href="/admin/scorecards/{{ draft.id }}?manual=1">Enter manually</a></p>
-<form method="post" action="/admin/scorecards/{{ draft.id }}/discard">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <p><button class="button-secondary" type="submit">Discard this card</button></p>
-</form>
+{% include "scorecards/_failed.html" %}
 {% endblock %}
