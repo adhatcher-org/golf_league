@@ -4,7 +4,7 @@
 <div class="notice scorecard-warnings" role="status" aria-labelledby="warnings-title">
     <h2 id="warnings-title">Check before you submit</h2>
     <ul>
-        {% for anchor, message in view.warnings %}<li>{% if anchor %}<a href="#{{ anchor }}">{{ message }}</a>{% else %}{{ message }}{% endif %}</li>{% endfor %}
+        {% for anchor, message in view.warnings %}<li>{% if anchor %}<a class="tap-link" href="#{{ anchor }}">{{ message }}</a>{% else %}{{ message }}{% endif %}</li>{% endfor %}
     </ul>
     <p>These are warnings. They do not stop you submitting.</p>
 </div>

@@ -17,6 +17,7 @@ from test_admin_scorecards import (
     NOW,
     DeferredExecutor,
     FakeProvider,
+    InlineExecutor,
     _card,
     _draft_count,
     _engine,
@@ -463,3 +464,37 @@ def test_an_upload_writes_no_score_before_the_reviewed_form_is_submitted(cards):
     with Session(_engine(client)) as session:
         assert session.scalar(select(func.count(HoleScore.id))) == 0
         assert session.get(ScorecardDraft, draft_id).status == "ready"
+
+
+def test_every_link_on_the_player_score_pages_keeps_a_44px_target_at_every_width(cards):
+    """Found in review: error-summary and card-warning links missed the desktop target size.
+    Every link inside <main> on the M9 player pages, in each state, is a `.tap-link` or a
+    `.button-link` (both 44 px at every width)."""
+    import re
+
+    from test_player_scores import _data
+
+    client, ids = cards
+    a1, b1 = _golfers(ids, "A1", "B1")
+    client.app.state.vision_provider = FakeProvider(_card(_player("A1", out_total=40), _player("B1")))
+    client.app.state.scorecard_executor = DeferredExecutor()
+    pages = {"entry": client.get(f"/weeks/{ids['week']}/scores/enter").text,
+             "week": client.get(f"/weeks/{ids['week']}/scores").text,
+             "match errors": client.post(_match_path(ids, 0), data=_data(client, ids, 0, (("x",) * 9, FIVES), 0)).text}
+    card = _draft_id(_upload(client, ids))
+    pages["waiting"] = client.get(f"/scorecards/{card}").text
+    client.app.state.scorecard_executor.run()
+    pages["review with warnings"] = client.get(f"/scorecards/{card}").text
+    pages["review errors"] = _submit(client, card, [("", a1, ("x",) * 9), ("", b1, FIVES)]).text
+    client.app.state.vision_provider = FakeProvider(ProviderTimeout())
+    client.app.state.scorecard_executor = InlineExecutor()
+    client.post(f"/scorecards/{card}/discard", data={"csrf_token": _token(client)})
+    pages["failed"] = client.get(f"/scorecards/{_draft_id(_upload(client, ids))}").text
+    assert "Check before you submit" in pages["review with warnings"]
+    assert 'class="error-summary"' in pages["match errors"]
+    for label, html in pages.items():
+        main = html.split("<main")[1].split("</main>")[0]
+        links = re.findall(r"<a [^>]*>", main)
+        assert links, label
+        bare = [link for link in links if "tap-link" not in link and "button-link" not in link]
+        assert not bare, f"{label}: {bare}"
