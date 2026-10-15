@@ -6,7 +6,7 @@
     <input type="hidden" name="retry" value="1">
     <p><button type="submit">Retry with a new photo</button></p>
 </form>
-<p><a class="button-link" href="{{ base_path }}/{{ draft.id }}?manual=1">Enter manually</a></p>
+<p><a class="button-link" href="{{ base_path }}/{{ draft.id }}?manual=1">{{ manual_label|default("Enter manually") }}</a></p>
 <form method="post" action="{{ base_path }}/{{ draft.id }}/discard">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <p><button class="button-secondary" type="submit">Discard this card</button></p>

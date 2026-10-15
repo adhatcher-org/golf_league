@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Scorecard not read - Golf League{% endblock %}
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title">
+    <p class="eyebrow">Scores · Week {{ week.index }}</p>
+    <h1 id="page-title">Your scorecard could not be read</h1>
+    <p>Week {{ week.index }} · {{ week.play_date.strftime('%b %-d, %Y') }}</p>
+</section>
+{% set manual_label = "Type the card instead" %}
+{% include "scorecards/_failed.html" %}
+{% endblock %}

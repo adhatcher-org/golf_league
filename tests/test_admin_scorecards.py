@@ -1107,7 +1107,7 @@ def test_a_busy_database_during_upload_is_a_plain_503_and_keeps_nothing(cards, m
         raise OperationalError("INSERT INTO scorecard_drafts", {"image_path": "must-not-be-logged.jpg"},
                                Exception("database is locked"))
 
-    monkeypatch.setattr(router_module, "create_draft", locked)
+    monkeypatch.setattr(router_module, "create_draft_from_image", locked)  # GL-86: prepared off the event loop
     with caplog.at_level(logging.WARNING):
         response = _upload(client, ids["weeks"][0])
     assert response.status_code == 503 and "could not be started just now" in response.text

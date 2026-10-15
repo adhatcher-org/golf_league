@@ -28,9 +28,11 @@ from golf_league.routers.scorecard_flow import (
     _page,
     _text,
     _today,
+    purge_drafts,
 )
 from golf_league.security import require_verified_user
 from golf_league.services.match_entry import parse_revision, parse_scores, score_field
+from golf_league.services.scorecard_drafts import user_week_draft
 from golf_league.services.scores import (
     EntryState,
     ScoreEntryError,
@@ -217,21 +219,22 @@ async def week_scores(week_id: int, request: Request,
 # --- the entry page --------------------------------------------------------------
 
 
-def _entry_state(session: Session, week: Week, user: User, today) -> EntryState:
-    return player_entry_state(session, week.id, user.golfer_id, today)
+def entry_page(request: Request, session: Session, week: Week, user: User, *,
+               errors: dict[str, str] | None = None, status_code: int = 200) -> Response:
+    """The entry page for the player's own match, by their entry state; 404 when they do not play.
 
-
-@router.get("/weeks/{week_id}/scores/enter")
-async def enter_scores(week_id: int, request: Request,
-                       session: Session = Depends(get_session),  # noqa: B008
-                       user: User = Depends(require_verified_user)) -> Response:  # noqa: B008
-    week = _week(session, week_id)
+    Where the player can enter scores at all, it also offers a scorecard:
+    upload a photo or type a card (GL-86), even when their own match is saved
+    or locked, since they may be keeping score for the other pair.
+    """
     actor, today = _actor(user), _today(request)
-    state = _entry_state(session, week, user, today)
+    purge_drafts(request, session)
+    state = player_entry_state(session, week.id, user.golfer_id, today)
     if state.state == "not_playing":
         raise _not_found()
-    context: dict = {"week": week, "state": state.state, "errors": {}, "field_ids": {}, "form": None,
-                     "kept": [], "message": "", "scores_path": week_path(week.id)}
+    context: dict = {"week": week, "state": state.state, "errors": errors or {}, "field_ids": {"photo": "photo"},
+                     "form": None, "kept": [], "message": "", "scores_path": week_path(week.id), "card": None,
+                     "discarded": request.query_params.get("discarded") == "1" and status_code == 200}
     if state.state == "closed":
         context["message"] = CLOSED
     elif state.state == "not_open_yet":
@@ -247,7 +250,18 @@ async def enter_scores(week_id: int, request: Request,
             sheet = {item.player_match_id: item for item in week_sheet(session, week.id)}
             context["kept"] = [{"href": match_path(week.id, match_id), "title": _title(sheet[match_id])}
                                for match_id in kept_matches(session, week.id, actor) if match_id in sheet]
-    return _page(request, "player/scores/enter.html", context)
+        draft = user_week_draft(session, user.id, week.id, _now(request))
+        context["card"] = {"action": f"/weeks/{week.id}/scorecards",
+                           "configured": request.app.state.vision_provider is not None,
+                           "in_progress": f"/scorecards/{draft.id}" if draft is not None else None}
+    return _page(request, "player/scores/enter.html", context, status_code)
+
+
+@router.get("/weeks/{week_id}/scores/enter")
+async def enter_scores(week_id: int, request: Request,
+                       session: Session = Depends(get_session),  # noqa: B008
+                       user: User = Depends(require_verified_user)) -> Response:  # noqa: B008
+    return entry_page(request, session, _week(session, week_id), user)
 
 
 # --- one match --------------------------------------------------------------------

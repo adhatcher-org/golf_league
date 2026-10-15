@@ -21,7 +21,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from golf_league.domain.scorecard import Actor
@@ -88,14 +88,26 @@ def _remove_image(directory: Path, image_path: str | None) -> None:
 
 def create_draft(session: Session, *, week_id: int, user_id: int, raw: bytes, today: date,
                  clock: Clock, directory: Path, actor: Actor) -> ScorecardDraft:
-    """Store a prepared photo and an `extracting` draft; commits.
+    """Prepare an upload, then store it and an `extracting` draft; commits.
 
     Raises `ScoreEntryError` for a week that cannot take a card and
     `ImageRefused` for a refused upload, in that order, before anything is
     written. If the row cannot be saved the photo is removed.
     """
     week_for_entry(session, week_id, today, actor)
-    image = prepare_image(raw)
+    return create_draft_from_image(session, week_id=week_id, user_id=user_id, image=prepare_image(raw),
+                                   today=today, clock=clock, directory=directory, actor=actor)
+
+
+def create_draft_from_image(session: Session, *, week_id: int, user_id: int, image: bytes, today: date,
+                            clock: Clock, directory: Path, actor: Actor) -> ScorecardDraft:
+    """Store an already prepared photo and an `extracting` draft; commits.
+
+    The caller prepares the image (off the event loop); the week is checked
+    again here, before anything is written. If the row cannot be saved the
+    photo is removed.
+    """
+    week_for_entry(session, week_id, today, actor)
     name = _write_image(directory, image)
     try:
         draft = _new_draft(week_id, user_id, clock, status="extracting", image_path=name)
@@ -255,6 +267,44 @@ def list_open_drafts(session: Session, user_id: int) -> list[ScorecardDraft]:
     """Every open draft, the given admin's own first, then newest first."""
     drafts = session.scalars(select(ScorecardDraft)).all()
     return sorted(drafts, key=lambda d: (d.created_by_user_id != user_id, -d.created_at.timestamp(), -d.id))
+
+
+def open_photo_draft(session: Session, user_id: int, now: datetime) -> ScorecardDraft | None:
+    """The user's newest unexpired draft that holds a photo: one photo card at a time."""
+    return session.scalar(
+        select(ScorecardDraft)
+        .where(ScorecardDraft.created_by_user_id == user_id, ScorecardDraft.expires_at > now,
+               ScorecardDraft.image_path.is_not(None))
+        .order_by(ScorecardDraft.created_at.desc(), ScorecardDraft.id.desc())
+        .limit(1)
+    )
+
+
+def user_week_draft(session: Session, user_id: int, week_id: int, now: datetime) -> ScorecardDraft | None:
+    """The user's newest unexpired draft for the week, photo or typed: their card in progress."""
+    return session.scalar(
+        select(ScorecardDraft)
+        .where(ScorecardDraft.created_by_user_id == user_id, ScorecardDraft.week_id == week_id,
+               ScorecardDraft.expires_at > now)
+        .order_by(ScorecardDraft.created_at.desc(), ScorecardDraft.id.desc())
+        .limit(1)
+    )
+
+
+def count_waiting(session: Session, now: datetime) -> int:
+    """Unexpired drafts whose photo is still waiting to be read."""
+    return session.scalar(
+        select(func.count(ScorecardDraft.id))
+        .where(ScorecardDraft.status == "extracting", ScorecardDraft.expires_at > now)
+    )
+
+
+def drafts_ahead(session: Session, draft: ScorecardDraft) -> int:
+    """Drafts waiting to be read that were queued before this one."""
+    return session.scalar(
+        select(func.count(ScorecardDraft.id))
+        .where(ScorecardDraft.status == "extracting", ScorecardDraft.id < draft.id)
+    )
 
 
 def delete_draft(session: Session, draft: ScorecardDraft, *, directory: Path) -> None:

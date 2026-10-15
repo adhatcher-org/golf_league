@@ -21,6 +21,8 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
+from starlette.datastructures import UploadFile
 
 from golf_league.config import get_settings
 from golf_league.domain.scorecard import Actor
@@ -31,7 +33,10 @@ from golf_league.services.scorecard_drafts import (
     draft_card,
     get_draft,
     image_file,
+    purge_expired,
+    start_extraction,
 )
+from golf_league.services.scorecard_image import MAX_UPLOAD_BYTES, prepare_image
 from golf_league.services.scorecard_review import (
     ACK_FIELD,
     CARD_ERROR,
@@ -47,6 +52,7 @@ from golf_league.services.scores import (
     ScoreEntryError,
     blocked_golfers,
     league_today,
+    week_for_entry,
     week_holes,
 )
 
@@ -109,12 +115,64 @@ def _page(request: Request, template: str, context: dict, status_code: int = 200
     )
 
 
+def purge_drafts(request: Request, session: Session) -> None:
+    """Retention housekeeping on the player pages that list or open drafts; never fails the page."""
+    try:
+        purge_expired(session, _now(request), directory=request.app.state.scorecard_dir)
+    except Exception as exc:
+        session.rollback()
+        logger.warning("scorecard draft purge failed type=%s", type(exc).__name__)
+
+
 def _not_found() -> HTTPException:
     return HTTPException(status_code=404, detail="Not found", headers=PRIVATE_HEADERS)
 
 
 def _actor(user: User, flow: Flow) -> Actor:
     return Actor(user.id, True) if flow.is_admin else Actor(user.id, False, user.golfer_id)
+
+
+# --- starting a photo card -----------------------------------------------------------
+
+
+IMAGE_MESSAGES = {
+    "too_large": "The photo is larger than 10 MB. Choose a smaller photo.",
+    "unsupported_type": "The photo could not be opened. Upload a JPEG, PNG or HEIC photo.",
+    "too_many_pixels": "The photo has too many pixels. Choose a photo of 50 megapixels or less.",
+}
+# Room for the multipart framing and the other fields around a 10 MB photo.
+_FORM_OVERHEAD = 64 * 1024
+
+
+async def declared_too_large(request: Request) -> bool:
+    """True, with the body drained and discarded, when the upload is plainly over the limit."""
+    declared = request.headers.get("content-length", "")
+    if not declared.isdecimal() or int(declared) <= MAX_UPLOAD_BYTES + _FORM_OVERHEAD:
+        return False
+    async for _ in request.stream():
+        pass
+    return True
+
+
+async def start_photo_draft(request: Request, session: Session, *, week_id: int, user: User, flow: Flow,
+                            photo: UploadFile, create_draft_from_image: Callable) -> ScorecardDraft:
+    """Check the week, prepare the photo off the event loop, store the draft and queue its read.
+
+    One photo is prepared at a time (`app.state.scorecard_prepare_lock`), on a
+    worker thread, so no request waits on another's decode. Raises
+    `ScoreEntryError` for a week that cannot take a card and `ImageRefused`
+    for a refused upload, before anything is written.
+    """
+    state, actor, today = request.app.state, _actor(user, flow), _today(request)
+    week_for_entry(session, week_id, today, actor)
+    raw = await photo.read(MAX_UPLOAD_BYTES + 1)
+    session.rollback()  # hold no read transaction while the photo is prepared
+    async with state.scorecard_prepare_lock:
+        image = await run_in_threadpool(prepare_image, raw)
+    draft = create_draft_from_image(session, week_id=week_id, user_id=user.id, image=image, today=today,
+                                    clock=state.scorecard_utc_now, directory=state.scorecard_dir, actor=actor)
+    start_extraction(state, draft.id)
+    return draft
 
 
 # --- who may open a draft ----------------------------------------------------------
@@ -156,7 +214,8 @@ def review_page(request: Request, session: Session, draft: ScorecardDraft, flow:
 
 
 def detail(request: Request, session: Session, draft_id: int, user: User, flow: Flow, *,
-           purge: Callable[[Request, Session], None], waiting: dict | None = None) -> Response:
+           purge: Callable[[Request, Session], None],
+           waiting: Callable[[ScorecardDraft], dict] | None = None) -> Response:
     """The waiting page, the failed page or the review form. `waiting` adds to the waiting page."""
     purge(request, session)
     draft = open_draft(request, session, draft_id, user, flow)
@@ -164,7 +223,8 @@ def detail(request: Request, session: Session, draft_id: int, user: User, flow: 
     if draft.status == "extracting":
         return _page(request, f"{flow.template_dir}/status.html", {
             "draft": draft, "week": week, "base_path": flow.base_path,
-            "slow": _now(request) - draft.created_at > SLOW_READ_AFTER, **(waiting or {}),
+            "slow": _now(request) - draft.created_at > SLOW_READ_AFTER,
+            **(waiting(draft) if waiting else {}),
         })
     if draft.status == "failed" and request.query_params.get("manual") != "1":
         return _page(request, f"{flow.template_dir}/failed.html", {

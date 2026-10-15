@@ -77,7 +77,11 @@ orchestrator repo next door.
   polling script `static/scorecard-status.js`. The five draft pages (page, status, photo, submit,
   discard) are shared through `golf_league/routers/scorecard_flow.py`, parameterised by a `Flow`,
   with the bodies in `templates/scorecards/_review.html`, `_status.html` and `_failed.html`;
-  `open_draft` there decides who may open a draft. `golf_league/services/scorecard_image.py` turns an
+  `open_draft` there decides who may open a draft. A player's own card is
+  `golf_league/routers/player_scorecards.py` (`/weeks/{week}/scorecards` to start one, then
+  `/scorecards/{draft}`) with `templates/player/scorecards/`: only its creator can open it, photo
+  uploads are limited by `app.state.scorecard_upload_limiter` and the waiting queue, and every
+  photo is prepared off the event loop, one at a time, under `app.state.scorecard_prepare_lock`. `golf_league/services/scorecard_image.py` turns an
   upload into a clean JPEG; `golf_league/services/scorecard_drafts.py` holds the short-lived
   `scorecard_drafts` rows and photos (under `<data dir>/scorecards/`) and runs the read on one
   background worker; `golf_league/services/scorecard_vision.py` is the only provider module (the
