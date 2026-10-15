@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Enter scores for week {{ week.index }} - Golf League{% endblock %}
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title">
+    <p class="eyebrow">Scores · {{ week.play_date.strftime('%b %-d, %Y') }}</p>
+    <h1 id="page-title">Week {{ week.index }}: enter scores</h1>
+</section>
+<nav aria-label="Week navigation"><p><a href="{{ scores_path }}">Week {{ week.index }} scores</a> · <a href="/my/schedule?season_id={{ week.season_id }}">My Schedule</a></p></nav>
+{% include "_error_summary.html" %}
+{% if message %}<p class="notice" role="status">{{ message }}</p>{% endif %}
+{% if form %}
+<section class="score-match" aria-labelledby="own-match-title">
+    <h2 id="own-match-title">{{ form.title }}</h2>
+    <p class="score-match__state">{{ form.state_line }}</p>
+    {% include "player/scores/_match_form.html" %}
+</section>
+{# GL-86: the scorecard photo upload goes here. #}
+{% if kept %}
+<section aria-labelledby="kept-title">
+    <h2 id="kept-title">Matches you kept score for</h2>
+    <ul>{% for item in kept %}<li><a href="{{ item.href }}">Update scores for {{ item.title }}</a></li>{% endfor %}</ul>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

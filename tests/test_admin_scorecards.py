@@ -963,14 +963,14 @@ def test_the_scores_page_with_nothing_saved_says_so(cards):
     assert "Save scores" not in empty.text
 
 
-def test_the_admin_menu_links_to_enter_scorecard_and_players_see_no_link(cards):
+def test_the_admin_menu_links_to_enter_scorecard_and_an_unlinked_player_sees_no_entry_link(cards):
     client, ids = cards
     assert '<a href="/admin/scorecards/new">Enter scorecard</a>' in client.get("/").text
-    _become(client, admin=False)
+    _become(client, admin=False)  # a verified player whose account is linked to no golfer
     for path in ("/", "/roster", "/my/schedule"):
         page = client.get(path).text
         assert "/admin/scorecards" not in page and "Enter scorecard" not in page, path
-        assert "/scores" not in page, path
+        assert "Enter scores" not in page and "/scores/enter" not in page, path
 
 
 def test_no_season_at_all_says_so(empty_admin_client):

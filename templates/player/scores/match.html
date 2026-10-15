@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Week {{ week.index }} match scores - Golf League{% endblock %}
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title">
+    <p class="eyebrow">Scores · Week {{ week.index }} · {{ week.play_date.strftime('%b %-d, %Y') }}</p>
+    <h1 id="page-title">{{ form.title }}</h1>
+    <p>{{ form.state_line }}</p>
+</section>
+<nav aria-label="Week navigation"><p><a href="{{ scores_path }}#match-{{ form.match.player_match_id }}">Week {{ week.index }} scores</a></p></nav>
+{% include "_error_summary.html" %}
+{% if message %}<p class="notice" role="status">{{ message }}</p>{% endif %}
+{% include "player/scores/_match_form.html" %}
+{% endblock %}

@@ -10,7 +10,7 @@ from test_my_schedule import _seed
 
 from golf_league.models import Base, Golfer, Season, TeamMatch, User, Week
 from golf_league.services.matchups import create_team_match, generate_player_matches
-from golf_league.services.player_schedule import get_home_view
+from golf_league.services.player_schedule import get_home_view, home_entry_prompt
 
 TODAY = date(2026, 8, 27)
 
@@ -171,3 +171,38 @@ def test_home_selects_active_season_otherwise_most_recent(client):
         season, view = get_home_view(session, TODAY)
         assert season.id == newer.id
         assert view is None
+
+
+def test_home_entry_prompt_is_the_latest_open_week_up_to_today(client):
+    ids = _seed(client)  # the viewer is A1; week 1 (27 August) is generated
+    a1 = ids["golfers"][0]
+    with Session(client.app.state.engine) as session:
+        pairing, _ = create_team_match(session, ids["weeks"][1], ids["teams"][0], ids["teams"][1], clock=clock)
+        generate_player_matches(session, pairing.id, clock=clock)  # week 2, 3 September
+        session.commit()
+        assert home_entry_prompt(session, ids["season"], a1, date(2026, 8, 26)) is None
+        assert home_entry_prompt(session, ids["season"], a1, TODAY).id == ids["weeks"][0]
+        assert home_entry_prompt(session, ids["season"], a1, date(2026, 9, 3)).id == ids["weeks"][1]
+        # Two open weeks on one date: the higher index comes first.
+        session.get(Week, ids["weeks"][0]).play_date = date(2026, 9, 3)
+        session.flush()
+        assert home_entry_prompt(session, ids["season"], a1, date(2026, 9, 3)).id == ids["weeks"][1]
+        session.get(Week, ids["weeks"][1]).status = "cancelled"
+        session.flush()
+        assert home_entry_prompt(session, ids["season"], a1, date(2026, 9, 3)).id == ids["weeks"][0]
+        assert home_entry_prompt(session, ids["season"], None, date(2026, 9, 3)) is None
+        assert home_entry_prompt(session, ids["season"], ids["golfers"][8], date(2026, 9, 3)) is None
+        session.rollback()
+
+
+def test_home_shows_the_entry_prompt_by_the_league_date_and_keeps_its_upcoming_week(client):
+    from datetime import UTC, datetime
+
+    ids = _seed(client)
+    client.app.state.scorecard_utc_now = lambda: datetime(2026, 8, 27, 18, tzinfo=UTC)
+    page = client.get("/").text
+    assert f'<a href="/weeks/{ids["weeks"][0]}/scores/enter">Week 1: Enter scores</a>' in page
+    assert page.index("Week 1: Enter scores") < page.index('id="next-week-title"')
+    # 02:00 UTC on 27 August is still 26 August in the league's time zone: not open yet.
+    client.app.state.scorecard_utc_now = lambda: datetime(2026, 8, 27, 2, tzinfo=UTC)
+    assert "Enter scores" not in client.get("/").text

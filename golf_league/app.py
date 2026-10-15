@@ -37,6 +37,7 @@ from golf_league.routers.home import router as home_router
 from golf_league.routers.identity import router as identity_router
 from golf_league.routers.join import router as join_router
 from golf_league.routers.player_schedule import router as player_schedule_router
+from golf_league.routers.player_scores import router as player_scores_router
 from golf_league.routers.roster import router as roster_router
 from golf_league.security import (
     SESSION_COOKIE_NAME,
@@ -261,6 +262,7 @@ def create_app(settings=None) -> FastAPI:
     app.include_router(home_router)
     app.include_router(roster_router)
     app.include_router(player_schedule_router)
+    app.include_router(player_scores_router)
     app.include_router(admin_config_router)
     app.include_router(admin_courses_router)
     app.include_router(admin_roster_router)

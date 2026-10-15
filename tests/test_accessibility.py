@@ -342,6 +342,53 @@ def test_week_score_pages_pass_static_audit_with_long_names(client):
     assert any("Locked on" in html for _, html in pages) and len(pages) == 11
 
 
+def test_player_score_pages_pass_static_audit_with_long_names(client):
+    """GL-85: the week's scores, the entry page and the match form, in each state a player meets."""
+    from datetime import UTC, datetime
+
+    from golf_league.models import Week
+    from golf_league.security import generate_csrf_token
+
+    ids = _seed(client)  # the viewer is the long-named A1, in week 1 (27 August)
+    _long_names(client)
+    week, state = ids["weeks"][0], client.app.state
+    with Session(client.app.state.engine) as session:
+        match = session.scalars(select(PlayerMatch).order_by(PlayerMatch.id)).first()
+        match_id, sides = match.id, (match.a_golfer_id, match.b_golfer_id)
+    token = generate_csrf_token(client.cookies.get("session") or "")
+    enter, scores, form = f"/weeks/{week}/scores/enter", f"/weeks/{week}/scores", f"/weeks/{week}/matches/{match_id}/scores"
+    pages: list[tuple[str, str]] = []
+
+    def audit(label: str, response, status: int = 200) -> None:
+        assert response.status_code == status, f"{label}: {response.status_code}"
+        pages.append((label, response.text))
+
+    def fields(value: str) -> dict:
+        return {f"score_{golfer}_{hole}": value for golfer in sides for hole in range(1, 10)}
+
+    state.scorecard_utc_now = lambda: datetime(2026, 8, 26, 18, 0, tzinfo=UTC)
+    audit("entry (not open yet)", client.get(enter))
+    state.scorecard_utc_now = lambda: datetime(2026, 8, 27, 18, 0, tzinfo=UTC)
+    audit("entry (open)", client.get(enter))
+    audit("week scores (nothing entered)", client.get(scores))
+    audit("match (errors)", client.post(form, data={"csrf_token": token, "revision": "0", **fields("x")}), 422)
+    saved = client.post(form, data={"csrf_token": token, "revision": "0", **fields("5")}, follow_redirects=False)
+    assert saved.status_code == 303
+    audit("week scores (saved, with notice)", client.get(saved.headers["location"]))
+    audit("entry (saved)", client.get(enter))
+    audit("match (out of date)", client.post(form, data={"csrf_token": token, "revision": "0", **fields("4")}), 409)
+    with Session(client.app.state.engine) as session:
+        session.get(Week, week).status = "played"
+        session.commit()
+    audit("entry (closed)", client.get(enter))
+    audit("match (closed)", client.get(form))
+
+    for label, html in pages:
+        _assert_accessible(label, html)
+        assert "<i>Markup</i>" not in html, f"{label}: unescaped synthetic markup"
+    assert len(pages) == 9
+
+
 def test_week_score_layout_rules_keep_the_page_from_scrolling_sideways():
     assert "min-width: 0" in _rule(".score-match")  # the grid scrolls; the block never widens the page
     assert "min-width: 46rem" in _rule(".score-grid--named table")

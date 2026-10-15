@@ -1584,6 +1584,7 @@ pre { max-width: 100%; overflow-x: auto; }
     background: var(--surface);
 }
 
+.score-match h2,
 .score-match h3,
 .score-match p { margin: 0; }
 .score-match__state { color: var(--ink); font-weight: 600; }

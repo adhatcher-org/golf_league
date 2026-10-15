@@ -66,6 +66,12 @@ orchestrator repo next door.
   `golf_league/routers/admin_week_scores.py` with `templates/admin/scorecards/scores.html`,
   `match.html` and `clear.html`; the shared score-grid partials are in `templates/scores/`, and
   `golf_league/services/match_entry.py` names the score fields and reads a posted form.
+- Player score pages (R-SCORES) are `golf_league/routers/player_scores.py` with
+  `templates/player/scores/`: the read-only week's scores (`/weeks/{week}/scores`) for any
+  verified user, and the entry page and one-match form for a player, who always acts as
+  `Actor(user.id, False, user.golfer_id)`. Its `entry_links` give My Schedule and the week page
+  their "Enter scores" / "Update scores" / "View scores" links; `home_entry_prompt` in
+  `golf_league/services/player_schedule.py` is home's "Week N: Enter scores".
 - Scorecard photo entry (R-SCORES, R-OCR-PROVIDER): the admin pages are
   `golf_league/routers/admin_scorecards.py` with `templates/admin/scorecards/` and the status
   polling script `static/scorecard-status.js`. `golf_league/services/scorecard_image.py` turns an

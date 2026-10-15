@@ -1,0 +1,12 @@
+{# One match's scores: a form while it can be changed, else the saved scores read-only. Takes `form`. #}
+{% set view = form.view %}{% set hole_numbers = form.hole_numbers %}
+{% if form.editable %}
+<form class="scorecard-form" method="post" action="{{ form.action }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="revision" value="{{ form.revision }}">
+    {% include "scores/_match_table.html" %}
+    <p><button type="submit">Save scores</button></p>
+</form>
+{% else %}
+{% include "scores/_match_table.html" %}
+{% endif %}
