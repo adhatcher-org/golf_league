@@ -5,7 +5,7 @@
     <p class="eyebrow">Scores · {{ week.play_date.strftime('%b %-d, %Y') }}</p>
     <h1 id="page-title">Week {{ week.index }}: enter scores</h1>
 </section>
-<nav aria-label="Week navigation"><p><a href="{{ scores_path }}">Week {{ week.index }} scores</a> · <a href="/my/schedule?season_id={{ week.season_id }}">My Schedule</a></p></nav>
+<nav aria-label="Week navigation"><p><a class="tap-link" href="{{ scores_path }}">Week {{ week.index }} scores</a> · <a class="tap-link" href="/my/schedule?season_id={{ week.season_id }}">My Schedule</a></p></nav>
 {% if discarded %}<p class="notice" role="status">The card was discarded. Its photo has been deleted.</p>{% endif %}
 {% include "_error_summary.html" %}
 {% if message %}<p class="notice" role="status">{{ message }}</p>{% endif %}
@@ -19,7 +19,7 @@
 {% if kept %}
 <section aria-labelledby="kept-title">
     <h2 id="kept-title">Matches you kept score for</h2>
-    <ul>{% for item in kept %}<li><a href="{{ item.href }}">Update scores for {{ item.title }}</a></li>{% endfor %}</ul>
+    <ul>{% for item in kept %}<li><a class="tap-link" href="{{ item.href }}">Update scores for {{ item.title }}</a></li>{% endfor %}</ul>
 </section>
 {% endif %}
 {% endif %}

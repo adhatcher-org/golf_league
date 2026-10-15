@@ -6,7 +6,7 @@
     <h1 id="page-title">Upcoming matches</h1>
 </section>
 <nav aria-label="Schedule navigation"><p><a href="/my/schedule">My Schedule</a></p></nav>
-{% if entry_prompt %}<p class="notice"><a href="{{ entry_prompt.href }}">Week {{ entry_prompt.week.index }}: Enter scores</a></p>{% endif %}
+{% if entry_prompt %}<p class="notice"><a class="tap-link" href="{{ entry_prompt.href }}">Week {{ entry_prompt.week.index }}: Enter scores</a></p>{% endif %}
 {% if season is none %}
 <p class="empty-state">No season is available yet.</p>
 {% elif week_view is none %}

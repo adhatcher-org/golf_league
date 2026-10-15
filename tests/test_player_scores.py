@@ -522,7 +522,7 @@ def test_link_text_follows_the_players_own_state(league):
 
 def test_the_home_prompt_appears_only_for_an_open_week_and_goes_once_saved(league):
     client, ids = league
-    prompt = f'<a href="/weeks/{ids["week"]}/scores/enter">Week 1: Enter scores</a>'
+    prompt = f'<a class="tap-link" href="/weeks/{ids["week"]}/scores/enter">Week 1: Enter scores</a>'
     client.app.state.scorecard_utc_now = lambda: NOW - timedelta(days=1)
     assert prompt not in client.get("/").text
     client.app.state.scorecard_utc_now = lambda: NOW + timedelta(days=3)

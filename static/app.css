@@ -1584,6 +1584,13 @@ pre { max-width: 100%; overflow-x: auto; }
     background: var(--surface);
 }
 
+/* M9: the score pages' own links keep a 44px target at every width, not only on phones. */
+.tap-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+}
+
 .score-match h2,
 .score-match h3,
 .score-match p { margin: 0; }

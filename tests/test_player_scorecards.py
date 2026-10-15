@@ -264,6 +264,58 @@ def test_with_eight_cards_waiting_an_upload_is_409_and_an_admin_is_not_limited(c
         assert upload.status_code == 303
 
 
+@pytest.mark.parametrize("already_waiting", [0, 7])
+def test_overlapping_uploads_are_admitted_one_at_a_time(cards, monkeypatch, already_waiting):
+    """Found in review: the limits were checked before the photo was prepared, so two uploads
+    in flight together both passed them. Admission now runs under the prepare lock."""
+    import threading
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    import golf_league.routers.player_scorecards as routes
+    import golf_league.routers.scorecard_flow as flow
+
+    client, ids = cards
+    client.app.state.scorecard_executor = DeferredExecutor()
+    with Session(_engine(client)) as session:
+        for number in range(already_waiting):
+            session.add(ScorecardDraft(week_id=ids["week"], created_by_user_id=ids["users"]["b1"],
+                                       status="extracting", image_path=f"{number:032x}.jpg", created_at=NOW,
+                                       expires_at=NOW + timedelta(hours=24)))
+        session.commit()
+    events, started, release = [], threading.Event(), threading.Event()
+    real_prepare, real_open, real_create = flow.prepare_image, routes.open_photo_draft, routes.create_draft_from_image
+
+    def prepare(raw):
+        started.set()
+        assert release.wait(15)
+        return real_prepare(raw)
+
+    def check(*args):
+        events.append("checked")
+        return real_open(*args)
+
+    def create(*args, **kwargs):
+        draft = real_create(*args, **kwargs)
+        events.append("created")
+        return draft
+
+    monkeypatch.setattr(flow, "prepare_image", prepare)
+    monkeypatch.setattr(routes, "open_photo_draft", check)
+    monkeypatch.setattr(routes, "create_draft_from_image", create)
+    with ThreadPoolExecutor(2) as pool:
+        first = pool.submit(_upload, client, ids)
+        assert started.wait(15)
+        second = pool.submit(_upload, client, ids)
+        time.sleep(0.3)  # the second upload is in flight while the first is being prepared
+        release.set()
+        responses = [first.result(15), second.result(15)]
+    assert events == ["checked", "created", "checked"]  # the second is admitted after the first is stored
+    assert _draft_count(client) == already_waiting + 1
+    assert [response.status_code for response in responses] == [303, 303]
+    assert responses[0].headers["location"] == responses[1].headers["location"]  # sent to the open card
+
+
 def test_the_waiting_page_counts_the_cards_ahead_and_offers_typed_entry(cards):
     client, ids = cards
     client.app.state.scorecard_executor = DeferredExecutor()

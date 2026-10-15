@@ -201,7 +201,7 @@ def test_home_shows_the_entry_prompt_by_the_league_date_and_keeps_its_upcoming_w
     ids = _seed(client)
     client.app.state.scorecard_utc_now = lambda: datetime(2026, 8, 27, 18, tzinfo=UTC)
     page = client.get("/").text
-    assert f'<a href="/weeks/{ids["weeks"][0]}/scores/enter">Week 1: Enter scores</a>' in page
+    assert f'<a class="tap-link" href="/weeks/{ids["weeks"][0]}/scores/enter">Week 1: Enter scores</a>' in page
     assert page.index("Week 1: Enter scores") < page.index('id="next-week-title"')
     # 02:00 UTC on 27 August is still 26 August in the league's time zone: not open yet.
     client.app.state.scorecard_utc_now = lambda: datetime(2026, 8, 27, 2, tzinfo=UTC)

@@ -45,7 +45,7 @@ def _engine(client):
 
 
 def _href(html: str, text: str) -> str:
-    match = re.search(rf'<a href="([^"]+)">{re.escape(text)}', html)
+    match = re.search(rf'<a (?:class="tap-link" )?href="([^"]+)">{re.escape(text)}', html)
     assert match, f"no link {text!r}"
     return match.group(1)
 

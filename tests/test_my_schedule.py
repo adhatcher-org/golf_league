@@ -152,7 +152,7 @@ def test_schedule_details_link_to_score_entry_by_the_players_state(client):
     client.app.state.scorecard_utc_now = lambda: datetime(2026, 8, 27, 18, tzinfo=UTC)
     page = client.get("/my/schedule").text
     assert page.count("/scores/enter") == 1
-    assert f'<a href="/weeks/{week}/scores/enter">Enter scores<span class="visually-hidden"> for week 1</span></a>' in page
+    assert f'<a class="tap-link" href="/weeks/{week}/scores/enter">Enter scores<span class="visually-hidden"> for week 1</span></a>' in page
     with Session(client.app.state.engine) as session:
         session.get(Week, week).status = "played"
         session.commit()

@@ -2,7 +2,7 @@
 <section aria-labelledby="scorecard-title">
     <h2 id="scorecard-title">Scorecard</h2>
     <p>Enter a whole card at once: your match and, if you kept score for it, one other match. You check every name and score before anything is saved.</p>
-    {% if card.in_progress %}<p><a href="{{ card.in_progress }}">Open your card in progress</a></p>{% endif %}
+    {% if card.in_progress %}<p><a class="tap-link" href="{{ card.in_progress }}">Open your card in progress</a></p>{% endif %}
     <form class="scorecard-form scorecard-form--start" method="post" action="{{ card.action }}" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         {% if card.configured %}

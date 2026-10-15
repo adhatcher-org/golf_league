@@ -8,6 +8,6 @@
 </section>
 {% if ahead %}<p class="notice">{{ ahead }} {{ 'card is' if ahead == 1 else 'cards are' }} ahead of yours.</p>{% endif %}
 {% include "scorecards/_status.html" %}
-<p><a href="/weeks/{{ week.id }}/scores/enter">Type your scores instead</a></p>
+<p><a class="tap-link" href="/weeks/{{ week.id }}/scores/enter">Type your scores instead</a></p>
 {% endblock %}
 {% block scripts %}<script src="/static/scorecard-status.js?v=20261013-scorecards-1"></script>{% endblock %}

@@ -74,6 +74,14 @@ class _Refused(Exception):
         super().__init__(message)
 
 
+class _OpenCard(Exception):
+    """The player already has a photo card open: go there instead."""
+
+    def __init__(self, path: str) -> None:
+        self.path = path
+        super().__init__(path)
+
+
 async def _start(request: Request, session: Session, week, user: User, form) -> str:
     """Steps 4 to 10 of starting a card; returns where to go next."""
     today, now, state = _today(request), _now(request), request.app.state
@@ -86,18 +94,26 @@ async def _start(request: Request, session: Session, week, user: User, form) -> 
     photo = form.get("photo")
     if not isinstance(photo, UploadFile) or not photo.filename:
         raise _Refused("Choose a photo of the scorecard.")
-    purge_drafts(request, session)
-    waiting = open_photo_draft(session, user.id, now)
-    if waiting is not None:  # one photo card at a time
-        return _draft_path(waiting)
-    if not state.scorecard_upload_limiter.check(str(user.id)):
-        raise _Refused(_HOURLY, 409)
-    busy = count_waiting(session, now)
-    if busy >= BUSY_AT:
-        raise _Refused(f"The photo reader is busy: {busy} cards are waiting. Type your scores instead, "
-                       "or try the photo again in a few minutes.", 409)
-    draft = await scorecard_flow.start_photo_draft(request, session, week_id=week.id, user=user, flow=FLOW,
-                                                   photo=photo, create_draft_from_image=create_draft_from_image)
+
+    def admit() -> None:
+        """Steps 7 to 9, run under the prepare lock so overlapping uploads are counted one at a time."""
+        purge_drafts(request, session)
+        waiting = open_photo_draft(session, user.id, now)
+        if waiting is not None:  # one photo card at a time
+            raise _OpenCard(_draft_path(waiting))
+        if not state.scorecard_upload_limiter.check(str(user.id)):
+            raise _Refused(_HOURLY, 409)
+        busy = count_waiting(session, now)
+        if busy >= BUSY_AT:
+            raise _Refused(f"The photo reader is busy: {busy} cards are waiting. Type your scores instead, "
+                           "or try the photo again in a few minutes.", 409)
+
+    try:
+        draft = await scorecard_flow.start_photo_draft(
+            request, session, week_id=week.id, user=user, flow=FLOW, photo=photo,
+            create_draft_from_image=create_draft_from_image, admit=admit)
+    except _OpenCard as exc:
+        return exc.path
     logger.info("player scorecard started draft=%d week=%d user=%d", draft.id, week.id, user.id)
     return _draft_path(draft)
 

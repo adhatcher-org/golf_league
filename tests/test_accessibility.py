@@ -448,6 +448,12 @@ def test_player_scorecard_pages_pass_static_audit_with_long_names(client):
     assert len(pages) == 8
 
 
+def test_score_page_links_keep_a_44px_target_at_every_width():
+    """Found in review: inline links are 44px only on phones; the M9 score links must be at both widths."""
+    rule = _rule(".tap-link")
+    assert "min-height: 2.75rem" in rule and "display: inline-flex" in rule
+
+
 def test_week_score_layout_rules_keep_the_page_from_scrolling_sideways():
     assert "min-width: 0" in _rule(".score-match")  # the grid scrolls; the block never widens the page
     assert "min-width: 46rem" in _rule(".score-grid--named table")

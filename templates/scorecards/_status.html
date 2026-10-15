@@ -1,7 +1,7 @@
 {# The page shown while a photo is read; takes `base_path`. #}
 <p role="status" data-scorecard-status-url="{{ base_path }}/{{ draft.id }}/status">The photo is being read. This usually takes under a minute, and up to three minutes the first time. This page checks every two seconds.</p>
 {% if slow %}<p class="notice"><strong>This is taking longer than expected.</strong> You can keep waiting, or discard the card and start again.</p>{% endif %}
-<p><a href="{{ base_path }}/{{ draft.id }}">Refresh this page</a></p>
+<p><a class="tap-link" href="{{ base_path }}/{{ draft.id }}">Refresh this page</a></p>
 <form method="post" action="{{ base_path }}/{{ draft.id }}/discard">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <p><button class="button-secondary" type="submit">Discard this card</button></p>

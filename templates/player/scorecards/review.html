@@ -6,6 +6,6 @@
     <h1 id="page-title">Review your scorecard</h1>
     <p>Week {{ week.index }} · {{ week.play_date.strftime('%b %-d, %Y') }} · {{ week.nine|title }} nine. Your own name must be on the card; it can hold your match and one other match.</p>
 </section>
-<nav aria-label="Week navigation"><p><a href="/weeks/{{ week.id }}/scores/enter">Back to entering scores</a></p></nav>
+<nav aria-label="Week navigation"><p><a class="tap-link" href="/weeks/{{ week.id }}/scores/enter">Back to entering scores</a></p></nav>
 {% include "scorecards/_review.html" %}
 {% endblock %}

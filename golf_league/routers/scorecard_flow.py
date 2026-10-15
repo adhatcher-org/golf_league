@@ -155,22 +155,31 @@ async def declared_too_large(request: Request) -> bool:
 
 
 async def start_photo_draft(request: Request, session: Session, *, week_id: int, user: User, flow: Flow,
-                            photo: UploadFile, create_draft_from_image: Callable) -> ScorecardDraft:
+                            photo: UploadFile, create_draft_from_image: Callable,
+                            admit: Callable[[], None] | None = None) -> ScorecardDraft:
     """Check the week, prepare the photo off the event loop, store the draft and queue its read.
 
-    One photo is prepared at a time (`app.state.scorecard_prepare_lock`), on a
-    worker thread, so no request waits on another's decode. Raises
-    `ScoreEntryError` for a week that cannot take a card and `ImageRefused`
-    for a refused upload, before anything is written.
+    One photo is admitted, prepared and stored at a time
+    (`app.state.scorecard_prepare_lock`), the decode on a worker thread so no
+    request waits on another's. `admit` runs first under that lock: limits
+    it checks (one open card, the queue) cannot be passed by two overlapping
+    uploads, because the first one's draft is committed before the second is
+    admitted. Raises `ScoreEntryError` for a week that cannot take a card,
+    whatever `admit` raises, and `ImageRefused` for a refused upload, before
+    anything is written.
     """
     state, actor, today = request.app.state, _actor(user, flow), _today(request)
     week_for_entry(session, week_id, today, actor)
     raw = await photo.read(MAX_UPLOAD_BYTES + 1)
-    session.rollback()  # hold no read transaction while the photo is prepared
+    session.rollback()  # hold no read transaction while waiting for the lock
     async with state.scorecard_prepare_lock:
+        if admit is not None:
+            admit()
+            session.rollback()
         image = await run_in_threadpool(prepare_image, raw)
-    draft = create_draft_from_image(session, week_id=week_id, user_id=user.id, image=image, today=today,
-                                    clock=state.scorecard_utc_now, directory=state.scorecard_dir, actor=actor)
+        draft = create_draft_from_image(session, week_id=week_id, user_id=user.id, image=image, today=today,
+                                        clock=state.scorecard_utc_now, directory=state.scorecard_dir,
+                                        actor=actor)
     start_extraction(state, draft.id)
     return draft
 
