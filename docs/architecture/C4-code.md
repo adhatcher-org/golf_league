@@ -1,4 +1,4 @@
-# C4: Code and data (as built, M7)
+# C4: Code and data (as built, M9)
 
 The committed symbol index is `.agents/codemap.md` (regenerate with
 `uv run python scripts/generate_codemap.py`). This page records the data model and the few
@@ -15,9 +15,10 @@ code paths whose shape matters for safety.
 | Season | `seasons`, `season_golfers` (selection), `season_participants` (tee/seed overrides; no role column), `teams`, `team_members` |
 | Schedule | `weeks` (`match` / `play_with_team` / `rain_date`, printed index kept) |
 | Matchups | `team_matches`, `player_matches` (sub flags, `vs_own_handicap`, `manually_adjusted`), `week_handicaps` (historical snapshots) |
+| Scores | `hole_scores` (one row per golfer and hole of a player match, with who first entered it), `match_score_states` (each match's revision and lock), `scorecard_drafts` (a card awaiting review; deleted on submit, discard or after 24 hours, its photo under `<data dir>/scorecards/`) |
 
 There is no role column anywhere (roles derive from team membership), no tee-handicap table,
-and no scoring, results or standings table.
+and no results, standings or statistics table.
 
 ## Code paths worth knowing
 

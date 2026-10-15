@@ -64,6 +64,9 @@ Private data, ignored files, and source contents are excluded.
 ### `docs/release-checklist.md`
 
 
+### `docs/releases/m9-release-notes.md`
+
+
 ### `docs/releases/mvp-release-notes.md`
 
 
@@ -1178,14 +1181,19 @@ Private data, ignored files, and source contents are excluded.
 
 ### `scripts/run_local.py`
 
-- class `FileMailSender` (line 40)
-  - method `__init__` (line 43)
-  - method `send` (line 48)
-- function `prepare_environment` (line 58)
-- function `_demo_weeks` (line 80)
-- function `seed_demo` (line 99)
-- function `build_app` (line 206)
-- function `main` (line 222)
+- class `FileMailSender` (line 44)
+  - method `__init__` (line 47)
+  - method `send` (line 52)
+- function `prepare_environment` (line 62)
+- function `_demo_weeks` (line 84)
+- function `league_today` (line 103)
+- function `_seed_scores_week` (line 116)
+- class `StandInReader` (line 155)
+  - method `__init__` (line 162)
+  - method `read_scorecard` (line 165)
+- function `seed_demo` (line 189)
+- function `build_app` (line 297)
+- function `main` (line 315)
 
 ### `static/app.css`
 
@@ -1527,6 +1535,29 @@ Private data, ignored files, and source contents are excluded.
 - function `test_cancelled_origin_and_activated_makeup_keep_navigation` (line 70)
 - function `test_week_and_home_show_all_league_matches_without_initial_contacts` (line 92)
 - function `test_authentication_and_verification_guard_player_journeys` (line 125)
+
+### `tests/milestones/M9/test_M9_exit_criteria.py`
+
+- function `m9` (line 33)
+- function `_engine` (line 43)
+- function `_href` (line 47)
+- function `_revision` (line 53)
+- function `_form` (line 57)
+- function `_scores` (line 65)
+- function `_rows` (line 71)
+- function `_drafts` (line 76)
+- function `_photos` (line 81)
+- function `_sides` (line 86)
+- function `_manual_card` (line 90)
+- function `_card_form` (line 99)
+- function `test_1_a_player_enters_from_my_schedule_the_opponent_changes_and_the_lock_stops_both` (line 112)
+- function `test_2_a_four_golfer_card_and_the_limits_of_what_a_card_may_reach` (line 165)
+- function `test_3_an_admin_saves_several_matches_at_once_and_lock_all_names_the_rest` (line 194)
+- function `test_4_every_verified_user_sees_the_weeks_scores_and_an_anonymous_visitor_does_not` (line 234)
+- function `test_5_another_players_card_is_404_on_every_address` (line 251)
+- function `test_6_a_week_with_a_saved_score_or_a_lock_cannot_move_to_a_rain_date` (line 274)
+- function `test_7_after_a_submit_a_discard_and_24_hours_no_draft_and_no_photo_remain` (line 313)
+- function `test_8_a_save_from_an_out_of_date_form_writes_nothing` (line 346)
 
 ### `tests/test_accessibility.py`
 
@@ -2585,13 +2616,15 @@ Private data, ignored files, and source contents are excluded.
 
 ### `tests/test_run_local.py`
 
-- function `_module` (line 18)
-- function `test_refuses_a_data_dir_inside_the_repository` (line 26)
-- function `test_refuses_to_run_with_a_relay_configured` (line 31)
-- function `test_a_relay_saved_in_the_managed_file_never_replaces_the_file_sender` (line 37)
-- function `test_environment_is_local_http_with_a_private_generated_secret` (line 57)
-- function `test_file_mail_sender_writes_private_files` (line 72)
-- function `test_demo_seed_creates_personas_admin_and_pairings_once` (line 80)
+- function `_module` (line 26)
+- function `test_refuses_a_data_dir_inside_the_repository` (line 34)
+- function `test_refuses_to_run_with_a_relay_configured` (line 39)
+- function `test_a_relay_saved_in_the_managed_file_never_replaces_the_file_sender` (line 45)
+- function `test_environment_is_local_http_with_a_private_generated_secret` (line 65)
+- function `test_file_mail_sender_writes_private_files` (line 80)
+- function `test_demo_seed_creates_personas_admin_and_pairings_once` (line 88)
+- function `test_demo_seed_adds_a_scores_week_today_with_saved_locked_and_empty_matches_once` (line 113)
+- function `test_the_stand_in_reader_reads_the_regular_personas_latest_match` (line 145)
 
 ### `tests/test_score_migration.py`
 

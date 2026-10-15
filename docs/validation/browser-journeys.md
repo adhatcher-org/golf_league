@@ -25,6 +25,13 @@ uv run python scripts/run_local.py --data-dir /tmp/golf-league-local --demo --po
 - `--demo` personas, password `local-demo-password`: `player-regular@example.test` (team
   golfer), `player-sub@example.test` (substituted into week 2), `player-unused@example.test`
   (sub with no match), `player-unlinked@example.test` (no golfer link).
+- `--demo` also adds week 11, dated the day it is seeded, in which the regular persona plays:
+  their own match is empty, one other match has saved scores, one is saved and locked, and
+  the rest are empty. The demo is seeded once; delete the data directory to get a week dated
+  today again.
+- `--stand-in-reader` replaces the photo reader with a local stand-in that "reads" the
+  regular persona's latest match (fours and fives, one cell unclear), so the scorecard
+  journeys run without a model. Any image is accepted as the photo.
 - Synthetic CSVs for imports: `tests/fixtures/roster/*.csv`.
 - Start from an empty `--data-dir` for the first-admin journey; delete the directory to reset.
 
@@ -49,6 +56,8 @@ For the container check use the image instead: `make build`, then the M0 procedu
 | J12 | Shared invite: create, view once, revoke, rotate, hit the send limit, join, captured set-password link, set password | Neutral join response; one-time URL |
 | J13 | `/admin/config`: invalid value (error summary), then a valid save ("Restart required") | No secret value shown |
 | J14 | Browser back, refresh and double-submit on J2, J6, J9, J12 | No duplicated action |
+| J15 | Player scores (M9, start with `--demo --stand-in-reader`): as the regular persona, My Schedule → "Enter scores"; type the match and save; change one score; the week's scores; upload a card photo, review, submit; open the locked match | Saved scores show on the week page with no name of who entered them; a locked match is read-only; the card adds only what was reviewed |
+| J16 | Admin scores (M9): the week sheet for week 11; save two matches at once; open a match, change it; lock, "Lock all", unlock; clear a match | Each action reports what it did; a locked match cannot be changed until unlocked; clear asks first |
 
 ## 3. Cross-checks
 
@@ -62,8 +71,8 @@ For the container check use the image instead: `make build`, then the M0 procedu
   including their 404 and validation-error responses.
 - Long synthetic names (the demo subs) wrap; markup typed into names is shown as text.
 - Keyboard only: skip link first, visible focus, every control labelled, menus reachable.
-- Touch targets at least 44 px; no page scrolls sideways at 390 px; wide tables scroll inside
-  their own region; empty and error states are readable at both widths.
+- Touch targets at least 44 px; no page scrolls sideways at 390 px; wide tables (every score
+  grid) scroll inside their own region; empty and error states are readable at both widths.
 - Server output (the terminal running `run_local.py`, or `docker logs`) has no tracebacks and
   no secrets.
 

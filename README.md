@@ -1,8 +1,9 @@
 # Golf League
 
 A private web app for one nine-hole Thursday league: roster, course, seasons, teams, the
-printed weekly schedule, weekly player matchups and each player's own schedule. It is
-deliberately small. It does **not** score rounds, keep results, standings or statistics,
+printed weekly schedule, weekly player matchups, each player's own schedule, and the hole
+scores of each week's matches, entered by players and admins and locked by an admin once
+checked. It is deliberately small. It does **not** compute results, standings or statistics,
 draft teams, pair teams automatically, recompute handicaps, or offer a public roster.
 
 Product decisions live in the project's Rulings (Obsidian vault, `Plan/Rulings.md`); this
@@ -84,7 +85,15 @@ release steps), `docs/backup-restore.md`, templates in `deploy/`.
 7. **Players' accounts.** Players either register with their roster address at `/register`,
    or receive the shared league link: *Manage → League invites* creates, shows once, rotates
    and revokes it.
-8. **Configuration.** *Manage → Configuration* sets the mail relay and log level; restart the
+8. **Scores.** *Manage → Season weeks → Scores* opens a match week's sheet
+   (`/admin/weeks/{week}/scores`): every match with its state in words. Type the missing
+   scores for several matches and save them at once; open a match to change its saved scores,
+   lock or unlock it, or clear them (after a confirmation). "Lock all" locks every fully
+   entered match that has not changed since the page was shown and names the rest. A locked
+   match refuses every change, an admin's included, until it is unlocked. *Manage → Enter
+   scorecard* reads a photographed card for review before anything is saved; a card only adds
+   scores, and the list of cards in progress marks one started by a player.
+9. **Configuration.** *Manage → Configuration* sets the mail relay and log level; restart the
    container afterwards.
 
 ### Player
@@ -96,7 +105,14 @@ release steps), `docs/backup-restore.md`, templates in `deploy/`.
    status (cancelled, rain date, awaiting pairing); each week links to its matchups.
 3. From a scheduled match you may view your direct opponent's contact details — nothing else
    of the roster's contact data is visible to players.
-4. Forgot your password: `/reset`.
+4. **Scores.** From the play date onward, My Schedule, the week page and home show "Enter
+   scores" for a week you play. Type the nine scores for you and your opponent and save; you,
+   your opponent, and whoever first entered a golfer's scores can change them until the
+   league admin locks the match ("Update scores", then "View scores" once locked). Instead of
+   typing, upload a photo of the card or type a whole card: it can hold your match and one
+   other match you kept score for, and you check every name and score before it is saved.
+   Every verified player can see a week's scores at "Scores" on the week page.
+5. Forgot your password: `/reset`.
 
 ## Repository map
 

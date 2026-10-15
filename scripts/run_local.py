@@ -14,7 +14,11 @@ Safety rails (the script refuses to start otherwise):
 The first admin is bootstrapped from ADMIN_EMAIL/ADMIN_PASSWORD when set,
 otherwise from the synthetic defaults printed at start-up. --demo seeds a
 synthetic Fall-shaped season (8 teams x 4, 10 printed weeks, two paired
-match weeks, one substitution) and four player personas.
+match weeks, one substitution), four player personas, and a scores week
+dated today in which the regular persona plays: one match with saved
+scores, one locked match and the rest empty. --stand-in-reader replaces the
+photo reader with a local stand-in that "reads" the regular persona's match,
+so the scorecard journeys run without a model.
 """
 
 import argparse
@@ -96,7 +100,93 @@ def _demo_weeks(season_id: int) -> list:
     return weeks
 
 
-def seed_demo(database_url: str) -> bool:
+def league_today() -> date:
+    """Today in the league's time zone, as the score pages count it."""
+    from zoneinfo import ZoneInfo
+
+    from golf_league.services.scorecard_vision import DEFAULT_LEAGUE_TIMEZONE
+
+    try:
+        zone = ZoneInfo(os.environ.get("LEAGUE_TIMEZONE") or DEFAULT_LEAGUE_TIMEZONE)
+    except Exception:
+        zone = ZoneInfo(DEFAULT_LEAGUE_TIMEZONE)
+    return datetime.now(zone).date()
+
+
+def _seed_scores_week(session, season_id: int, teams: list[int], regular_golfer_id: int, today: date) -> None:
+    """A match week dated today showing every score state: the regular persona's own match and
+    one other are empty, one match has saved scores, and one is saved and locked."""
+    from sqlalchemy import select
+
+    from golf_league.domain.scorecard import Actor
+    from golf_league.models import PlayerMatch, TeamMatch, User, Week
+    from golf_league.services.matchups import create_team_match, generate_player_matches
+    from golf_league.services.scores import lock_match, save_match_scores, week_holes
+
+    def clock():
+        return datetime.now(UTC)
+
+    week = Week(season_id=season_id, index=11, play_date=today, nine="front", week_type="match",
+                status="scheduled")
+    session.add(week)
+    session.commit()
+    lineup = [teams[0], *teams[1:]]
+    for home, away in zip(lineup[:4], reversed(lineup[4:]), strict=True):
+        pairing, _ = create_team_match(session, week.id, home, away, clock=clock)
+        generate_player_matches(session, pairing.id, clock=clock)
+    session.commit()
+    own = session.scalar(select(PlayerMatch).join(TeamMatch).where(
+        TeamMatch.week_id == week.id,
+        (PlayerMatch.a_golfer_id == regular_golfer_id) | (PlayerMatch.b_golfer_id == regular_golfer_id)))
+    saved, locked = list(session.scalars(select(PlayerMatch).where(
+        PlayerMatch.team_match_id == own.team_match_id, PlayerMatch.id != own.id).order_by(PlayerMatch.id)))[:2]
+    admin = session.scalar(select(User).where(User.is_admin.is_(True)).order_by(User.id))
+    actor, now = Actor(admin.id, True), clock()
+    holes = [hole.number for hole in week_holes(session, week.id)]
+    for match, strokes in ((saved, (5, 6)), (locked, (4, 5))):
+        scores = {golfer_id: dict.fromkeys(holes, value)
+                  for golfer_id, value in zip((match.a_golfer_id, match.b_golfer_id), strokes, strict=True)}
+        save_match_scores(session, week.id, match.id, scores, actor, today, base_revision=0, now=now)
+        session.commit()
+    lock_match(session, week.id, locked.id, actor, base_revision=1, now=now)
+    session.commit()
+
+
+class StandInReader:
+    """A local stand-in for the photo reader: it "reads" the regular persona's latest match.
+
+    Synthetic, for browser journeys only: the first names of both sides, fours
+    and fives, and one cell marked unclear so the review form shows a note.
+    """
+
+    def __init__(self, database_url: str) -> None:
+        self.database_url = database_url
+
+    def read_scorecard(self, image_jpeg: bytes, *, hole_count: int):
+        from sqlalchemy import select
+        from sqlalchemy.orm import Session
+
+        from golf_league.database import make_engine
+        from golf_league.models import Golfer, PlayerMatch, TeamMatch, User, Week
+        from golf_league.services.scorecard_vision import ExtractedCard, ExtractedPlayer
+
+        engine = make_engine(self.database_url)
+        try:
+            with Session(engine) as session:
+                golfer_id = session.scalar(select(User.golfer_id).where(User.email == PERSONAS["regular"]))
+                match = session.scalar(select(PlayerMatch).join(TeamMatch).join(Week).where(
+                    (PlayerMatch.a_golfer_id == golfer_id) | (PlayerMatch.b_golfer_id == golfer_id))
+                    .order_by(Week.play_date.desc(), PlayerMatch.id))
+                names = [session.get(Golfer, side).first_name for side in (match.a_golfer_id, match.b_golfer_id)]
+        finally:
+            engine.dispose()
+        uncertain = (True,) + (False,) * (hole_count - 1)
+        return ExtractedCard(players=tuple(
+            ExtractedPlayer(name, (value,) * hole_count, uncertain) for name, value in zip(names, (4, 5), strict=True)
+        ), model_name="local-stand-in", holes_header=tuple(range(1, hole_count + 1)))
+
+
+def seed_demo(database_url: str, *, today: date | None = None) -> bool:
     """Seed the synthetic demo season once; return False when data already exists."""
     from sqlalchemy import select
     from sqlalchemy.orm import Session
@@ -198,12 +288,13 @@ def seed_demo(database_url: str) -> bool:
                                  password_hash=hash_password(DEMO_PASSWORD), email_verified_at=now,
                                  is_admin=False, golfer_id=links[persona]))
             session.commit()
+            _seed_scores_week(session, season.id, teams, team_golfers[0], today or league_today())
             return True
     finally:
         engine.dispose()
 
 
-def build_app(data_dir: Path):
+def build_app(data_dir: Path, *, stand_in_reader: bool = False):
     """The local application: mail always goes to files, whatever the managed file says.
 
     `SMTP_HOST` is a managed key, so a tester who saves one at /admin/config
@@ -216,6 +307,8 @@ def build_app(data_dir: Path):
 
     app = create_app(settings=Settings(smtp_host=""))
     app.state.email_sender = FileMailSender(data_dir.resolve() / "mail")
+    if stand_in_reader:
+        app.state.vision_provider = StandInReader(os.environ["DATABASE_URL"])
     return app
 
 
@@ -224,6 +317,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--data-dir", type=Path, required=True)
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--demo", action="store_true", help="seed the synthetic demo season once")
+    parser.add_argument("--stand-in-reader", action="store_true",
+                        help="read scorecard photos with a local stand-in instead of a model")
     args = parser.parse_args(argv)
 
     os.environ.update(prepare_environment(args.data_dir, args.port))
@@ -233,7 +328,7 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.demo and seed_demo(os.environ["DATABASE_URL"]):
         print("Seeded the synthetic demo season.")
-    app = build_app(args.data_dir)
+    app = build_app(args.data_dir, stand_in_reader=args.stand_in_reader)
 
     print(f"Golf League (local) at http://127.0.0.1:{args.port}")
     print(f"  first admin : {os.environ['ADMIN_EMAIL']} (password from ADMIN_PASSWORD, "

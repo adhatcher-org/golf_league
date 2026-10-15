@@ -18,6 +18,11 @@ out of every backup. A database backup taken while a scorecard draft is open doe
 draft's extracted names and scores; a restored application deletes any draft older than 24 hours
 when it starts, and a draft whose photo is missing simply shows no photo.
 
+Scores live only in the database: `hole_scores` and, since M9, `match_score_states` (each
+match's revision and lock). Both are in every database backup above; M9 stores nothing new on
+disk. Take a verified backup before upgrading to M9: its one migration (`e41c7f9a2b36`) creates
+`match_score_states`, and there is no downgrade in production.
+
 Never copy the live `golf_league.db` file on its own while the app is running: a copy taken
 mid-write can be inconsistent, and SQLite may also have `-wal`/`-journal` files beside it.
 
