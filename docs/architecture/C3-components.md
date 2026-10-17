@@ -1,4 +1,4 @@
-# C3: Components (as built, M7)
+# C3: Components (as built, M9)
 
 Three layers inside `golf_league/`, with the boundaries enforced by `tests/test_architecture.py`:
 
@@ -24,6 +24,9 @@ atomic writer), `security.py` (CSRF, cookie `Secure` rule, the auth dependency l
 | Weeks, cascades, nine, rain dates | `admin_weeks.py` | `schedule.py` | `schedule.py` |
 | Matchups, snapshots, substitutions | `admin_matches.py` | `matchups.py`, `handicaps.py` | `matchups.py` |
 | Player views | `home.py`, `player_schedule.py` | `player_schedule.py` | — |
+| Scores: admin week sheet, match page, lock, unlock, clear | `admin_week_scores.py` | `scores.py`, `match_entry.py` | `scorecard.py` (`Actor`) |
+| Scores: player week page, entry page, match form | `player_scores.py` | `scores.py`, `match_entry.py`, `player_schedule.py` (`home_entry_prompt`) | `scorecard.py` |
+| Scorecards: upload, read, review, submit (admin and player flows) | `admin_scorecards.py`, `player_scorecards.py`, shared `scorecard_flow.py` | `scorecard_drafts.py`, `scorecard_image.py`, `scorecard_review.py`, `scorecard_vision.py` (the one provider module) | `scorecard.py`, `scorecard_review.py` |
 | Managed configuration | `admin_config.py` | — (`managed_config.py`) | — |
 
 Authorization ladder (`security.py`): `get_optional_user` → `require_user` (401) →

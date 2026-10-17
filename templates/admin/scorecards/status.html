@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Reading scorecard - Golf League{% endblock %}
+{% block content %}
+<header class="admin-page-heading">
+    <div>
+        <p class="eyebrow">Manage · Scorecards</p>
+        <h1>Reading the scorecard</h1>
+        <p>Week {{ week.index }} · {{ week.play_date.strftime('%b %-d, %Y') }}</p>
+    </div>
+</header>
+{% include "scorecards/_status.html" %}
+{% endblock %}
+{% block scripts %}<script src="/static/scorecard-status.js?v=20261013-scorecards-1"></script>{% endblock %}

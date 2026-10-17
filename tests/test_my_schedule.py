@@ -140,3 +140,20 @@ def test_substitute_without_team_slot_sees_actual_matchup_not_old_assignment(cli
     page = client.get("/my/schedule")
     assert "Taylor Substitute (sub)" in page.text and "B1 Example" in page.text
     assert "A1 Example" not in page.text
+
+
+def test_schedule_details_link_to_score_entry_by_the_players_state(client):
+    from datetime import UTC, datetime
+
+    ids = _seed(client)  # the viewer is A1 in week 1 (27 August)
+    week = ids["weeks"][0]
+    client.app.state.scorecard_utc_now = lambda: datetime(2026, 8, 26, 18, tzinfo=UTC)
+    assert "/scores/enter" not in client.get("/my/schedule").text  # not open yet
+    client.app.state.scorecard_utc_now = lambda: datetime(2026, 8, 27, 18, tzinfo=UTC)
+    page = client.get("/my/schedule").text
+    assert page.count("/scores/enter") == 1
+    assert f'<a class="tap-link" href="/weeks/{week}/scores/enter">Enter scores<span class="visually-hidden"> for week 1</span></a>' in page
+    with Session(client.app.state.engine) as session:
+        session.get(Week, week).status = "played"
+        session.commit()
+    assert "/scores" not in client.get("/my/schedule").text  # closed: no entry link

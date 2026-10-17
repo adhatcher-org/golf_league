@@ -16,6 +16,7 @@ from golf_league.models import (
     WeekHandicap,
 )
 from golf_league.services.schedule import list_weeks
+from golf_league.services.scores import player_entry_state
 from golf_league.services.seasons import get_season, list_seasons
 
 
@@ -191,6 +192,22 @@ def get_home_view(session: Session, today: date) -> tuple[Season | None, WeekVie
     if week is None:
         return season, None
     return season, get_week_detail(session, week.id)[2]
+
+
+def home_entry_prompt(session: Session, season_id: int, golfer_id: int | None, today: date) -> Week | None:
+    """The most recent week of the season, up to `today`, whose scores the golfer can still enter.
+
+    Latest `play_date` first, then highest `index`; only a week whose entry
+    state for the golfer is `open` counts. `today` is the league-local date.
+    """
+    if golfer_id is None:
+        return None
+    weeks = session.scalars(
+        select(Week).where(Week.season_id == season_id, Week.play_date <= today)
+        .order_by(Week.play_date.desc(), Week.index.desc())
+    )
+    return next((week for week in weeks
+                 if player_entry_state(session, week.id, golfer_id, today).state == "open"), None)
 
 
 def get_opponent_contact(

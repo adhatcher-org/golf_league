@@ -7,7 +7,15 @@ from sqlalchemy import create_engine, event, inspect
 from golf_league.migrations import _make_config, upgrade_to_head
 
 PRIOR_HEAD = "6a2e9d4b7c31"
-NEW_HEAD = "ab42c7d9e013"
+INVITE_REVISION = "ab42c7d9e013"
+
+
+def _assert_single_head_at_or_after_invites(config):
+    script = ScriptDirectory.from_config(config)
+    heads = script.get_heads()
+    assert len(heads) == 1
+    ancestry = {revision.revision for revision in script.walk_revisions(base="base", head=heads[0])}
+    assert INVITE_REVISION in ancestry
 
 
 def _engine(url):
@@ -43,7 +51,7 @@ def _assert_invite_schema(engine):
 def test_fresh_upgrade_has_invite_tables_one_head_and_defaults(tmp_path):
     url = f"sqlite:///{tmp_path / 'fresh-invites.db'}"
     config = _make_config(url)
-    assert ScriptDirectory.from_config(config).get_heads() == [NEW_HEAD]
+    _assert_single_head_at_or_after_invites(config)
 
     upgrade_to_head(url)
     engine = _engine(url)
@@ -96,7 +104,7 @@ def test_upgrade_from_prior_head_preserves_existing_identity_and_repeats_cleanly
 
     command.upgrade(config, "head")
     command.upgrade(config, "head")
-    assert ScriptDirectory.from_config(config).get_heads() == [NEW_HEAD]
+    _assert_single_head_at_or_after_invites(config)
     engine = _engine(url)
     try:
         _assert_invite_schema(engine)

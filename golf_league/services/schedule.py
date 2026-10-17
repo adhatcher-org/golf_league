@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 from golf_league.domain.schedule import generate_weeks, rotate_nines, shift_from
 from golf_league.models import (
     Golfer,
+    HoleScore,
+    MatchScoreState,
     PlayerMatch,
     Season,
     SeasonGolfer,
@@ -329,6 +331,24 @@ def _validate_rain_date_target(session: Session, source: Week, target: Week, sea
     _validate_makeup_ancestry(session, source, target, season_id)
 
 
+def _require_no_scores_or_locks(session: Session, week_id: int) -> None:
+    """Scores hold a week in place (R-SCORES): its matches cannot move to a rain date."""
+    week_matches = (select(PlayerMatch.id)
+                    .join(TeamMatch, TeamMatch.id == PlayerMatch.team_match_id)
+                    .where(TeamMatch.week_id == week_id))
+    scored = session.execute(
+        select(HoleScore.id).where(HoleScore.player_match_id.in_(week_matches)).limit(1)
+    ).first()
+    locked = session.execute(
+        select(MatchScoreState.player_match_id).where(
+            MatchScoreState.player_match_id.in_(week_matches), MatchScoreState.locked_at.is_not(None),
+        ).limit(1)
+    ).first()
+    if scored is not None or locked is not None:
+        raise ScheduleConflict("A week with saved scores or a locked match cannot be moved to a rain "
+                               "date. Clear the scores and unlock the matches first.")
+
+
 def preview_rain_date(session: Session, season_id: int, source_id: int, target_id: int) -> RainDatePreview:
     season, weeks, source = _rain_date_state(session, season_id, source_id)
     target = next((row for row in weeks if row.id == target_id), None)
@@ -340,6 +360,7 @@ def preview_rain_date(session: Session, season_id: int, source_id: int, target_i
     )))
     if other_reservations:
         raise ScheduleConflict("This week already has a different rain date reserved.")
+    _require_no_scores_or_locks(session, source.id)
     match_count = session.scalar(select(func.count(TeamMatch.id)).where(TeamMatch.week_id == source.id)) or 0
     target_match_count = session.scalar(select(func.count(TeamMatch.id)).where(TeamMatch.week_id == target.id)) or 0
     snapshot_count = session.scalar(select(func.count(WeekHandicap.id)).where(WeekHandicap.week_id == source.id)) or 0
@@ -565,6 +586,15 @@ def confirm_nine_core(session: Session, season_id: int, week_id: int, *, new_nin
     preview = preview_nine(session, season_id, week_id, new_nine=new_nine, rerotate=rerotate)
     if preview.fingerprint != expected_fingerprint:
         raise ScheduleConflict("The schedule or requested change changed after this preview. Review a fresh preview.")
+    changed_week_ids = [change.week_id for change in preview.changes]
+    if changed_week_ids and session.execute(
+        select(HoleScore.id)
+        .join(PlayerMatch, PlayerMatch.id == HoleScore.player_match_id)
+        .join(TeamMatch, TeamMatch.id == PlayerMatch.team_match_id)
+        .where(TeamMatch.week_id.in_(changed_week_ids))
+        .limit(1)
+    ).first() is not None:
+        raise ScheduleConflict("A week with submitted scores cannot change its nine.")
     for change in preview.changes:
         session.get(Week, change.week_id).nine = change.new_value
     return preview

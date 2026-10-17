@@ -217,6 +217,262 @@ def test_admin_and_player_pages_pass_static_audit_with_long_names(client):
         assert "<i>Markup</i>" not in response.text, f"{path}: unescaped synthetic markup"
 
 
+def test_scorecard_pages_pass_static_audit_with_long_names(client):
+    """GL-82: every scorecard page, in each of its states, at the same audit as the rest."""
+    from datetime import UTC, datetime
+
+    from test_admin_scorecards import (
+        DeferredExecutor,
+        FakeProvider,
+        InlineExecutor,
+        _card,
+        _draft_id,
+        _player,
+        _submit,
+        _upload,
+    )
+
+    from golf_league.services.scorecard_vision import ProviderTimeout
+
+    ids = _seed(client, admin=True)
+    _long_names(client)
+    week, golfers, state = ids["weeks"][0], ids["golfers"], client.app.state
+    state.scorecard_utc_now = lambda: datetime(2026, 8, 27, 18, 0, tzinfo=UTC)
+    pages: list[tuple[str, str]] = []
+
+    def audit(label: str, response, status: int = 200) -> None:
+        assert response.status_code == status, f"{label}: {response.status_code}"
+        pages.append((label, response.text))
+
+    state.vision_provider = None
+    audit("new (photo reading not set up)", client.get("/admin/scorecards/new"))
+
+    # A reading with every kind of note: an unread cell, an unclear cell, a
+    # flagged name, a total that disagrees, a wrong-nine header.
+    state.vision_provider = FakeProvider(_card(
+        _player(LONG_FIRST, (6, 6, 6, 6, 6, None, 6, 5, 5), (True,) + (False,) * 8,
+                handicap_written=7, out_total=43),
+        _player("B1", out_total=40), _player("A2", (6,) * 9, out_total=44), _player("B2"),
+        header=tuple(range(10, 19)),
+    ))
+    state.scorecard_executor = DeferredExecutor()
+    waiting = _draft_id(_upload(client, week))
+    audit("status (being read)", client.get(f"/admin/scorecards/{waiting}"))
+    audit("new (with a card in progress)", client.get("/admin/scorecards/new"))
+    state.scorecard_executor.run()
+    review = client.get(f"/admin/scorecards/{waiting}")
+    audit("review (what was read)", review)
+    assert "Not read" in review.text and "Unclear" in review.text and "Check before you submit" in review.text
+
+    rows = [(LONG_FIRST, golfers[0], ("x",) * 9), ("B1", "", (5,) * 9), ("A2", golfers[1], (5,) * 9)]
+    audit("review (errors)", _submit(client, waiting, rows), 422)
+    rows = [(LONG_FIRST, golfers[0], (5,) * 9), ("B1", golfers[4], (5,) * 9), ("A2", golfers[1], (5,) * 9)]
+    audit("review (acknowledgement needed)", _submit(client, waiting, rows), 422)
+
+    state.scorecard_executor = InlineExecutor()
+    state.vision_provider = FakeProvider(ProviderTimeout())
+    failed = _draft_id(_upload(client, week))
+    audit("failed", client.get(f"/admin/scorecards/{failed}"))
+    audit("review (manual, after a failed read)", client.get(f"/admin/scorecards/{failed}?manual=1"))
+
+    audit("scores (none saved)", client.get(f"/admin/weeks/{week}/scores"))
+    saved = _submit(client, waiting, rows, acknowledged=[golfers[1]])
+    assert saved.status_code == 303
+    audit("scores (a saved card)", client.get(saved.headers["location"]))
+    audit("new (with saved scores)", client.get("/admin/scorecards/new"))
+
+    for label, html in pages:
+        _assert_accessible(label, html)
+        assert "<i>Markup</i>" not in html, f"{label}: unescaped synthetic markup"
+    assert len(pages) == 11
+
+
+def test_week_score_pages_pass_static_audit_with_long_names(client):
+    """GL-84: the week sheet, the match page (open, locked) and the clear page, in each state."""
+    from datetime import UTC, datetime
+
+    from golf_league.security import generate_csrf_token
+
+    ids = _seed(client, admin=True)
+    _long_names(client)
+    week, state = ids["weeks"][0], client.app.state
+    state.scorecard_utc_now = lambda: datetime(2026, 8, 27, 18, 0, tzinfo=UTC)
+    with Session(client.app.state.engine) as session:
+        matches = list(session.scalars(select(PlayerMatch).order_by(PlayerMatch.id)))
+        sides = [(match.id, match.a_golfer_id, match.b_golfer_id) for match in matches]
+    token = generate_csrf_token(client.cookies.get("session") or "")
+    sheet, base = f"/admin/weeks/{week}/scores", f"/admin/weeks/{week}/matches"
+    pages: list[tuple[str, str]] = []
+
+    def audit(label: str, response, status: int = 200) -> None:
+        assert response.status_code == status, f"{label}: {response.status_code}"
+        pages.append((label, response.text))
+
+    def match_fields(index: int, value: str) -> dict:
+        match_id, a, b = sides[index]
+        return {f"score_{match_id}_{golfer}_{hole}": value for golfer in (a, b) for hole in range(1, 10)}
+
+    audit("sheet (nothing entered)", client.get(sheet))
+    audit("sheet (errors)", client.post(sheet, data={
+        "csrf_token": token, f"revision_{sides[0][0]}": "0", **match_fields(0, "x")}), 422)
+    saved = client.post(sheet, follow_redirects=False, data={
+        "csrf_token": token, f"revision_{sides[0][0]}": "0", f"revision_{sides[1][0]}": "0",
+        **match_fields(0, "5"), **match_fields(1, "6")})
+    assert saved.status_code == 303
+    audit("sheet (saved, with notice)", client.get(saved.headers["location"]))
+    audit("match (open, with saved scores)", client.get(f"{base}/{sides[0][0]}/scores"))
+    audit("match (empty)", client.get(f"{base}/{sides[2][0]}/scores"))
+    audit("match (out of date)", client.post(f"{base}/{sides[0][0]}/scores", data={
+        "csrf_token": token, "revision": "0",
+        **{f"score_{golfer}_{hole}": "4" for golfer in sides[0][1:] for hole in range(1, 10)}}), 409)
+    audit("clear (confirmation)", client.get(f"{base}/{sides[1][0]}/scores/clear"))
+    locked = client.post(f"{base}/{sides[0][0]}/lock", data={"csrf_token": token, "revision": "1"},
+                         follow_redirects=False)
+    assert locked.status_code == 303
+    audit("sheet (a locked match)", client.get(locked.headers["location"]))
+    audit("match (locked)", client.get(f"{base}/{sides[0][0]}/scores"))
+    audit("match (locked, clear refused)", client.get(f"{base}/{sides[0][0]}/scores/clear"), 409)
+    lock_all = client.post(f"{sheet}/lock-all", follow_redirects=False, data={
+        "csrf_token": token, **{f"revision_{match_id}": "0" for match_id, _, _ in sides}})
+    audit("sheet (after lock all, a changed match named)", client.get(lock_all.headers["location"]))
+
+    for label, html in pages:
+        _assert_accessible(label, html)
+        assert "<i>Markup</i>" not in html, f"{label}: unescaped synthetic markup"
+    assert any("Locked on" in html for _, html in pages) and len(pages) == 11
+
+
+def test_player_score_pages_pass_static_audit_with_long_names(client):
+    """GL-85: the week's scores, the entry page and the match form, in each state a player meets."""
+    from datetime import UTC, datetime
+
+    from golf_league.models import Week
+    from golf_league.security import generate_csrf_token
+
+    ids = _seed(client)  # the viewer is the long-named A1, in week 1 (27 August)
+    _long_names(client)
+    week, state = ids["weeks"][0], client.app.state
+    with Session(client.app.state.engine) as session:
+        match = session.scalars(select(PlayerMatch).order_by(PlayerMatch.id)).first()
+        match_id, sides = match.id, (match.a_golfer_id, match.b_golfer_id)
+    token = generate_csrf_token(client.cookies.get("session") or "")
+    enter, scores, form = f"/weeks/{week}/scores/enter", f"/weeks/{week}/scores", f"/weeks/{week}/matches/{match_id}/scores"
+    pages: list[tuple[str, str]] = []
+
+    def audit(label: str, response, status: int = 200) -> None:
+        assert response.status_code == status, f"{label}: {response.status_code}"
+        pages.append((label, response.text))
+
+    def fields(value: str) -> dict:
+        return {f"score_{golfer}_{hole}": value for golfer in sides for hole in range(1, 10)}
+
+    state.scorecard_utc_now = lambda: datetime(2026, 8, 26, 18, 0, tzinfo=UTC)
+    audit("entry (not open yet)", client.get(enter))
+    state.scorecard_utc_now = lambda: datetime(2026, 8, 27, 18, 0, tzinfo=UTC)
+    audit("entry (open)", client.get(enter))
+    audit("week scores (nothing entered)", client.get(scores))
+    audit("match (errors)", client.post(form, data={"csrf_token": token, "revision": "0", **fields("x")}), 422)
+    saved = client.post(form, data={"csrf_token": token, "revision": "0", **fields("5")}, follow_redirects=False)
+    assert saved.status_code == 303
+    audit("week scores (saved, with notice)", client.get(saved.headers["location"]))
+    audit("entry (saved)", client.get(enter))
+    audit("match (out of date)", client.post(form, data={"csrf_token": token, "revision": "0", **fields("4")}), 409)
+    with Session(client.app.state.engine) as session:
+        session.get(Week, week).status = "played"
+        session.commit()
+    audit("entry (closed)", client.get(enter))
+    audit("match (closed)", client.get(form))
+
+    for label, html in pages:
+        _assert_accessible(label, html)
+        assert "<i>Markup</i>" not in html, f"{label}: unescaped synthetic markup"
+    assert len(pages) == 9
+
+
+def test_player_scorecard_pages_pass_static_audit_with_long_names(client):
+    """GL-86: the player's entry page with a card offered, and the waiting, failed and review pages."""
+    from datetime import UTC, datetime
+
+    from test_admin_scorecards import (
+        DeferredExecutor,
+        FakeProvider,
+        InlineExecutor,
+        _card,
+        _form,
+        _jpeg,
+        _player,
+    )
+
+    from golf_league.security import generate_csrf_token
+    from golf_league.services.scorecard_vision import ProviderTimeout
+
+    ids = _seed(client)  # the viewer is the long-named A1, in week 1 (27 August)
+    _long_names(client)
+    week, golfers, state = ids["weeks"][0], ids["golfers"], client.app.state
+    state.scorecard_utc_now = lambda: datetime(2026, 8, 27, 18, 0, tzinfo=UTC)
+    token = generate_csrf_token(client.cookies.get("session") or "")
+    pages: list[tuple[str, str]] = []
+
+    def audit(label: str, response, status: int = 200) -> None:
+        assert response.status_code == status, f"{label}: {response.status_code}"
+        pages.append((label, response.text))
+
+    def upload():
+        response = client.post(f"/weeks/{week}/scorecards", data={"csrf_token": token},
+                               files={"photo": ("card.jpg", _jpeg(), "image/jpeg")}, follow_redirects=False)
+        assert response.status_code == 303, response.text
+        return response.headers["location"]
+
+    state.vision_provider = None
+    audit("entry (photo reading not set up)", client.get(f"/weeks/{week}/scores/enter"))
+    state.vision_provider = FakeProvider(_card(_player(LONG_FIRST), _player("B1")))
+    audit("entry (a card offered)", client.get(f"/weeks/{week}/scores/enter"))
+    state.scorecard_executor = DeferredExecutor()
+    card = upload()
+    audit("waiting", client.get(card))
+    audit("entry (a card in progress)", client.get(f"/weeks/{week}/scores/enter"))
+    state.scorecard_executor.run()
+    audit("review (what was read)", client.get(card))
+    rows = [(LONG_FIRST, golfers[0], ("x",) * 9), ("B1", golfers[4], (5,) * 9)]
+    audit("review (errors)", client.post(f"{card}/submit", data=_form(client, rows)), 422)
+    client.post(f"{card}/discard", data={"csrf_token": token})
+    state.scorecard_executor = InlineExecutor()
+    state.vision_provider = FakeProvider(ProviderTimeout())
+    failed = upload()
+    audit("failed", client.get(failed))
+    audit("review (typed, after a failed read)", client.get(f"{failed}?manual=1"))
+
+    for label, html in pages:
+        _assert_accessible(label, html)
+        assert "<i>Markup</i>" not in html, f"{label}: unescaped synthetic markup"
+    assert len(pages) == 8
+
+
+def test_score_page_links_keep_a_44px_target_at_every_width():
+    """Found in review: inline links are 44px only on phones; the M9 score links must be at both widths."""
+    rule = _rule(".tap-link")
+    assert "min-height: 2.75rem" in rule and "display: inline-flex" in rule
+
+
+def test_week_score_layout_rules_keep_the_page_from_scrolling_sideways():
+    assert "min-width: 0" in _rule(".score-match")  # the grid scrolls; the block never widens the page
+    assert "min-width: 46rem" in _rule(".score-grid--named table")
+    assert "overflow-wrap: anywhere" in _rule('.score-grid--named th[scope="row"]')
+    assert "flex-wrap: wrap" in _rule(".score-match__actions")
+
+
+def test_scorecard_layout_rules_keep_the_page_from_scrolling_sideways():
+    # Photo beside the form only on a desktop; each player's grid scrolls in its own region.
+    assert "grid-template-columns: minmax(0, 1fr)" in _rule(".scorecard-review")
+    assert re.search(r"@media \(min-width: 721px\) \{\s*\.scorecard-review \{[^}]*minmax\(0, 2fr\) minmax\(0, 3fr\)", CSS)
+    assert "min-width: 0" in _rule(".scorecard-player")  # a fieldset would otherwise grow to its table
+    assert "min-width: 0" in _rule(".scorecard-review__photo,\n.scorecard-review__form")
+    assert "max-width: 100%" in _rule(".scorecard-review__photo img")
+    assert "min-width: 34rem" in _rule(".score-grid table")
+    assert "min-height: 2.75rem" in _rule(".score-input")
+    assert "min-height: 2.75rem" in _rule(".scorecard-acknowledge")
+
+
 def test_anonymous_pages_pass_static_audit(client):
     for path in ["/", "/login", "/register", "/reset"]:
         response = client.get(path)

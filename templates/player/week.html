@@ -9,6 +9,8 @@
 </section>
 <nav aria-label="Week navigation"><p>
     <a href="/my/schedule?season_id={{ season.id }}">My Schedule</a>
+    {% if scores_path %} · <a class="tap-link" href="{{ scores_path }}">Scores</a>{% endif %}
+    {% if entry_link %} · <a class="tap-link" href="{{ entry_link.href }}">{{ entry_link.text }}</a>{% endif %}
     {% if is_admin %} · <a href="/admin/seasons/{{ season.id }}/weeks">Season weeks</a> · <a href="/admin/seasons/{{ season.id }}/weeks/{{ week.id }}/edit">Edit week</a>{% endif %}
 </p></nav>
 <p><strong>Status:</strong>

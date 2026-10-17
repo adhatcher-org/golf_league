@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Review scorecard - Golf League{% endblock %}
+{% block content %}
+<header class="admin-page-heading">
+    <div>
+        <p class="eyebrow">Manage · Scorecards</p>
+        <h1>Review scorecard</h1>
+        <p>Week {{ week.index }} · {{ week.play_date.strftime('%b %-d, %Y') }} · {{ week.nine|title }} nine. The week cannot be changed here.</p>
+    </div>
+</header>
+{% include "scorecards/_review.html" %}
+{% endblock %}

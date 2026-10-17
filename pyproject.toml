@@ -27,6 +27,9 @@ dependencies = [
     "pydantic-settings>=2.0.0,<3.0.0",
     "jinja2>=3.1.0,<4.0.0",
     "argon2-cffi>=23.1.0,<26.0.0",
+    "tzdata>=2026.5",
+    "pillow>=12.3.0",
+    "pillow-heif>=1.8.1",
 ]
 
 [project.optional-dependencies]

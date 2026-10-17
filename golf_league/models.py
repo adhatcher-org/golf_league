@@ -584,6 +584,81 @@ class WeekHandicap(Base):
     tee_set: Mapped["TeeSet"] = relationship()
 
 
+class HoleScore(Base):
+    """One golfer's strokes on one hole of a submitted scorecard (R-SCORES)."""
+
+    __tablename__ = "hole_scores"
+    __table_args__ = (
+        UniqueConstraint("player_match_id", "golfer_id", "hole_id", name="uq_hole_scores_match_golfer_hole"),
+        CheckConstraint("strokes BETWEEN 1 AND 15", name="ck_hole_scores_strokes"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    player_match_id: Mapped[int] = mapped_column(ForeignKey("player_matches.id"), nullable=False, index=True)
+    golfer_id: Mapped[int] = mapped_column(ForeignKey("golfers.id"), nullable=False, index=True)
+    hole_id: Mapped[int] = mapped_column(ForeignKey("holes.id"), nullable=False)
+    strokes: Mapped[int] = mapped_column(Integer, nullable=False)
+    entered_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    entered_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False, server_default=func.current_timestamp())
+
+
+class MatchScoreState(Base):
+    """What has happened to one match's scores: its revision, last change and lock (R-SCORES).
+
+    At most one row per match. A match with no row is at revision 0 and is not
+    locked. The revision goes up on every save, clear, lock and unlock, so a
+    form can tell whether what it showed is still what is saved.
+    """
+
+    __tablename__ = "match_score_states"
+    __table_args__ = (
+        CheckConstraint("revision >= 1", name="ck_match_score_states_revision"),
+        CheckConstraint("(scores_changed_at IS NULL) = (scores_changed_by_user_id IS NULL)",
+                        name="ck_match_score_states_changed_pair"),
+        CheckConstraint("(locked_at IS NULL) = (locked_by_user_id IS NULL)",
+                        name="ck_match_score_states_locked_pair"),
+    )
+
+    player_match_id: Mapped[int] = mapped_column(ForeignKey("player_matches.id"), primary_key=True,
+                                                 autoincrement=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    scores_changed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    scores_changed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    locked_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    locked_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
+class ScorecardDraft(Base):
+    """An uploaded scorecard awaiting review; a draft is not data (R-SCORES).
+
+    The photo and this row are deleted on submit, on discard and 24 hours after
+    upload. `image_path` is a bare file name inside the scorecard directory and
+    is null for a manual draft. `extracted_json` holds only the structured
+    reading, never raw model text.
+    """
+
+    __tablename__ = "scorecard_drafts"
+    __table_args__ = (
+        CheckConstraint("status IN ('extracting', 'ready', 'failed')", name="ck_scorecard_drafts_status"),
+        # Drafts are deleted constantly. AUTOINCREMENT keeps SQLite from giving a
+        # new draft a deleted one's id, so a stale page can never act on another card.
+        {"sqlite_autoincrement": True},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # A draft never outlives its week: deleting the week removes the row, and the
+    # orphan sweep in `purge_expired` removes the photo.
+    week_id: Mapped[int] = mapped_column(ForeignKey("weeks.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False)
+    model_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    image_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extracted_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+
+
 class LeagueInviteLink(Base):
     """Shared invitation; only its irreversible digest is persisted."""
 

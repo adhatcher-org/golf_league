@@ -12,6 +12,17 @@ container, `GOLF_LEAGUE_DATA_DIR` on the host):
   template) are backed up privately by the operator. Restoring a database with a different
   `SESSION_SECRET` signs everyone out and resets invite-quota keys; it does not lose data.
 
+Not backed up: `scorecards/` (mode 0700). It holds scorecard photos awaiting review, which show
+player names and are deleted on submit, on discard and 24 hours after upload (R-SCORES). Leave it
+out of every backup. A database backup taken while a scorecard draft is open does contain that
+draft's extracted names and scores; a restored application deletes any draft older than 24 hours
+when it starts, and a draft whose photo is missing simply shows no photo.
+
+Scores live only in the database: `hole_scores` and, since M9, `match_score_states` (each
+match's revision and lock). Both are in every database backup above; M9 stores nothing new on
+disk. Take a verified backup before upgrading to M9: its one migration (`e41c7f9a2b36`) creates
+`match_score_states`, and there is no downgrade in production.
+
 Never copy the live `golf_league.db` file on its own while the app is running: a copy taken
 mid-write can be inconsistent, and SQLite may also have `-wal`/`-journal` files beside it.
 

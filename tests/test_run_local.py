@@ -2,6 +2,7 @@
 
 import importlib.util
 import stat
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,14 @@ from sqlalchemy.orm import Session
 
 from golf_league.config import Settings
 from golf_league.database import make_engine
-from golf_league.models import PlayerMatch, TeamMatch, User, Week
+from golf_league.models import (
+    HoleScore,
+    MatchScoreState,
+    PlayerMatch,
+    TeamMatch,
+    User,
+    Week,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -82,8 +90,8 @@ def test_demo_seed_creates_personas_admin_and_pairings_once(tmp_path, monkeypatc
     monkeypatch.setenv("ADMIN_EMAIL", "admin@example.test")
     monkeypatch.setenv("ADMIN_PASSWORD", "local-admin-password")
     url = f"sqlite:///{tmp_path / 'demo.db'}"
-    assert module.seed_demo(url) is True
-    assert module.seed_demo(url) is False
+    assert module.seed_demo(url, today=date(2026, 10, 15)) is True
+    assert module.seed_demo(url, today=date(2026, 10, 15)) is False
 
     engine = make_engine(url)
     try:
@@ -92,11 +100,54 @@ def test_demo_seed_creates_personas_admin_and_pairings_once(tmp_path, monkeypatc
             assert users["admin@example.test"].is_admin
             assert set(module.PERSONAS.values()) <= set(users)
             assert users["player-unlinked@example.test"].golfer_id is None
-            assert session.scalar(select(func.count(TeamMatch.id))) == 8
-            assert session.scalar(select(func.count(PlayerMatch.id))) == 32
+            assert session.scalar(select(func.count(TeamMatch.id))) == 12
+            assert session.scalar(select(func.count(PlayerMatch.id))) == 48
             assert session.scalar(select(func.count(PlayerMatch.id)).where(PlayerMatch.b_is_sub)) == 1
             weeks = session.scalars(select(Week).order_by(Week.index)).all()
-            assert [week.week_type for week in weeks].count("match") == 7
-            assert weeks[0].status == "cancelled" and weeks[-1].week_type == "rain_date"
+            assert [week.week_type for week in weeks].count("match") == 8
+            assert weeks[0].status == "cancelled" and weeks[9].week_type == "rain_date"
     finally:
         engine.dispose()
+
+
+def test_demo_seed_adds_a_scores_week_today_with_saved_locked_and_empty_matches_once(tmp_path, monkeypatch):
+    from golf_league.services.scores import player_entry_state
+
+    module = _module()
+    monkeypatch.setenv("ADMIN_EMAIL", "admin@example.test")
+    monkeypatch.setenv("ADMIN_PASSWORD", "local-admin-password")
+    url = f"sqlite:///{tmp_path / 'demo.db'}"
+    today = date(2026, 10, 15)
+    assert module.seed_demo(url, today=today) is True
+    assert module.seed_demo(url, today=today) is False  # once: nothing is added a second time
+
+    engine = make_engine(url)
+    try:
+        with Session(engine) as session:
+            week = session.scalar(select(Week).where(Week.index == 11))
+            assert (week.play_date, week.week_type, week.status, week.nine) == (today, "match", "scheduled", "front")
+            regular = session.scalar(select(User).where(User.email == module.PERSONAS["regular"]))
+            assert player_entry_state(session, week.id, regular.golfer_id, today).state == "open"
+            matches = session.scalars(select(PlayerMatch).join(TeamMatch).where(TeamMatch.week_id == week.id)).all()
+            assert len(matches) == 16
+            scored = {row[0]: row[1] for row in session.execute(
+                select(HoleScore.player_match_id, func.count(HoleScore.id))
+                .join(PlayerMatch).join(TeamMatch).where(TeamMatch.week_id == week.id)
+                .group_by(HoleScore.player_match_id)).all()}
+            assert sorted(scored.values()) == [18, 18]
+            locked = session.scalars(select(MatchScoreState).where(MatchScoreState.locked_at.is_not(None))).all()
+            assert [state.player_match_id for state in locked] == [max(scored)]
+            assert session.scalar(select(func.count(HoleScore.id))) == 36
+    finally:
+        engine.dispose()
+
+
+def test_the_stand_in_reader_reads_the_regular_personas_latest_match(tmp_path, monkeypatch):
+    module = _module()
+    monkeypatch.setenv("ADMIN_EMAIL", "admin@example.test")
+    monkeypatch.setenv("ADMIN_PASSWORD", "local-admin-password")
+    url = f"sqlite:///{tmp_path / 'demo.db'}"
+    module.seed_demo(url, today=date(2026, 10, 15))
+    card = module.StandInReader(url).read_scorecard(b"", hole_count=9)
+    assert [player.name for player in card.players][0] == "Demo11"
+    assert len(card.players) == 2 and card.players[0].scores == (4,) * 9 and card.players[0].uncertain[0]

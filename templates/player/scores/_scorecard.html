@@ -1,0 +1,19 @@
+{# Start a scorecard for this week: a photo to be read, or a card typed in. Takes `card`. #}
+<section aria-labelledby="scorecard-title">
+    <h2 id="scorecard-title">Scorecard</h2>
+    <p>Enter a whole card at once: your match and, if you kept score for it, one other match. You check every name and score before anything is saved.</p>
+    {% if card.in_progress %}<p><a class="tap-link" href="{{ card.in_progress }}">Open your card in progress</a></p>{% endif %}
+    <form class="scorecard-form scorecard-form--start" method="post" action="{{ card.action }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% if card.configured %}
+        <label for="photo">Scorecard photo</label>
+        <input type="file" id="photo" name="photo" accept="image/*"{% if errors.photo %} aria-invalid="true"{% endif %}>
+        <p>JPEG, PNG or HEIC, up to 10 MB. The photo is deleted when you submit or discard the card, and after 24 hours at the latest.</p>
+        <p><button type="submit">Upload photo</button></p>
+        <p><button class="button-secondary" type="submit" name="manual" value="1">Type a card for up to four players</button></p>
+        {% else %}
+        <p>Photo reading is not set up. You can type the card instead.</p>
+        <p><button type="submit" name="manual" value="1">Type a card for up to four players</button></p>
+        {% endif %}
+    </form>
+</section>

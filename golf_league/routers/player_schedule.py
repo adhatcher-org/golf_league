@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from golf_league.database import get_session
 from golf_league.models import User
+from golf_league.routers.player_scores import entry_links, week_path
 from golf_league.security import require_verified_user
 from golf_league.services.player_schedule import (
     get_opponent_contact,
@@ -29,7 +30,8 @@ async def my_schedule(
     return request.app.state.templates.TemplateResponse(
         request,
         "player/my_schedule.html",
-        {"projection": projection, "user_golfer_id": user.golfer_id},
+        {"projection": projection, "user_golfer_id": user.golfer_id,
+         "entry_links": entry_links(session, request, [item.week.id for item in projection.weeks], user)},
     )
 
 
@@ -91,5 +93,7 @@ async def week_detail(
     return request.app.state.templates.TemplateResponse(
         request,
         "player/week.html",
-        {"season": season, "seasons": seasons, "week_view": week_view, "is_admin": user.is_admin},
+        {"season": season, "seasons": seasons, "week_view": week_view, "is_admin": user.is_admin,
+         "entry_link": entry_links(session, request, [week_id], user).get(week_id),
+         "scores_path": week_path(week_id) if any(match.slots for match in week_view.matches) else None},
     )
