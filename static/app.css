@@ -1613,3 +1613,24 @@ pre { max-width: 100%; overflow-x: auto; }
     white-space: normal;
     overflow-wrap: anywhere;
 }
+
+/* Score entry grids: fit a phone screen without sideways scroll.
+   Desktop rules (min-width, nowrap) above are unchanged; this only
+   relaxes them at the 720px mobile breakpoint. Placed last so the
+   desktop rules are the first match for any selector audit. */
+@media (max-width: 720px) {
+    .score-grid table,
+    .score-grid--named table { min-width: auto; }
+    .score-grid--named th[scope="row"] { min-width: auto; }
+    .score-grid th,
+    .score-grid td {
+        white-space: normal;
+        padding: 0.3rem 0.15rem;
+        font-size: 0.78rem;
+    }
+    .score-input {
+        width: 2.2rem;
+        padding: 0.25rem 0.1rem;
+        font-size: 0.78rem;
+    }
+}

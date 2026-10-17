@@ -30,6 +30,16 @@ jobs:
         pip install uv
         uv sync --frozen --extra dev
     
-    - name: Run checks
-      run: |
-        make check
+    # Fast failures first: lint and dependency integrity before the minutes-long suite.
+    # Each concern runs exactly once; `make check` stays the single local run target.
+    - name: Lint
+      run: make lint
+    
+    - name: Security
+      run: make security
+    
+    - name: Dependency check
+      run: make dependency-check
+    
+    - name: Test with coverage
+      run: make test-with-cov

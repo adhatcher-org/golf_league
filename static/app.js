@@ -192,6 +192,16 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         totalCell.textContent = any ? String(total) : '—';
+        const handicapCell = row.querySelector('.score-handicap');
+        const netCell = row.querySelector('.score-net');
+        const handicapRaw = row.dataset.handicap || "";
+        const handicap = handicapRaw === "" ? null : parseInt(handicapRaw, 10);
+        if (handicapCell) {
+            handicapCell.textContent = handicap === null ? '—' : handicapRaw;
+        }
+        if (netCell) {
+            netCell.textContent = (any && handicap !== null) ? String(total - handicap) : '—';
+        }
     }
 
     document.querySelectorAll('.score-input').forEach((input) => {

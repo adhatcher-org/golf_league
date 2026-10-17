@@ -38,6 +38,7 @@ from golf_league.models import (
     TeamMatch,
     User,
     Week,
+    WeekHandicap,
 )
 from golf_league.services.matchups import Clock, MatchupConflict, reserve_matchup_write
 from golf_league.services.schedule import ScheduleConflict
@@ -107,6 +108,7 @@ class SheetGolfer:
     is_sub: bool
     strokes_by_hole: dict[int, int]
     total: int | None  # None when the golfer has no scores
+    handicap: int | None  # the week's stored strokes for this golfer, or None
     entered_by_user_id: int | None
     entered_by_name: str | None
 
@@ -715,6 +717,10 @@ def week_sheet(session: Session, week_id: int) -> list[SheetMatch]:
     revision, which the write then refuses as out of date, never the reverse.
     """
     hole_number = {hole.id: hole.number for hole in week_holes(session, week_id)}
+    handicaps = {
+        row.golfer_id: row.strokes
+        for row in session.scalars(select(WeekHandicap).where(WeekHandicap.week_id == week_id))
+    }
     matches = session.execute(
         select(PlayerMatch, TeamMatch)
         .join(TeamMatch, TeamMatch.id == PlayerMatch.team_match_id)
@@ -747,6 +753,7 @@ def week_sheet(session: Session, week_id: int) -> list[SheetMatch]:
             golfers.append(SheetGolfer(
                 golfer_id=golfer_id, name=_name(session.get(Golfer, golfer_id)), is_sub=bool(is_sub),
                 strokes_by_hole=strokes, total=sum(strokes.values()) if saved else None,
+                handicap=handicaps.get(golfer_id),
                 entered_by_user_id=entered_by, entered_by_name=user_name(entered_by),
             ))
         counts = [len(golfer.strokes_by_hole) for golfer in golfers]

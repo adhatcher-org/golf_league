@@ -144,6 +144,7 @@ class RowView:
     cells: tuple[CellView, ...]
     out_total: int | None
     handicap_written: int | None
+    handicap: int | None  # the week's stored strokes for this golfer, or None
     warnings: tuple[str, ...]
     autofocus: bool
     golfer_invalid: bool
@@ -268,6 +269,7 @@ def build_review(card: ExtractedCard | None, week: Week, hole_numbers: Sequence[
             index=row, number=row + 1, name=name, golfer_id=golfer_id, match_note=match_note,
             cells=tuple(cells), out_total=player.out_total if player else None,
             handicap_written=player.handicap_written if player else None,
+            handicap=by_id[golfer_id].candidate.handicap if golfer_id is not None else None,
             # With errors to fix, the page stays at the error summary instead.
             warnings=tuple(warnings), autofocus=total_disagrees and not focused and not invalid_fields,
             golfer_invalid=golfer_field(row) in invalid_fields,
