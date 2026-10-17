@@ -42,5 +42,7 @@ security:
 dependency-check:
 	uv pip list --outdated
 
-# test-with-cov runs the whole suite, so `test` is not repeated here.
-check: lint test-with-cov security dependency-check
+# Fast, cheap checks run first so a broken dependency or lint error fails
+# before the minutes-long suite. `test-with-cov` runs the whole suite, so
+# `test` is not repeated here.
+check: lint security dependency-check test-with-cov
