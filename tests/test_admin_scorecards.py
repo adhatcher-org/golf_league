@@ -320,7 +320,7 @@ def test_an_unknown_week_is_404_and_a_missing_week_is_422(cards):
 @pytest.mark.parametrize("raw,message", [
     (b"this is a text file named like a photo", "could not be opened"),
     (b"\x00" * (10 * 1024 * 1024 + 1), "larger than 10 MB"),
-])
+], ids=["text_file", "over_10_mb"])
 def test_a_refused_image_is_422_and_writes_nothing(cards, raw, message):
     client, ids = cards
     response = _upload(client, ids["weeks"][0], raw=raw)
@@ -963,14 +963,14 @@ def test_the_scores_page_with_nothing_saved_says_so(cards):
     assert "Save scores" not in empty.text
 
 
-def test_the_admin_menu_links_to_enter_scorecard_and_players_see_no_link(cards):
+def test_the_admin_menu_links_to_enter_scorecard_and_an_unlinked_player_sees_no_entry_link(cards):
     client, ids = cards
     assert '<a href="/admin/scorecards/new">Enter scorecard</a>' in client.get("/").text
-    _become(client, admin=False)
+    _become(client, admin=False)  # a verified player whose account is linked to no golfer
     for path in ("/", "/roster", "/my/schedule"):
         page = client.get(path).text
         assert "/admin/scorecards" not in page and "Enter scorecard" not in page, path
-        assert "/scores" not in page, path
+        assert "Enter scores" not in page and "/scores/enter" not in page, path
 
 
 def test_no_season_at_all_says_so(empty_admin_client):
@@ -1107,7 +1107,7 @@ def test_a_busy_database_during_upload_is_a_plain_503_and_keeps_nothing(cards, m
         raise OperationalError("INSERT INTO scorecard_drafts", {"image_path": "must-not-be-logged.jpg"},
                                Exception("database is locked"))
 
-    monkeypatch.setattr(router_module, "create_draft", locked)
+    monkeypatch.setattr(router_module, "create_draft_from_image", locked)  # GL-86: prepared off the event loop
     with caplog.at_level(logging.WARNING):
         response = _upload(client, ids["weeks"][0])
     assert response.status_code == 503 and "could not be started just now" in response.text

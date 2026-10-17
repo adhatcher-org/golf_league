@@ -39,7 +39,7 @@
 <p>A card stays here until it is submitted or discarded, or for 24 hours.</p>
 <ul>
     {% for item in drafts %}
-    <li><a href="/admin/scorecards/{{ item.draft.id }}">Card {{ item.draft.id }}{% if item.week %}, week {{ item.week.index }}{% endif %}</a>:
+    <li><a href="/admin/scorecards/{{ item.draft.id }}">Card {{ item.draft.id }}{% if item.week %}, week {{ item.week.index }}{% endif %}</a>{% if item.by_player %} (started by a player){% endif %}:
         {% if item.draft.status == 'extracting' %}being read{% elif item.draft.status == 'failed' %}could not be read{% else %}ready to review{% endif %}</li>
     {% endfor %}
 </ul>

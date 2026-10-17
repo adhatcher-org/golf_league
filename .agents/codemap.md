@@ -64,6 +64,9 @@ Private data, ignored files, and source contents are excluded.
 ### `docs/release-checklist.md`
 
 
+### `docs/releases/m9-release-notes.md`
+
+
 ### `docs/releases/mvp-release-notes.md`
 
 
@@ -83,12 +86,12 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/app.py`
 
-- function `_navigation_user` (line 71)
-- function `_configure_scorecards` (line 103)
-- function `_clean_scorecard_drafts` (line 119)
-- function `lifespan` (line 134)
-- function `create_app` (line 214)
-- function `main` (line 301)
+- function `_navigation_user` (line 73)
+- function `_configure_scorecards` (line 105)
+- function `_clean_scorecard_drafts` (line 121)
+- function `lifespan` (line 136)
+- function `create_app` (line 216)
+- function `main` (line 309)
 
 ### `golf_league/config.py`
 
@@ -413,30 +416,20 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/routers/admin_scorecards.py`
 
-- function `_settings` (line 89)
-- function `_now` (line 93)
-- function `_today` (line 97)
-- function `_csrf` (line 101)
-- function `_text` (line 106)
-- function `_number` (line 111)
-- function `_page` (line 119)
-- function `_purge` (line 126)
-- function `_open_draft` (line 135)
-- function `_scored_weeks` (line 146)
-- function `_new_page` (line 155)
-- function `scorecard_new` (line 177)
-- class `_Refused` (line 184)
-  - method `__init__` (line 187)
-- function `_declared_too_large` (line 192)
-- function `_start_draft` (line 202)
-- function `scorecard_create` (line 220)
-- function `_review_page` (line 258)
-- function `scorecard_detail` (line 278)
-- function `scorecard_status` (line 296)
-- function `scorecard_image` (line 304)
-- function `_refusal` (line 315)
-- function `scorecard_submit` (line 337)
-- function `scorecard_discard` (line 400)
+- function `_number` (line 66)
+- function `_purge` (line 74)
+- function `_scored_weeks` (line 86)
+- function `_new_page` (line 95)
+- function `scorecard_new` (line 119)
+- class `_Refused` (line 126)
+  - method `__init__` (line 129)
+- function `_start_draft` (line 134)
+- function `scorecard_create` (line 149)
+- function `scorecard_detail` (line 188)
+- function `scorecard_status` (line 195)
+- function `scorecard_image` (line 202)
+- function `scorecard_submit` (line 209)
+- function `scorecard_discard` (line 217)
 
 ### `golf_league/routers/admin_seasons.py`
 
@@ -518,7 +511,7 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/routers/home.py`
 
-- function `home` (line 19)
+- function `home` (line 21)
 
 ### `golf_league/routers/identity.py`
 
@@ -560,13 +553,80 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/routers/player_schedule.py`
 
-- function `my_schedule` (line 20)
-- function `opponent_contact` (line 37)
-- function `week_detail` (line 77)
+- function `my_schedule` (line 21)
+- function `opponent_contact` (line 39)
+- function `week_detail` (line 79)
+
+### `golf_league/routers/player_scorecards.py`
+
+- function `_draft_path` (line 61)
+- function `_to` (line 65)
+- class `_Refused` (line 69)
+  - method `__init__` (line 72)
+- function `_start` (line 77)
+- function `scorecard_start` (line 106)
+- function `_waiting` (line 142)
+- function `scorecard_detail` (line 151)
+- function `scorecard_status` (line 159)
+- function `scorecard_image` (line 166)
+- function `scorecard_submit` (line 173)
+- function `scorecard_discard` (line 181)
+
+### `golf_league/routers/player_scores.py`
+
+- function `_not_found` (line 63)
+- function `_actor` (line 67)
+- function `week_path` (line 71)
+- function `enter_path` (line 75)
+- function `match_path` (line 79)
+- function `entry_link` (line 83)
+- function `entry_links` (line 94)
+- function `opens_sentence` (line 101)
+- function `_week` (line 105)
+- function `_sheet_match` (line 112)
+- function `_writable` (line 117)
+- function `_open_to` (line 122)
+- function `_title` (line 131)
+- function `_state_line` (line 135)
+- function `_rows` (line 148)
+- function `_match_form` (line 162)
+- function `week_scores` (line 193)
+- function `entry_page` (line 222)
+- function `enter_scores` (line 261)
+- function `_match_page` (line 270)
+- function `match_scores` (line 294)
+- function `_refused` (line 300)
+- function `match_scores_save` (line 325)
 
 ### `golf_league/routers/roster.py`
 
 - function `player_roster` (line 16)
+
+### `golf_league/routers/scorecard_flow.py`
+
+- class `Flow` (line 78)
+- function `_settings` (line 89)
+- function `_now` (line 93)
+- function `_today` (line 97)
+- function `_csrf` (line 101)
+- function `_text` (line 106)
+- function `_page` (line 111)
+- function `purge_drafts` (line 118)
+- function `_not_found` (line 127)
+- function `_actor` (line 131)
+- function `declared_too_large` (line 147)
+- function `start_photo_draft` (line 157)
+- function `_owned` (line 181)
+- function `open_draft` (line 186)
+- function `review_page` (line 197)
+- function `detail` (line 216)
+- function `status` (line 237)
+- function `image` (line 242)
+- function `_refusal` (line 251)
+- function `_saved_path` (line 272)
+- function `submit` (line 279)
+- function `_discarded_path` (line 339)
+- function `discard` (line 345)
 
 ### `golf_league/security.py`
 
@@ -728,16 +788,17 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/services/player_schedule.py`
 
-- class `PlayerSlot` (line 23)
-- class `MatchView` (line 32)
-- class `WeekView` (line 38)
-- class `PlayerSchedule` (line 48)
-- function `select_player_season` (line 54)
-- function `_match_views` (line 68)
-- function `get_player_schedule` (line 115)
-- function `get_week_detail` (line 152)
-- function `get_home_view` (line 177)
-- function `get_opponent_contact` (line 196)
+- class `PlayerSlot` (line 24)
+- class `MatchView` (line 33)
+- class `WeekView` (line 39)
+- class `PlayerSchedule` (line 49)
+- function `select_player_season` (line 55)
+- function `_match_views` (line 69)
+- function `get_player_schedule` (line 116)
+- function `get_week_detail` (line 153)
+- function `get_home_view` (line 178)
+- function `home_entry_prompt` (line 197)
+- function `get_opponent_contact` (line 213)
 
 ### `golf_league/services/roster.py`
 
@@ -840,21 +901,26 @@ Private data, ignored files, and source contents are excluded.
 - function `_write_image` (line 71)
 - function `_remove_image` (line 80)
 - function `create_draft` (line 89)
-- function `create_manual_draft` (line 112)
-- function `_new_draft` (line 123)
-- function `card_to_json` (line 133)
-- function `draft_card` (line 145)
-- function `run_extraction` (line 162)
-- function `_store_result` (line 197)
-- function `_session_factory` (line 220)
-- function `start_extraction` (line 225)
-- function `get_draft` (line 250)
-- function `list_open_drafts` (line 254)
-- function `delete_draft` (line 260)
-- function `discard_draft` (line 267)
-- function `_sweep_stray_photos` (line 278)
-- function `purge_expired` (line 298)
-- function `mark_interrupted` (line 328)
+- function `create_draft_from_image` (line 102)
+- function `create_manual_draft` (line 124)
+- function `_new_draft` (line 135)
+- function `card_to_json` (line 145)
+- function `draft_card` (line 157)
+- function `run_extraction` (line 174)
+- function `_store_result` (line 209)
+- function `_session_factory` (line 232)
+- function `start_extraction` (line 237)
+- function `get_draft` (line 262)
+- function `list_open_drafts` (line 266)
+- function `open_photo_draft` (line 272)
+- function `user_week_draft` (line 283)
+- function `count_waiting` (line 294)
+- function `drafts_ahead` (line 302)
+- function `delete_draft` (line 310)
+- function `discard_draft` (line 317)
+- function `_sweep_stray_photos` (line 328)
+- function `purge_expired` (line 348)
+- function `mark_interrupted` (line 378)
 
 ### `golf_league/services/scorecard_image.py`
 
@@ -1115,14 +1181,19 @@ Private data, ignored files, and source contents are excluded.
 
 ### `scripts/run_local.py`
 
-- class `FileMailSender` (line 40)
-  - method `__init__` (line 43)
-  - method `send` (line 48)
-- function `prepare_environment` (line 58)
-- function `_demo_weeks` (line 80)
-- function `seed_demo` (line 99)
-- function `build_app` (line 206)
-- function `main` (line 222)
+- class `FileMailSender` (line 44)
+  - method `__init__` (line 47)
+  - method `send` (line 52)
+- function `prepare_environment` (line 62)
+- function `_demo_weeks` (line 84)
+- function `league_today` (line 103)
+- function `_seed_scores_week` (line 116)
+- class `StandInReader` (line 155)
+  - method `__init__` (line 162)
+  - method `read_scorecard` (line 165)
+- function `seed_demo` (line 189)
+- function `build_app` (line 297)
+- function `main` (line 315)
 
 ### `static/app.css`
 
@@ -1268,6 +1339,30 @@ Private data, ignored files, and source contents are excluded.
 ### `templates/player/opponent_contact.html`
 
 
+### `templates/player/scorecards/failed.html`
+
+
+### `templates/player/scorecards/review.html`
+
+
+### `templates/player/scorecards/status.html`
+
+
+### `templates/player/scores/_match_form.html`
+
+
+### `templates/player/scores/_scorecard.html`
+
+
+### `templates/player/scores/enter.html`
+
+
+### `templates/player/scores/match.html`
+
+
+### `templates/player/scores/week.html`
+
+
 ### `templates/player/week.html`
 
 
@@ -1275,6 +1370,15 @@ Private data, ignored files, and source contents are excluded.
 
 
 ### `templates/roster.html`
+
+
+### `templates/scorecards/_failed.html`
+
+
+### `templates/scorecards/_review.html`
+
+
+### `templates/scorecards/_status.html`
 
 
 ### `templates/scores/_match_inputs.html`
@@ -1432,6 +1536,29 @@ Private data, ignored files, and source contents are excluded.
 - function `test_week_and_home_show_all_league_matches_without_initial_contacts` (line 92)
 - function `test_authentication_and_verification_guard_player_journeys` (line 125)
 
+### `tests/milestones/M9/test_M9_exit_criteria.py`
+
+- function `m9` (line 33)
+- function `_engine` (line 43)
+- function `_href` (line 47)
+- function `_revision` (line 53)
+- function `_form` (line 57)
+- function `_scores` (line 65)
+- function `_rows` (line 71)
+- function `_drafts` (line 76)
+- function `_photos` (line 81)
+- function `_sides` (line 86)
+- function `_manual_card` (line 90)
+- function `_card_form` (line 99)
+- function `test_1_a_player_enters_from_my_schedule_the_opponent_changes_and_the_lock_stops_both` (line 112)
+- function `test_2_a_four_golfer_card_and_the_limits_of_what_a_card_may_reach` (line 165)
+- function `test_3_an_admin_saves_several_matches_at_once_and_lock_all_names_the_rest` (line 194)
+- function `test_4_every_verified_user_sees_the_weeks_scores_and_an_anonymous_visitor_does_not` (line 234)
+- function `test_5_another_players_card_is_404_on_every_address` (line 251)
+- function `test_6_a_week_with_a_saved_score_or_a_lock_cannot_move_to_a_rain_date` (line 274)
+- function `test_7_after_a_submit_a_discard_and_24_hours_no_draft_and_no_photo_remain` (line 313)
+- function `test_8_a_save_from_an_out_of_date_form_writes_nothing` (line 346)
+
 ### `tests/test_accessibility.py`
 
 - class `_Audit` (line 29)
@@ -1459,20 +1586,22 @@ Private data, ignored files, and source contents are excluded.
 - function `test_admin_and_player_pages_pass_static_audit_with_long_names` (line 210)
 - function `test_scorecard_pages_pass_static_audit_with_long_names` (line 220)
 - function `test_week_score_pages_pass_static_audit_with_long_names` (line 290)
-- function `test_week_score_layout_rules_keep_the_page_from_scrolling_sideways` (line 345)
-- function `test_scorecard_layout_rules_keep_the_page_from_scrolling_sideways` (line 352)
-- function `test_anonymous_pages_pass_static_audit` (line 364)
-- function `test_empty_admin_states_pass_static_audit` (line 371)
-- function `test_identity_error_states_are_announced_with_text` (line 378)
-- function `_rules` (line 391)
-- function `test_stylesheet_has_only_the_720px_breakpoint` (line 398)
-- function `test_interactive_touch_targets_are_at_least_44px` (line 412)
-- function `test_wide_tables_scroll_inside_their_own_region` (line 420)
-- function `test_public_token_pages_use_the_styled_layout_and_private_headers` (line 426)
-- function `_rule` (line 457)
-- function `test_hidden_labels_and_wide_content_cannot_widen_the_page` (line 469)
-- function `test_import_review_columns_do_not_use_font_relative_units` (line 478)
-- function `test_phone_tap_targets_for_links_brand_and_my_schedule_cards` (line 483)
+- function `test_player_score_pages_pass_static_audit_with_long_names` (line 345)
+- function `test_player_scorecard_pages_pass_static_audit_with_long_names` (line 392)
+- function `test_week_score_layout_rules_keep_the_page_from_scrolling_sideways` (line 451)
+- function `test_scorecard_layout_rules_keep_the_page_from_scrolling_sideways` (line 458)
+- function `test_anonymous_pages_pass_static_audit` (line 470)
+- function `test_empty_admin_states_pass_static_audit` (line 477)
+- function `test_identity_error_states_are_announced_with_text` (line 484)
+- function `_rules` (line 497)
+- function `test_stylesheet_has_only_the_720px_breakpoint` (line 504)
+- function `test_interactive_touch_targets_are_at_least_44px` (line 518)
+- function `test_wide_tables_scroll_inside_their_own_region` (line 526)
+- function `test_public_token_pages_use_the_styled_layout_and_private_headers` (line 532)
+- function `_rule` (line 563)
+- function `test_hidden_labels_and_wide_content_cannot_widen_the_page` (line 575)
+- function `test_import_review_columns_do_not_use_font_relative_units` (line 584)
+- function `test_phone_tap_targets_for_links_brand_and_my_schedule_cards` (line 589)
 
 ### `tests/test_admin_config.py`
 
@@ -1749,7 +1878,7 @@ Private data, ignored files, and source contents are excluded.
 - function `test_gets_never_change_anything` (line 935)
 - function `test_unknown_ids_are_404` (line 947)
 - function `test_the_scores_page_with_nothing_saved_says_so` (line 955)
-- function `test_the_admin_menu_links_to_enter_scorecard_and_players_see_no_link` (line 966)
+- function `test_the_admin_menu_links_to_enter_scorecard_and_an_unlinked_player_sees_no_entry_link` (line 966)
 - function `test_no_season_at_all_says_so` (line 976)
 - function `test_a_drafts_times_come_from_the_injected_clock` (line 981)
 - function `test_a_purge_failure_never_fails_the_page` (line 989)
@@ -2025,6 +2154,8 @@ Private data, ignored files, and source contents are excluded.
 - function `test_no_season_empty_state_and_home_allows_unlinked_verified_user` (line 137)
 - function `test_no_upcoming_week_and_ungenerated_week_empty_states` (line 144)
 - function `test_home_selects_active_season_otherwise_most_recent` (line 162)
+- function `test_home_entry_prompt_is_the_latest_open_week_up_to_today` (line 176)
+- function `test_home_shows_the_entry_prompt_by_the_league_date_and_keeps_its_upcoming_week` (line 198)
 
 ### `tests/test_identity.py`
 
@@ -2205,6 +2336,7 @@ Private data, ignored files, and source contents are excluded.
 - function `test_played_week_retains_matchup_without_opponent_contact_link` (line 101)
 - function `test_selected_season_is_validated_and_reserved_makeup_is_distinguished` (line 113)
 - function `test_substitute_without_team_slot_sees_actual_matchup_not_old_assignment` (line 128)
+- function `test_schedule_details_link_to_score_entry_by_the_players_state` (line 145)
 
 ### `tests/test_name_matching.py`
 
@@ -2270,6 +2402,78 @@ Private data, ignored files, and source contents are excluded.
 - function `test_admin_participant_page_and_add_require_admin_and_csrf` (line 358)
 - function `test_admin_golfer_delete_reference_check_uses_409_and_csrf` (line 396)
 - function `test_admin_cross_course_override_rerenders_422` (line 415)
+
+### `tests/test_player_scorecards.py`
+
+- function `cards` (line 43)
+- function `_start_path` (line 50)
+- function `_upload` (line 54)
+- function `_manual` (line 60)
+- function `_draft_id` (line 65)
+- function `_submit` (line 72)
+- function `_routes` (line 77)
+- function `_golfers` (line 83)
+- function `test_another_players_card_is_404_everywhere_and_an_admin_uses_the_admin_addresses` (line 93)
+- function `test_anonymous_is_401_unverified_403_and_a_post_needs_a_token` (line 113)
+- function `test_who_may_start_a_card` (line 135)
+- function `test_a_two_golfer_card_for_the_players_match_saves_18_rows_and_deletes_the_draft` (line 152)
+- function `test_a_four_golfer_card_saves_36_rows_and_the_scorekeeper_can_change_the_other_pair` (line 168)
+- function `test_a_card_outside_the_players_scope_is_422_and_writes_nothing` (line 186)
+- function `test_golfers_already_saved_or_locked_are_left_off_and_all_left_off_is_409` (line 203)
+- function `test_a_second_upload_goes_to_the_open_card_and_typed_cards_are_not_limited` (line 226)
+- function `test_the_seventh_upload_in_an_hour_is_409` (line 235)
+- function `test_with_eight_cards_waiting_an_upload_is_409_and_an_admin_is_not_limited` (line 246)
+- function `test_the_waiting_page_counts_the_cards_ahead_and_offers_typed_entry` (line 267)
+- function `test_the_image_is_prepared_off_the_event_loop_one_at_a_time` (line 285)
+- function `test_the_entry_page_offers_a_photo_with_no_capture_and_a_typed_card` (line 311)
+- function `test_a_locked_own_match_still_lets_the_player_keep_score_for_the_other_pair` (line 327)
+- function `test_a_provider_failure_offers_retry_typing_and_discard` (line 341)
+- function `test_a_refused_image_is_422_and_keeps_nothing` (line 361)
+- function `test_no_photo_chosen_and_a_declared_oversize_upload_are_422` (line 368)
+- function `test_an_expired_card_is_gone_on_every_route` (line 377)
+- function `test_names_render_escaped_and_no_log_carries_a_name_a_score_or_image_bytes` (line 389)
+- function `test_an_upload_writes_no_score_before_the_reviewed_form_is_submitted` (line 407)
+
+### `tests/test_player_scores.py`
+
+- function `_user` (line 46)
+- function `_as` (line 56)
+- function `league` (line 65)
+- function `_week_path` (line 90)
+- function `_match_path` (line 94)
+- function `_data` (line 98)
+- function `_save` (line 106)
+- function `_state` (line 111)
+- function `_strokes` (line 116)
+- function `_block` (line 123)
+- function `_admin` (line 127)
+- function `_with_admin` (line 131)
+- function `_routes` (line 138)
+- function `test_anonymous_is_401_and_unverified_is_403_on_every_route` (line 143)
+- function `test_a_post_without_a_token_is_403_and_every_page_is_never_cached` (line 159)
+- function `test_a_first_entry_writes_18_rows_and_the_opponent_can_change_one` (line 180)
+- function `test_an_unchanged_save_keeps_the_revision` (line 205)
+- function `test_two_players_from_the_same_revision_the_second_gets_409_and_the_saved_values` (line 212)
+- function `test_a_form_with_no_readable_revision_or_stale_mistakes_is_out_of_date` (line 224)
+- function `test_a_bad_value_is_422_keeps_what_was_typed_and_saves_nothing` (line 241)
+- function `test_a_locked_match_is_read_only_and_409_until_it_is_unlocked` (line 250)
+- function `test_a_match_locked_while_the_form_was_open_is_409` (line 275)
+- function `test_a_match_without_rights_is_404_and_a_field_outside_the_match_is_ignored` (line 286)
+- function `test_a_conflict_keeps_what_was_typed` (line 300)
+- function `test_a_database_failure_is_503_and_keeps_what_was_typed` (line 315)
+- function `test_before_the_play_date_entry_says_when_it_opens_and_a_post_is_422` (line 334)
+- function `test_a_closed_week_takes_no_scores` (line 353)
+- function `test_a_verified_account_with_no_golfer_can_view_but_not_enter` (line 374)
+- function `test_a_golfer_not_playing_that_week_gets_404` (line 386)
+- function `test_a_substitute_with_an_account_enters_and_the_replaced_player_gets_404` (line 397)
+- function `test_a_self_match_reads_as_two_golfers_and_never_says_opponent` (line 416)
+- function `test_an_admin_who_plays_is_treated_as_a_player_here` (line 434)
+- function `test_a_scorekeeper_can_change_the_other_match_they_kept_and_a_third_player_cannot` (line 446)
+- function `test_a_typed_save_leaves_the_players_scorecard_draft_and_photo_in_place` (line 466)
+- function `test_the_week_page_shows_every_match_to_any_verified_user_with_no_name_of_who_entered` (line 483)
+- function `test_link_text_follows_the_players_own_state` (line 496)
+- function `test_the_home_prompt_appears_only_for_an_open_week_and_goes_once_saved` (line 523)
+- function `test_names_render_escaped_and_no_log_carries_a_name_or_score` (line 537)
 
 ### `tests/test_rain_dates.py`
 
@@ -2412,13 +2616,15 @@ Private data, ignored files, and source contents are excluded.
 
 ### `tests/test_run_local.py`
 
-- function `_module` (line 18)
-- function `test_refuses_a_data_dir_inside_the_repository` (line 26)
-- function `test_refuses_to_run_with_a_relay_configured` (line 31)
-- function `test_a_relay_saved_in_the_managed_file_never_replaces_the_file_sender` (line 37)
-- function `test_environment_is_local_http_with_a_private_generated_secret` (line 57)
-- function `test_file_mail_sender_writes_private_files` (line 72)
-- function `test_demo_seed_creates_personas_admin_and_pairings_once` (line 80)
+- function `_module` (line 26)
+- function `test_refuses_a_data_dir_inside_the_repository` (line 34)
+- function `test_refuses_to_run_with_a_relay_configured` (line 39)
+- function `test_a_relay_saved_in_the_managed_file_never_replaces_the_file_sender` (line 45)
+- function `test_environment_is_local_http_with_a_private_generated_secret` (line 65)
+- function `test_file_mail_sender_writes_private_files` (line 80)
+- function `test_demo_seed_creates_personas_admin_and_pairings_once` (line 88)
+- function `test_demo_seed_adds_a_scores_week_today_with_saved_locked_and_empty_matches_once` (line 113)
+- function `test_the_stand_in_reader_reads_the_regular_personas_latest_match` (line 145)
 
 ### `tests/test_score_migration.py`
 
@@ -2473,7 +2679,7 @@ Private data, ignored files, and source contents are excluded.
 - function `test_the_week_sheet_lists_every_match_in_order_with_scores_change_and_lock` (line 669)
 - function `test_the_week_sheet_never_shows_a_revision_newer_than_its_scores` (line 702)
 - function `test_player_entry_state_covers_every_state` (line 733)
-- function `test_no_score_service_commits` (line 778)
+- function `test_no_score_service_commits` (line 783)
 
 ### `tests/test_scorecard_domain.py`
 
@@ -2497,62 +2703,64 @@ Private data, ignored files, and source contents are excluded.
 
 ### `tests/test_scorecard_drafts.py`
 
-- function `clock` (line 68)
-- function `_jpeg` (line 72)
-- class `FakeProvider` (line 78)
-  - method `__init__` (line 81)
-  - method `read_scorecard` (line 86)
-- class `InlineExecutor` (line 95)
-  - method `__init__` (line 98)
-  - method `submit` (line 101)
-- class `_State` (line 106)
-  - method `__init__` (line 109)
-- function `db` (line 117)
-- function `_factory` (line 130)
-- function `_create` (line 134)
-- function `_draft` (line 142)
-- function `_count` (line 147)
-- function `_files` (line 152)
-- function `test_the_scorecard_directory_is_beside_the_managed_file` (line 159)
-- function `test_only_names_this_module_writes_resolve_to_a_file` (line 166)
-- function `test_a_written_name_resolves_inside_the_directory` (line 170)
-- function `test_create_draft_stores_a_private_photo_and_an_extracting_row` (line 177)
-- function `test_two_uploads_of_the_same_photo_get_different_names` (line 197)
-- function `test_create_draft_refuses_a_week_that_cannot_take_a_card` (line 207)
-- function `test_a_draft_can_be_started_after_the_play_date` (line 226)
-- function `test_create_draft_refuses_a_bad_image_without_writing` (line 235)
-- function `test_the_week_is_checked_before_the_image` (line 243)
-- function `test_a_failed_row_insert_removes_the_photo` (line 249)
-- function `test_create_manual_draft_is_ready_with_no_photo` (line 261)
-- function `test_extraction_stores_the_reading_and_the_model_name` (line 279)
-- function `test_a_provider_error_fails_the_draft_with_its_code` (line 300)
-- function `test_an_unexpected_exception_in_the_provider_does_not_escape` (line 309)
-- function `test_a_draft_discarded_during_the_read_stays_discarded` (line 320)
-- function `test_a_draft_failed_during_the_read_is_not_overwritten_by_a_late_result` (line 334)
-- function `test_a_draft_that_is_not_extracting_is_left_alone` (line 351)
-- function `test_a_missing_photo_fails_the_draft_without_calling_the_provider` (line 363)
-- function `test_a_week_with_no_holes_fails_the_draft_without_calling_the_provider` (line 373)
-- function `test_a_database_that_cannot_be_opened_does_not_escape` (line 385)
-- function `test_storing_the_result_is_retried_when_the_writer_is_busy` (line 396)
-- function `test_no_hole_scores_are_written_by_a_draft` (line 412)
-- function `test_start_extraction_runs_the_job_on_the_executor` (line 423)
-- function `test_start_extraction_on_a_real_single_worker_thread` (line 432)
-- function `test_with_no_provider_the_draft_becomes_manual_and_nothing_is_called` (line 448)
-- function `test_get_and_list_open_drafts_show_every_admins_drafts_own_first` (line 462)
-- function `test_delete_draft_removes_photo_then_row_and_leaves_the_commit_to_the_caller` (line 480)
-- function `test_discard_draft_removes_photo_and_row_and_tolerates_a_missing_photo` (line 496)
-- function `test_purge_removes_a_24_hour_old_draft_and_keeps_a_23_hour_old_one` (line 507)
-- function `test_purge_removes_an_old_stray_photo_and_keeps_a_new_one` (line 525)
-- function `test_a_photo_that_cannot_be_removed_never_keeps_expired_text_alive` (line 542)
-- function `test_purge_with_no_directory_yet_is_harmless` (line 568)
-- function `test_mark_interrupted_fails_extracting_drafts_and_leaves_ready_ones` (line 575)
-- function `test_deleting_a_week_removes_its_drafts` (line 587)
-- function `test_no_log_record_carries_image_bytes_a_name_or_a_score` (line 606)
-- function `_settings` (line 630)
-- function `test_startup_sets_the_directory_and_a_single_worker_and_shuts_it_down` (line 635)
-- function `test_an_assigned_executor_and_directory_are_kept` (line 649)
-- function `test_startup_fails_interrupted_drafts_and_purges_expired_ones` (line 659)
-- function `test_a_cleanup_failure_at_startup_never_stops_the_application` (line 691)
+- function `clock` (line 73)
+- function `_jpeg` (line 77)
+- class `FakeProvider` (line 83)
+  - method `__init__` (line 86)
+  - method `read_scorecard` (line 91)
+- class `InlineExecutor` (line 100)
+  - method `__init__` (line 103)
+  - method `submit` (line 106)
+- class `_State` (line 111)
+  - method `__init__` (line 114)
+- function `db` (line 122)
+- function `_factory` (line 135)
+- function `_create` (line 139)
+- function `_draft` (line 147)
+- function `_count` (line 152)
+- function `_files` (line 157)
+- function `test_the_scorecard_directory_is_beside_the_managed_file` (line 164)
+- function `test_only_names_this_module_writes_resolve_to_a_file` (line 171)
+- function `test_a_written_name_resolves_inside_the_directory` (line 175)
+- function `test_create_draft_stores_a_private_photo_and_an_extracting_row` (line 182)
+- function `test_two_uploads_of_the_same_photo_get_different_names` (line 202)
+- function `test_create_draft_refuses_a_week_that_cannot_take_a_card` (line 212)
+- function `test_a_draft_can_be_started_after_the_play_date` (line 231)
+- function `test_create_draft_refuses_a_bad_image_without_writing` (line 240)
+- function `test_the_week_is_checked_before_the_image` (line 248)
+- function `test_a_failed_row_insert_removes_the_photo` (line 254)
+- function `test_create_manual_draft_is_ready_with_no_photo` (line 266)
+- function `test_extraction_stores_the_reading_and_the_model_name` (line 284)
+- function `test_a_provider_error_fails_the_draft_with_its_code` (line 305)
+- function `test_an_unexpected_exception_in_the_provider_does_not_escape` (line 314)
+- function `test_a_draft_discarded_during_the_read_stays_discarded` (line 325)
+- function `test_a_draft_failed_during_the_read_is_not_overwritten_by_a_late_result` (line 339)
+- function `test_a_draft_that_is_not_extracting_is_left_alone` (line 356)
+- function `test_a_missing_photo_fails_the_draft_without_calling_the_provider` (line 368)
+- function `test_a_week_with_no_holes_fails_the_draft_without_calling_the_provider` (line 378)
+- function `test_a_database_that_cannot_be_opened_does_not_escape` (line 390)
+- function `test_storing_the_result_is_retried_when_the_writer_is_busy` (line 401)
+- function `test_no_hole_scores_are_written_by_a_draft` (line 417)
+- function `test_start_extraction_runs_the_job_on_the_executor` (line 428)
+- function `test_start_extraction_on_a_real_single_worker_thread` (line 437)
+- function `test_with_no_provider_the_draft_becomes_manual_and_nothing_is_called` (line 453)
+- function `test_get_and_list_open_drafts_show_every_admins_drafts_own_first` (line 467)
+- function `test_delete_draft_removes_photo_then_row_and_leaves_the_commit_to_the_caller` (line 485)
+- function `test_discard_draft_removes_photo_and_row_and_tolerates_a_missing_photo` (line 501)
+- function `test_purge_removes_a_24_hour_old_draft_and_keeps_a_23_hour_old_one` (line 512)
+- function `test_purge_removes_an_old_stray_photo_and_keeps_a_new_one` (line 530)
+- function `test_a_photo_that_cannot_be_removed_never_keeps_expired_text_alive` (line 547)
+- function `test_purge_with_no_directory_yet_is_harmless` (line 573)
+- function `test_mark_interrupted_fails_extracting_drafts_and_leaves_ready_ones` (line 580)
+- function `test_deleting_a_week_removes_its_drafts` (line 592)
+- function `test_no_log_record_carries_image_bytes_a_name_or_a_score` (line 611)
+- function `_settings` (line 635)
+- function `test_startup_sets_the_directory_and_a_single_worker_and_shuts_it_down` (line 640)
+- function `test_an_assigned_executor_and_directory_are_kept` (line 654)
+- function `test_startup_fails_interrupted_drafts_and_purges_expired_ones` (line 664)
+- function `test_a_cleanup_failure_at_startup_never_stops_the_application` (line 696)
+- function `test_create_draft_from_image_stores_a_prepared_photo_and_checks_the_week_first` (line 711)
+- function `test_open_photo_draft_count_waiting_and_drafts_ahead` (line 726)
 
 ### `tests/test_scorecard_image.py`
 
@@ -2864,6 +3072,7 @@ Private data, ignored files, and source contents are excluded.
 - function `test_week_detail_admin_link_and_self_match_explanation` (line 31)
 - function `test_week_detail_escapes_names_and_never_shows_roster_contacts` (line 58)
 - function `test_week_detail_keeps_team_pairing_visible_before_player_slots_exist` (line 72)
+- function `test_week_detail_links_to_the_weeks_scores_and_the_players_entry` (line 83)
 
 ### `uv.lock`
 

@@ -1,18 +1,22 @@
-# C1: System context (as built, M7)
+# C1: System context (as built, M9)
 
 Golf League is a private web application for one Thursday-evening nine-hole league. It keeps
 the roster, the course, seasons, teams, the printed weekly schedule and the weekly player
-matchups, and shows each player their own schedule. It does **not** score rounds, keep
-standings or statistics, draft teams or pair teams automatically, or recompute handicaps.
+matchups, shows each player their own schedule, and keeps the hole scores of each week's
+matches, which players and admins enter (typed, or read from a photographed card and then
+reviewed) and an admin locks. It does **not** compute results, keep standings or statistics,
+draft teams or pair teams automatically, or recompute handicaps.
 
 ## People
 
 - **League administrator** (verified admin): imports and edits the roster, maintains the
-  course, configures seasons, teams, weeks and matchups, records substitutions, issues the
-  shared league link, edits mail/log settings.
+  course, configures seasons, teams, weeks and matchups, records substitutions, enters,
+  changes, locks, unlocks and clears a week's scores, issues the shared league link, edits
+  mail/log settings.
 - **Player** (verified user linked to a roster golfer): sees the upcoming matches, their own
-  schedule, the weekly matchups, the privacy-safe roster and the contact details of a direct
-  opponent in a scheduled match.
+  schedule, the weekly matchups, the privacy-safe roster, the contact details of a direct
+  opponent in a scheduled match, and every week's scores; enters and changes the scores of
+  their own match, and of one other match they kept score for, until an admin locks it.
 - **Anonymous visitor**: can only log in, reset a password, register a roster address, or use
   a shared league link to request a personal set-password link.
 

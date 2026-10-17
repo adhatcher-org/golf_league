@@ -770,7 +770,7 @@ def player_entry_state(session: Session, week_id: int, golfer_id: int | None, to
     """Where a player stands for a week.
 
     `not_playing` (no golfer, unknown week, or not a side of a match in it);
-    `closed` (the week is cancelled or played); `not_open_yet` (before the play
+    `closed` (the week is cancelled or played, or is no longer a match week); `not_open_yet` (before the play
     date); `locked`; `saved` (both golfers have every score, not locked);
     `open` (anything else).
     """
@@ -781,7 +781,7 @@ def player_entry_state(session: Session, week_id: int, golfer_id: int | None, to
                   if golfer_id in (row.a_golfer_id, row.b_golfer_id)), None)
     if match is None:
         return EntryState("not_playing")
-    if week.status != "scheduled":
+    if week.status != "scheduled" or week.week_type != "match":  # as `week_for_entry`
         return EntryState("closed", match.id)
     if week.play_date > today:
         return EntryState("not_open_yet", match.id, week.play_date)

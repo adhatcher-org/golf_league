@@ -20,7 +20,7 @@ orchestrator repo next door.
 ## Commands
 - Install: `uv sync --frozen --extra dev`
 - Test: `uv run pytest <paths> -q` for the files you touched (serial, no xdist). Full suite:
-  `uv run pytest -n auto -q` (~637 tests, ~40s with `pytest-xdist`; ~90s serial).
+  `uv run pytest -n auto -q` (~1,540 tests, ~90s with `pytest-xdist`).
 - Full gate: `make check` = `lint test-with-cov security dependency-check` (the coverage run is the
   only full-suite run, parallel via `-n auto`); requires >=80% branch coverage on `golf_league`.
   This is exactly what CI runs on `main` and `reset/**`. During development run only the tests for
@@ -47,6 +47,9 @@ orchestrator repo next door.
 ## Map
 - `tests/milestones/M6/test_M6_exit_criteria.py` is the aggregate player-view gate for
   regular, substitute, self-match, unused and unlinked personas, makeup navigation, and privacy.
+  `tests/milestones/M9/test_M9_exit_criteria.py` is the score-entry gate (R-SCORES version 2):
+  player entry and change, cards, the admin week sheet, locks, card privacy and the rain-date
+  guard, all through the real routes.
 - `.agents/codemap.md` is the committed source-file manifest and Python symbol index.
 - Regenerate with `uv run python scripts/generate_codemap.py` after adding, moving, renaming,
   or deleting source files. The stdlib generator indexes existing tracked and nonignored source
@@ -66,10 +69,23 @@ orchestrator repo next door.
   `golf_league/routers/admin_week_scores.py` with `templates/admin/scorecards/scores.html`,
   `match.html` and `clear.html`; the shared score-grid partials are in `templates/scores/`, and
   `golf_league/services/match_entry.py` names the score fields and reads a posted form.
+- Player score pages (R-SCORES) are `golf_league/routers/player_scores.py` with
+  `templates/player/scores/`: the read-only week's scores (`/weeks/{week}/scores`) for any
+  verified user, and the entry page and one-match form for a player, who always acts as
+  `Actor(user.id, False, user.golfer_id)`. Its `entry_links` give My Schedule and the week page
+  their "Enter scores" / "Update scores" / "View scores" links; `home_entry_prompt` in
+  `golf_league/services/player_schedule.py` is home's "Week N: Enter scores".
 - Scorecard photo entry (R-SCORES, R-OCR-PROVIDER): the admin pages are
   `golf_league/routers/admin_scorecards.py` with `templates/admin/scorecards/` and the status
-  polling script `static/scorecard-status.js`. `golf_league/services/scorecard_image.py` turns an
-  upload into a clean JPEG; `golf_league/services/scorecard_drafts.py` holds the short-lived
+  polling script `static/scorecard-status.js`. The five draft pages (page, status, photo, submit,
+  discard) are shared through `golf_league/routers/scorecard_flow.py`, parameterised by a `Flow`,
+  with the bodies in `templates/scorecards/_review.html`, `_status.html` and `_failed.html`;
+  `open_draft` there decides who may open a draft. A player's own card is
+  `golf_league/routers/player_scorecards.py` (`/weeks/{week}/scorecards` to start one, then
+  `/scorecards/{draft}`) with `templates/player/scorecards/`: only its creator can open it, photo
+  uploads are limited by `app.state.scorecard_upload_limiter` and the waiting queue, and every
+  photo is prepared off the event loop, one at a time, under `app.state.scorecard_prepare_lock`.
+  `golf_league/services/scorecard_image.py` turns an upload into a clean JPEG; `golf_league/services/scorecard_drafts.py` holds the short-lived
   `scorecard_drafts` rows and photos (under `<data dir>/scorecards/`) and runs the read on one
   background worker; `golf_league/services/scorecard_vision.py` is the only provider module (the
   Ollama client and the five deploy-time keys); `golf_league/services/scorecard_review.py` builds
@@ -91,7 +107,8 @@ orchestrator repo next door.
   guards their safety properties.
 - `README.md` covers setup, running and the admin/player journeys. Release preparation:
   `docs/deployment-runbook.md` (GL-72 steps, not executed), `docs/release-checklist.md`,
-  `docs/releases/mvp-release-notes.md`; as-built architecture in `docs/architecture/C1..C4` and
+  `docs/releases/mvp-release-notes.md` and `docs/releases/m9-release-notes.md`; as-built
+  architecture in `docs/architecture/C1..C4` and
   `docs/adr/0001..0004`. `scripts/run_local.py` starts a local server with synthetic demo data
   and file-captured mail for browser journeys (`docs/validation/browser-journeys.md`).
 - `tests/test_contract_regressions.py` holds the GL-61 contract assertions not covered elsewhere;
@@ -124,9 +141,12 @@ orchestrator repo next door.
   open or modify real `.env` files.
 - Runtime: single non-root container, SQLite persistence under `/data`, startup migrations,
   redacted stdout/stderr logs.
-- Hole scores for a submitted scorecard are in scope under R-SCORES, and so is the one provider
-  module that reads a scorecard photo (`golf_league/services/scorecard_vision.py`) under
-  R-OCR-PROVIDER: no other feature may call a model, no model name appears in code, and no request
+- Hole scores are in scope under R-SCORES: an admin enters, changes, locks, unlocks and clears
+  them; a verified player linked to a golfer who plays the week enters and changes their own
+  match, and one other match they kept score for, until an admin locks it; every verified user
+  sees a week's scores. Every write goes through `services/scores.py`, which refuses a locked
+  match and an out-of-date revision. So is the one provider module that reads a scorecard photo
+  (`golf_league/services/scorecard_vision.py`) under R-OCR-PROVIDER: no other feature may call a model, no model name appears in code, and no request
   handler calls the provider. Out of scope unless a work item explicitly adds it: rounds, results,
   standings, statistics, scoring rulesets, automatic team formation/pairings, handicap
   recomputation, any other AI/provider module. Do not restore PDF parsing, public roster, export,

@@ -55,7 +55,7 @@
                 </div>{% endfor %}
             {% else %}—{% endif %}
         </td>
-        <td data-label="Details"><a href="/weeks/{{ week.id }}?season_id={{ projection.season.id }}">Week details</a></td>
+        <td data-label="Details"><a href="/weeks/{{ week.id }}?season_id={{ projection.season.id }}">Week details</a>{% set entry = entry_links.get(week.id) %}{% if entry %} · <a class="tap-link" href="{{ entry.href }}">{{ entry.text }}<span class="visually-hidden"> for week {{ week.index }}</span></a>{% endif %}</td>
     </tr>{% endfor %}</tbody>
 </table></div>
 {% else %}<p class="empty-state">No weeks are scheduled for this season yet.</p>{% endif %}

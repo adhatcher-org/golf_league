@@ -78,3 +78,18 @@ def test_week_detail_keeps_team_pairing_visible_before_player_slots_exist(client
     page = client.get(f"/weeks/{ids['weeks'][0]}")
     assert "A vs B" in page.text
     assert "Player match slots have not been generated" in page.text
+
+
+def test_week_detail_links_to_the_weeks_scores_and_the_players_entry(client):
+    from datetime import UTC, datetime
+
+    ids = _seed(client)  # the viewer is A1 in week 1
+    week = ids["weeks"][0]
+    client.app.state.scorecard_utc_now = lambda: datetime(2026, 8, 27, 18, tzinfo=UTC)
+    page = client.get(f"/weeks/{week}").text
+    assert f'<a class="tap-link" href="/weeks/{week}/scores">Scores</a>' in page
+    assert f'<a class="tap-link" href="/weeks/{week}/scores/enter">Enter scores</a>' in page
+    other = client.get(f"/weeks/{ids['weeks'][1]}").text  # no generated matches
+    assert "/scores" not in other
+    client.app.state.scorecard_utc_now = lambda: datetime(2026, 8, 20, 18, tzinfo=UTC)
+    assert "/scores/enter" not in client.get(f"/weeks/{week}").text

@@ -13,6 +13,8 @@ jobs:
   test:
     # Pinned: `ubuntu-latest` moves to Ubuntu 26 from 2026-10-19. Upgrade deliberately.
     runs-on: ubuntu-24.04
+    # A full run takes about 5 minutes. Fail a stalled run here instead of after GitHub's 6 hours.
+    timeout-minutes: 20
     
     steps:
     - uses: actions/checkout@v7

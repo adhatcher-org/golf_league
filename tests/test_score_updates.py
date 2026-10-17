@@ -773,6 +773,11 @@ def test_player_entry_state_covers_every_state(db):
             session.flush()
             assert state(session) == "closed"
         session.rollback()
+        # A week whose type changed while its matches remained takes no scores (as `week_for_entry`).
+        session.get(Week, week).week_type = "play_with_team"
+        session.flush()
+        assert state(session) == "closed"
+        session.rollback()
 
 
 def test_no_score_service_commits(db):

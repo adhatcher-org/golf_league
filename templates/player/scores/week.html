@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Week {{ week.index }} scores - Golf League{% endblock %}
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title">
+    <p class="eyebrow">Scores · {{ week.play_date.strftime('%b %-d, %Y') }}</p>
+    <h1 id="page-title">Week {{ week.index }} scores</h1>
+    <p>{% if week.nine %}{{ week.nine|title }} nine{% else %}Rain date{% endif %}</p>
+</section>
+<nav aria-label="Week navigation"><p><a class="tap-link" href="/weeks/{{ week.id }}">Week {{ week.index }} details</a> · <a class="tap-link" href="/my/schedule?season_id={{ week.season_id }}">My Schedule</a></p></nav>
+{% if saved %}<p class="notice" role="status">Your scores were saved.</p>{% endif %}
+{% if not matches %}<p class="empty-state">This week has no generated matches.</p>{% endif %}
+{% for item in matches %}
+<section class="score-match" id="match-{{ item.match.player_match_id }}" aria-labelledby="match-title-{{ item.match.player_match_id }}">
+    <h2 id="match-title-{{ item.match.player_match_id }}">{{ item.title }}</h2>
+    <p class="score-match__state">{{ item.match.home_team_name }} vs {{ item.match.away_team_name }} · Match {{ item.match.position_label }}. {{ item.state_line }}</p>
+    {% set view = item.view %}
+    {% include "scores/_match_table.html" %}
+    {% if item.link %}<div class="score-match__actions"><a class="tap-link" href="{{ item.link.href }}">{{ item.link.text }}<span class="visually-hidden"> for {{ item.title }}</span></a></div>{% endif %}
+</section>
+{% endfor %}
+{% endblock %}

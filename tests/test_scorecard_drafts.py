@@ -27,21 +27,26 @@ from golf_league.domain.scorecard import Actor
 from golf_league.models import Hole, HoleScore, HoleYardage, ScorecardDraft, User, Week
 from golf_league.services import scorecard_drafts
 from golf_league.services.scorecard_drafts import (
+    count_waiting,
     create_draft,
+    create_draft_from_image,
     create_manual_draft,
     delete_draft,
     discard_draft,
     draft_card,
+    drafts_ahead,
     get_draft,
     image_file,
     list_open_drafts,
     mark_interrupted,
+    open_photo_draft,
     purge_expired,
     run_extraction,
     scorecard_directory,
     start_extraction,
+    user_week_draft,
 )
-from golf_league.services.scorecard_image import ImageRefused
+from golf_league.services.scorecard_image import ImageRefused, prepare_image
 from golf_league.services.scorecard_vision import (
     ExtractedCard,
     ExtractedPlayer,
@@ -698,3 +703,47 @@ def test_a_cleanup_failure_at_startup_never_stops_the_application(tmp_path, monk
         assert client.get("/healthz").status_code == 200
     assert "scorecard draft cleanup failed at startup" in caplog.text
     assert "synthetic cleanup failure" not in caplog.text
+
+
+# --- GL-86: a prepared photo, and the queue a player sees -----------------------------
+
+
+def test_create_draft_from_image_stores_a_prepared_photo_and_checks_the_week_first(db):
+    engine, ids, directory = db
+    image = prepare_image(_jpeg())
+    with Session(engine) as session:
+        draft = create_draft_from_image(session, week_id=ids["week"], user_id=ids["user"], image=image,
+                                        today=TODAY, clock=clock, directory=directory,
+                                        actor=Actor(ids["user"], True))
+        assert draft.status == "extracting" and (directory / draft.image_path).read_bytes() == image
+        with pytest.raises(ScoreEntryError):
+            create_draft_from_image(session, week_id=ids["weeks"][1], user_id=ids["user"], image=image,
+                                    today=TODAY, clock=clock, directory=directory,
+                                    actor=Actor(ids["user"], True))
+    assert _count(engine) == 1 and len(_files(directory)) == 1
+
+
+def test_open_photo_draft_count_waiting_and_drafts_ahead(db):
+    engine, ids, directory = db
+    with Session(engine) as session:
+        other = User(username="other@example.test", email="other@example.test", display_name="Other",
+                     password_hash="x")
+        session.add(other)
+        session.commit()
+        other_id = other.id
+    first = _create(engine, ids, directory, user_id=other_id)
+    with Session(engine) as session:
+        create_manual_draft(session, week_id=ids["week"], user_id=ids["user"], today=TODAY, clock=clock,
+                            actor=Actor(ids["user"], True))
+    second = _create(engine, ids, directory)
+    with Session(engine) as session:
+        assert open_photo_draft(session, ids["user"], NOW).id == second  # a typed card is not a photo card
+        assert open_photo_draft(session, ids["user"], NOW + timedelta(hours=24)) is None  # expired
+        assert user_week_draft(session, ids["user"], ids["week"], NOW).id == second
+        assert user_week_draft(session, ids["user"], ids["weeks"][1], NOW) is None
+        assert count_waiting(session, NOW) == 2 and count_waiting(session, NOW + timedelta(hours=24)) == 0
+        assert drafts_ahead(session, session.get(ScorecardDraft, second)) == 1
+        assert drafts_ahead(session, session.get(ScorecardDraft, first)) == 0
+        session.get(ScorecardDraft, first).status = "ready"
+        session.commit()
+        assert count_waiting(session, NOW) == 1 and drafts_ahead(session, session.get(ScorecardDraft, second)) == 0

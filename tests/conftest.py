@@ -18,6 +18,20 @@ _CSRF_RE = re.compile(r'name="csrf_token" value="([^"]*)"')
 HTTPS_TEST_BASE_URL = "https://testserver"
 
 
+# pytest builds a test's ID from its parameter values. A large bytes parameter
+# becomes an ID of tens of megabytes, which `pytest -v -n auto` in CI prints and
+# which once stalled the whole run. Give such cases short explicit `ids=`.
+MAX_TEST_ID_LENGTH = 10_000  # the longest legitimate ID today is about 5,100
+
+
+def pytest_collection_modifyitems(config, items):
+    too_long = [item.nodeid[:120] for item in items if len(item.nodeid) > MAX_TEST_ID_LENGTH]
+    if too_long:
+        raise pytest.UsageError(
+            f"test IDs longer than {MAX_TEST_ID_LENGTH} characters (give the parametrize case short ids=): "
+            + "; ".join(too_long))
+
+
 def _extract_csrf(html: str) -> str:
     """Return the value of the hidden `csrf_token` input in a rendered form."""
     match = _CSRF_RE.search(html)
