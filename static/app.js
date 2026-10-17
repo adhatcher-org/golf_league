@@ -151,4 +151,32 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         updateSelection();
     }
+
+    // Dynamically total each score row as hole scores are entered.
+    // Runs on every page via base.html; score-input rows exist only on score pages.
+    function scoreRowTotal(row) {
+        const inputs = row.querySelectorAll('.score-input');
+        const totalCell = row.querySelector('.score-total');
+        if (!totalCell) return;
+        let total = 0;
+        let any = false;
+        inputs.forEach((cell) => {
+            const value = parseInt(cell.value, 10);
+            if (!isNaN(value)) {
+                total += value;
+                any = true;
+            }
+        });
+        totalCell.textContent = any ? String(total) : '—';
+    }
+
+    document.querySelectorAll('.score-input').forEach((input) => {
+        const row = input.closest('tr');
+        if (!row) return;
+        input.addEventListener('input', () => scoreRowTotal(row));
+    });
+    document.querySelectorAll('.score-total').forEach((cell) => {
+        const row = cell.closest('tr');
+        if (row) scoreRowTotal(row);
+    });
 });

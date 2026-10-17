@@ -39,13 +39,14 @@
                 {% endif %}
                 <div class="table-wrap score-grid">
                     <table>
-                        <thead><tr>{% for cell in row.cells %}<th scope="col">Hole {{ cell.hole }}</th>{% endfor %}</tr></thead>
+                        <thead><tr>{% for cell in row.cells %}<th scope="col">Hole {{ cell.hole }}</th>{% endfor %}<th scope="col">Total</th></tr></thead>
                         <tbody><tr>
                             {% for cell in row.cells %}
                             <td><label class="visually-hidden" for="{{ cell.field }}">Hole {{ cell.hole }}, player {{ row.number }}</label>
                                 <input class="score-input" type="text" inputmode="numeric" maxlength="2" autocomplete="off" id="{{ cell.field }}" name="{{ cell.field }}" value="{{ cell.value }}"{% if row.autofocus and loop.first %} autofocus{% endif %}{% if cell.note %} aria-describedby="{{ cell.field }}_note"{% endif %}{% if cell.invalid %} aria-invalid="true"{% endif %}>
                                 {% if cell.note %}<small class="score-note" id="{{ cell.field }}_note">{{ cell.note }}</small>{% endif %}</td>
                             {% endfor %}
+                            <td class="score-total">—</td>
                         </tr></tbody>
                     </table>
                 </div>
