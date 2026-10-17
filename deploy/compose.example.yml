@@ -47,6 +47,15 @@ services:
       # SWAG's fixed address on the proxy network. Never "*": that would let
       # any client pick its own address and bypass the per-IP invite quota.
       FORWARDED_ALLOW_IPS: ${SWAG_IP:?set SWAG_IP to the SWAG container address on the proxy network}
+      # Scorecard photo entry (R-OCR-PROVIDER, R-SCORES): deploy-time, placeholders
+      # only, never editable from the app; the data-dir .env may hold them instead.
+      # Leave OLLAMA_URL or OLLAMA_VISION_MODEL empty and photo entry is simply
+      # "not configured". The model value is an example, not a default.
+      ANALYSIS_PROVIDER: ${ANALYSIS_PROVIDER:-}  # empty means ollama
+      OLLAMA_URL: ${OLLAMA_URL:-}  # e.g. http://ollama.example.invalid:11434
+      OLLAMA_VISION_MODEL: ${OLLAMA_VISION_MODEL:-}  # e.g. ministral-3:8b
+      OLLAMA_VISION_NUM_CTX: ${OLLAMA_VISION_NUM_CTX:-}  # empty means 32768
+      LEAGUE_TIMEZONE: ${LEAGUE_TIMEZONE:-}  # empty means America/Chicago
       # SMTP_* and LOG_LEVEL may be set here as well, but values saved at
       # /admin/config (stored in /app/data/.env) take precedence over these.
     logging:
