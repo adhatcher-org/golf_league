@@ -320,7 +320,7 @@ def test_an_unknown_week_is_404_and_a_missing_week_is_422(cards):
 @pytest.mark.parametrize("raw,message", [
     (b"this is a text file named like a photo", "could not be opened"),
     (b"\x00" * (10 * 1024 * 1024 + 1), "larger than 10 MB"),
-])
+], ids=["text_file", "over_10_mb"])
 def test_a_refused_image_is_422_and_writes_nothing(cards, raw, message):
     client, ids = cards
     response = _upload(client, ids["weeks"][0], raw=raw)

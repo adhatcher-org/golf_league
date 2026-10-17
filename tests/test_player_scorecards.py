@@ -410,7 +410,7 @@ def test_a_provider_failure_offers_retry_typing_and_discard(cards):
 @pytest.mark.parametrize("raw,message", [
     (b"not an image", "The photo could not be opened."),
     (b"x" * (10 * 1024 * 1024 + 1), "The photo is larger than 10 MB."),
-])
+], ids=["not_an_image", "over_10_mb"])
 def test_a_refused_image_is_422_and_keeps_nothing(cards, raw, message):
     client, ids = cards
     response = _upload(client, ids, raw=raw)
