@@ -152,6 +152,30 @@ document.addEventListener('DOMContentLoaded', function() {
         updateSelection();
     }
 
+    // Suggest only the next golfer, without replacing a choice or repeating a player.
+    document.querySelectorAll('.scorecard-form').forEach((form) => {
+        const golfers = Array.from(form.querySelectorAll('.scorecard-player select[name^="golfer_"]'));
+        let fillingOpponent = false;
+        golfers.forEach((select, index) => {
+            select.addEventListener('change', () => {
+                if (fillingOpponent) return;
+                const opponent = select.selectedOptions[0]?.dataset.opponent;
+                const next = golfers[index + 1];
+                if (!opponent || !next || next.value
+                        || golfers.some((golfer) => golfer.value === opponent)
+                        || !Array.from(next.options).some((option) => option.value === opponent)) return;
+                next.value = opponent;
+                // Notify other listeners, but do not suggest the original golfer again.
+                fillingOpponent = true;
+                try {
+                    next.dispatchEvent(new Event('change', { bubbles: true }));
+                } finally {
+                    fillingOpponent = false;
+                }
+            });
+        });
+    });
+
     // Dynamically total each score row as hole scores are entered.
     // Runs on every page via base.html; score-input rows exist only on score pages.
     function scoreRowTotal(row) {
