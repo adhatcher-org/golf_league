@@ -30,7 +30,7 @@
                 <label for="golfer_{{ row.index }}">Golfer</label>
                 <select id="golfer_{{ row.index }}" name="golfer_{{ row.index }}"{% if row.golfer_invalid %} aria-invalid="true"{% endif %}>
                     <option value="">Choose a golfer</option>
-                    {% for option in view.options %}<option value="{{ option.golfer_id }}"{% if option.golfer_id == row.golfer_id %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
+                    {% for option in view.options %}<option data-opponent="{{ option.opponent_golfer_id }}" value="{{ option.golfer_id }}"{% if option.golfer_id == row.golfer_id %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
                 </select>
                 {% if row.left_off %}<p class="scorecard-player__note">Already saved or locked: left off this card.</p>{% endif %}
                 {% if row.match_note %}<p class="scorecard-player__note">{{ row.match_note }}.</p>{% endif %}
