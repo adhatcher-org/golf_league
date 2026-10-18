@@ -347,29 +347,80 @@ def delete_golfer(session: Session, golfer_id: int) -> bool | None:
     return True
 
 
+_POSITION_LETTERS = {1: "A", 2: "B", 3: "C", 4: "D"}
+
+
 @dataclass(frozen=True)
 class RosterPlayer:
-    """The privacy-safe projection used by the verified player roster."""
+    """The privacy-safe projection used by the verified player roster.
+
+    `golfer_id` is included so the detail dialog can fetch contact
+    information on demand; `team_name`/`position_letter` are only populated
+    when a `season_id` is supplied, otherwise they are `None` (rendered as
+    "—"). Contact details (email/phone) are deliberately NOT part of this
+    projection — they are fetched through a separate authenticated JSON
+    endpoint so the roster HTML never exposes them.
+    """
 
     first_name: str
     last_name: str
     tee_color: str
     handicap_strokes: int | None
+    golfer_id: int
+    team_name: str | None
+    position_letter: str | None
 
 
-def list_active_roster_players(session: Session) -> list[RosterPlayer]:
-    """Load only columns permitted in the verified player-roster view."""
-    rows = session.execute(
-        select(
-            Golfer.first_name,
-            Golfer.last_name,
-            Golfer.default_tee_label,
-            Golfer.handicap_strokes,
+def list_active_roster_players(
+    session: Session, season_id: int | None = None
+) -> list[RosterPlayer]:
+    """Load only columns permitted in the verified player-roster view.
+
+    When `season_id` is given, each player's team and position for that
+    season are joined in; otherwise team/position are unavailable and
+    reported as `None`.
+    """
+    stmt = select(
+        Golfer.id.label("golfer_id"),
+        Golfer.first_name,
+        Golfer.last_name,
+        Golfer.default_tee_label.label("tee_color"),
+        Golfer.handicap_strokes,
+    ).where(Golfer.is_active.is_(True))
+
+    if season_id is not None:
+        stmt = stmt.outerjoin(
+            TeamMember,
+            (TeamMember.golfer_id == Golfer.id) & (TeamMember.season_id == season_id),
+        ).outerjoin(
+            Team,
+            (Team.id == TeamMember.team_id) & (Team.season_id == season_id),
+        ).add_columns(
+            Team.name.label("team_name"),
+            TeamMember.position.label("position"),
         )
-        .where(Golfer.is_active.is_(True))
-        .order_by(Golfer.last_name, Golfer.first_name)
-    ).all()
-    return [RosterPlayer(*row) for row in rows]
+
+    stmt = stmt.order_by(Golfer.last_name, Golfer.first_name)
+    rows = session.execute(stmt).all()
+
+    players: list[RosterPlayer] = []
+    for row in rows:
+        team_name = getattr(row, "team_name", None)
+        position = getattr(row, "position", None)
+        players.append(
+            RosterPlayer(
+                first_name=row.first_name,
+                last_name=row.last_name,
+                tee_color=row.tee_color,
+                handicap_strokes=row.handicap_strokes,
+                golfer_id=row.golfer_id,
+                team_name=team_name,
+                position_letter=(
+                    _POSITION_LETTERS.get(position) if position is not None else None
+                ),
+            )
+        )
+    return players
 
 
 __all__ = [

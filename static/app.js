@@ -213,4 +213,147 @@ document.addEventListener('DOMContentLoaded', function() {
         const row = cell.closest('tr');
         if (row) scoreRowTotal(row);
     });
+
+    // Roster page: golfer detail dialog (contact fetched on demand), plus
+    // client-side column sort and text filter. Guards on element ids so this
+    // only runs on /roster.
+    const rosterBody = document.getElementById('roster-body');
+    const rosterDialog = document.getElementById('roster-detail-dialog');
+    if (!rosterBody || !rosterDialog) return;
+
+    const rosterFilter = document.getElementById('roster-filter');
+    const detailName = document.getElementById('roster-detail-name');
+    const detailFields = document.getElementById('roster-detail-fields');
+    const detailStatus = document.getElementById('roster-detail-status');
+
+    let sortKey = null;
+    let sortDir = 1; // 1 = ascending, -1 = descending
+
+    const cellSortValue = (row, key) => {
+        const cell = row.querySelector('[data-sort-cell="' + key + '"]');
+        return cell ? (cell.dataset.sortValue || "") : "";
+    };
+
+    const renderRoster = () => {
+        const rows = Array.from(rosterBody.querySelectorAll('tr'));
+        const q = rosterFilter ? rosterFilter.value.toLowerCase() : "";
+        const filtered = rows.filter((row) => {
+            if (!q) return true;
+            const nameCell = row.querySelector('[data-sort-cell="name"]');
+            const name = nameCell ? (nameCell.textContent || "") : "";
+            return name.toLowerCase().indexOf(q) !== -1;
+        });
+        if (sortKey) {
+            filtered.sort((a, b) => {
+                let va = cellSortValue(a, sortKey);
+                let vb = cellSortValue(b, sortKey);
+                if (sortKey === "handicap") {
+                    va = va === "" ? Infinity : Number(va);
+                    vb = vb === "" ? Infinity : Number(vb);
+                }
+                let cmp = 0;
+                if (va < vb) cmp = -1;
+                else if (va > vb) cmp = 1;
+                return cmp * sortDir;
+            });
+        }
+        const fragment = document.createDocumentFragment();
+        filtered.forEach((row) => fragment.appendChild(row));
+        rosterBody.appendChild(fragment);
+        const count = document.getElementById('roster-count');
+        if (count && rosterFilter) {
+            count.textContent = filtered.length + " of " + rows.length + " players";
+        }
+        updateSortIndicators();
+    };
+
+    const columnLabel = (key) => key.charAt(0).toUpperCase() + key.slice(1);
+
+    const updateSortIndicators = () => {
+        document.querySelectorAll('.roster__sort').forEach((link) => {
+            const key = link.getAttribute('data-sort');
+            const dirSpan = link.querySelector('.roster__sort-dir');
+            if (key === sortKey) {
+                link.setAttribute('aria-current', 'true');
+                link.setAttribute('aria-label', 'Sort by ' + columnLabel(key) + ', ' + (sortDir === 1 ? 'ascending' : 'descending'));
+                dirSpan.textContent = sortDir === 1 ? ' \u2191' : ' \u2193';
+            } else {
+                link.removeAttribute('aria-current');
+                link.removeAttribute('aria-label');
+                dirSpan.textContent = '';
+            }
+        });
+    };
+
+    document.querySelectorAll('.roster__sort').forEach((link) => {
+        const dirSpan = document.createElement('span');
+        dirSpan.className = 'roster__sort-dir';
+        dirSpan.setAttribute('aria-hidden', 'true');
+        link.appendChild(dirSpan);
+        link.addEventListener('click', (event) => {
+            event.preventDefault();
+            const key = link.getAttribute('data-sort');
+            if (key === sortKey) {
+                sortDir = -sortDir;
+            } else {
+                sortKey = key;
+                sortDir = 1;
+            }
+            renderRoster();
+        });
+    });
+
+    if (rosterFilter) {
+        rosterFilter.addEventListener('input', renderRoster);
+    }
+
+    // Detail dialog: fetch contact + handicap for one golfer on demand. The
+    // roster HTML never renders email/phone; they come from this JSON endpoint.
+    rosterBody.addEventListener('click', (event) => {
+        const button = event.target.closest('.roster__detail');
+        if (!button) return;
+        event.preventDefault();
+        const golferId = button.getAttribute('data-golfer-id');
+        rosterDialog.showModal();
+        detailName.textContent = 'Loading…';
+        detailFields.innerHTML = '';
+        detailStatus.textContent = '';
+        fetch('/roster/golfers/' + golferId, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        })
+            .then(async (response) => {
+                if (!response.ok) throw new Error('Details unavailable');
+                return response.json();
+            })
+            .then((data) => {
+                if (!rosterDialog.open) return;
+                detailName.textContent = data.name || 'Golfer';
+                const dl = document.createElement('dl');
+                dl.className = 'roster-dialog__details';
+                const field = (label, value) => {
+                    const dt = document.createElement('dt');
+                    dt.textContent = label;
+                    const dd = document.createElement('dd');
+                    dd.textContent = (value !== null && value !== undefined && value !== '') ? String(value) : 'Not recorded';
+                    dl.appendChild(dt);
+                    dl.appendChild(dd);
+                };
+                field('Handicap', (data.handicap_strokes !== null && data.handicap_strokes !== undefined) ? String(data.handicap_strokes) : 'No handicap on file');
+                field('Email', data.email);
+                field('Phone', data.phone);
+                detailFields.appendChild(dl);
+            })
+            .catch((error) => {
+                if (!rosterDialog.open) return;
+                detailName.textContent = 'Details unavailable';
+                detailStatus.textContent = error.message;
+            });
+    });
+
+    rosterDialog.addEventListener('click', (event) => {
+        if (event.target === rosterDialog) rosterDialog.close();
+    });
+
+    renderRoster();
 });

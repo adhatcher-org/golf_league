@@ -7,15 +7,38 @@
     <p>Active players and their current tee and handicap information.</p>
 </section>
 {% if players %}
+<div class="roster-toolbar">
+    <label for="roster-filter">Filter players</label>
+    <input
+        type="search"
+        id="roster-filter"
+        name="q"
+        placeholder="Search by name"
+        aria-label="Filter players by name"
+    >
+    <p id="roster-count" class="roster-toolbar__count">{{ players|length }} players</p>
+</div>
 <div class="table-wrap">
-    <table aria-label="Active player roster">
-        <thead><tr><th scope="col">Name</th><th scope="col">Tee</th><th scope="col">Handicap</th></tr></thead>
-        <tbody>
+    <table class="roster__table" aria-label="Active player roster">
+        <thead>
+            <tr>
+                <th scope="col"><a href="#" class="roster__sort" data-sort="name">Name</a></th>
+                <th scope="col"><a href="#" class="roster__sort" data-sort="handicap">Handicap</a></th>
+                <th scope="col"><a href="#" class="roster__sort" data-sort="tee">Tee</a></th>
+                <th scope="col"><a href="#" class="roster__sort" data-sort="team">Team</a></th>
+                <th scope="col"><a href="#" class="roster__sort" data-sort="position">Position</a></th>
+                <th scope="col" class="roster__actions-col">Details</th>
+            </tr>
+        </thead>
+        <tbody id="roster-body">
         {% for player in players %}
         <tr>
-            <td>{{ player.first_name }} {{ player.last_name }}</td>
-            <td>{{ player.tee_color }}</td>
-            <td>{% if player.handicap_strokes is none %}No handicap on file{% else %}{{ player.handicap_strokes }}{% endif %}</td>
+            <td data-sort-cell="name" data-sort-value="{{ (player.first_name + ' ' + player.last_name)|lower }}">{{ player.first_name }} {{ player.last_name }}</td>
+            <td data-sort-cell="handicap" data-sort-value="{% if player.handicap_strokes is none %}{% else %}{{ player.handicap_strokes }}{% endif %}">{% if player.handicap_strokes is none %}No handicap on file{% else %}{{ player.handicap_strokes }}{% endif %}</td>
+            <td data-sort-cell="tee" data-sort-value="{{ player.tee_color|lower }}"><span class="tee-box tee-box--{{ player.tee_color|lower }}" aria-label="{{ player.tee_color }} tee">{{ player.tee_color }}</span></td>
+            <td data-sort-cell="team" data-sort-value="{{ player.team_name or '' }}">{{ player.team_name or '—' }}</td>
+            <td data-sort-cell="position" data-sort-value="{{ player.position_letter or '' }}">{{ player.position_letter or '—' }}</td>
+            <td class="roster__actions-col"><button type="button" class="roster__detail" data-golfer-id="{{ player.golfer_id }}" aria-label="Details for {{ player.first_name }} {{ player.last_name }}">Details</button></td>
         </tr>
         {% endfor %}
         </tbody>
@@ -24,4 +47,13 @@
 {% else %}
 <p class="empty-state">There are no active players in the roster yet.</p>
 {% endif %}
+
+<dialog class="roster-dialog" id="roster-detail-dialog" aria-labelledby="roster-detail-name">
+    <div class="roster-dialog__content">
+        <form method="dialog"><button class="roster-dialog__close" aria-label="Close details">×</button></form>
+        <h2 id="roster-detail-name"></h2>
+        <div id="roster-detail-fields"></div>
+        <p id="roster-detail-status" role="status" aria-live="polite"></p>
+    </div>
+</dialog>
 {% endblock %}
