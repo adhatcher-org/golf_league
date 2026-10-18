@@ -595,4 +595,8 @@ def test_import_review_columns_do_not_use_font_relative_units():
 def test_phone_tap_targets_for_links_brand_and_my_schedule_cards():
     assert "min-height: 2.75rem" in _rule(".brand")
     assert "min-height: 2.75rem" in _rule(".page-shell a:not(.button-link)", media="(max-width: 720px)")
-    assert "display: block" in _rule(".schedule-cards__table,\n    .schedule-cards__table tbody,\n    .schedule-cards__table tr,\n    .schedule-cards__table th,\n    .schedule-cards__table td", media="(max-width: 720px)")
+    # GL-94: the season schedule stays a 1-week-per-line table on phones
+    # (the OBS-7 card layout is not applied); cells keep tap-friendly padding.
+    rule = _rule(".schedule-cards__table,\n    .schedule-cards__table tbody,\n    .schedule-cards__table tr,\n    .schedule-cards__table th,\n    .schedule-cards__table td", media="(max-width: 720px)")
+    assert "display: block" not in rule
+    assert "padding:" in rule

@@ -1442,6 +1442,12 @@ pre { max-width: 100%; overflow-x: auto; }
     .import-fields__header { padding-left: calc(0.9rem + 3px); }
 }
 
+/* GL-94: season schedule Details/score links render as an icon with a
+   visually-hidden text label on phones, and as a text link on desktop. */
+.schedule-cards__table td[data-label="Details"] .schedule__icon { display: none; }
+.schedule-cards__table td[data-label="Details"] .schedule__label { display: inline; }
+.schedule__icon svg { width: 1.1rem; height: 1.1rem; display: block; }
+
 @media (max-width: 720px) {
     /* F6: standalone and table links get a 44px tap height on phones. */
     .page-shell a:not(.button-link) {
@@ -1450,41 +1456,28 @@ pre { max-width: 100%; overflow-x: auto; }
         align-items: center;
     }
 
-    /* OBS-7: My Schedule becomes one card per week, so the matchup is on
-       screen instead of in a sideways-scrolling column. */
-    .schedule-cards { overflow: visible; border: 0; background: transparent; }
+    /* GL-94: keep the season schedule as a 1-week-per-line table on phones
+       (do not apply the OBS-7 card transformation). Smaller padding and
+       font-size so a row fits a narrow screen. */
     .schedule-cards__table,
     .schedule-cards__table tbody,
     .schedule-cards__table tr,
     .schedule-cards__table th,
-    .schedule-cards__table td { display: block; min-width: 0; }
-    .schedule-cards__table thead { position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-    .schedule-cards__table tr {
-        margin-bottom: 0.9rem;
-        padding: 0.4rem 0.9rem 0.6rem;
-        border: 1px solid var(--line);
-        border-radius: 0.55rem;
-        background: var(--surface);
-    }
-    .schedule-cards__table tbody tr:hover { background: var(--surface); }
-    .schedule-cards__table th[scope="row"] { padding: 0.6rem 0; background: transparent; font-size: 0.95rem; }
-    .schedule-cards__table th[scope="row"]::before { content: "Week "; }
     .schedule-cards__table td {
-        display: grid;
-        grid-template-columns: 5.5rem minmax(0, 1fr);
-        gap: 0.6rem;
-        padding: 0.35rem 0;
-        border: 0;
-        overflow-wrap: anywhere;
+        padding: 0.5rem 0.6rem;
+        font-size: 0.85rem;
+        white-space: normal;
     }
-    .schedule-cards__table td::before {
-        content: attr(data-label);
-        color: var(--muted);
-        font-size: 0.75rem;
-        font-weight: 700;
-        letter-spacing: 0.045em;
-        text-transform: uppercase;
-    }
+    .schedule-cards__table { min-width: auto; }
+
+    /* Hide the Status column on phones. */
+    .schedule-cards__table th[data-label="Status"],
+    .schedule-cards__table td[data-label="Status"] { display: none; }
+
+    /* Week Details / score-entry links: show the icon, hide the visible
+       text label; the visually-hidden text stays for screen readers. */
+    .schedule-cards__table td[data-label="Details"] .schedule__icon { display: inline-flex; align-items: center; }
+    .schedule-cards__table td[data-label="Details"] .schedule__label { display: none; }
 }
 
 /* Scorecard entry (GL-82). The photo sits beside the form on a desktop and

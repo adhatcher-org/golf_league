@@ -20,7 +20,7 @@
 {% if projection.weeks %}
 <div class="table-wrap schedule-cards"><table class="schedule-cards__table">
     <caption class="visually-hidden">My schedule for {{ projection.season.year }}</caption>
-    <thead><tr><th scope="col">Week</th><th scope="col">Date</th><th scope="col">Nine</th><th scope="col">Status</th><th scope="col">Matchup</th><th scope="col">Details</th></tr></thead>
+    <thead><tr><th scope="col">Week</th><th scope="col">Date</th><th scope="col">Nine</th><th scope="col" data-label="Status">Status</th><th scope="col">Matchup</th><th scope="col">Details</th></tr></thead>
     <tbody>{% for item in projection.weeks %}{% set week = item.week %}<tr>
         <th scope="row">{{ week.index }}</th>
         <td data-label="Date">{{ week.play_date.strftime('%b %-d, %Y') }}</td>
@@ -36,7 +36,8 @@
             {% else %}{{ week.status|title }}{% endif %}
         </td>
         <td data-label="Matchup">
-            {% if item.state in ('match', 'makeup') %}
+            {% if item.state == 'play_with_team' %}Playing with Team
+            {% elif item.state in ('match', 'makeup') %}
                 {% for match in item.matches %}<div>
                     {% if match.pairing.is_self_match %}<span>Self-match: both sides play against their own handicap.</span>{% endif %}
                     {% for a, b in match.slots %}<span>
@@ -55,7 +56,7 @@
                 </div>{% endfor %}
             {% else %}—{% endif %}
         </td>
-        <td data-label="Details"><a href="/weeks/{{ week.id }}?season_id={{ projection.season.id }}">Week details</a>{% set entry = entry_links.get(week.id) %}{% if entry %} · <a class="tap-link" href="{{ entry.href }}">{{ entry.text }}<span class="visually-hidden"> for week {{ week.index }}</span></a>{% endif %}</td>
+        <td data-label="Details"><a class="tap-link" href="/weeks/{{ week.id }}?season_id={{ projection.season.id }}"><span class="schedule__icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="schedule__label">Week details</span><span class="visually-hidden"> for week {{ week.index }}</span></a>{% set entry = entry_links.get(week.id) %}{% if entry %} · <a class="tap-link" href="{{ entry.href }}"><span class="schedule__icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span><span class="schedule__label">{{ entry.text }}</span><span class="visually-hidden"> for week {{ week.index }}</span></a>{% endif %}</td>
     </tr>{% endfor %}</tbody>
 </table></div>
 {% else %}<p class="empty-state">No weeks are scheduled for this season yet.</p>{% endif %}
