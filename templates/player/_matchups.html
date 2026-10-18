@@ -4,18 +4,18 @@
     {% for match in week_view.matches %}
     <article>
         <h3>{{ match.pairing.home_team.name }} vs {{ match.pairing.away_team.name }}</h3>
+        <p class="matchup__scores-link"><a class="tap-link" href="/weeks/{{ week.id }}/scores?match={{ match.player_match_id }}">View scores</a></p>
         {% if match.pairing.is_self_match %}<p>This self-match is played against each golfer's own handicap.</p>{% endif %}
         {% if not match.slots %}<p>Player match slots have not been generated.</p>{% endif %}
         {% if match.slots %}
-        <div class="table-wrap"><table>
-            <thead><tr><th scope="col">Slot</th><th scope="col">Home player</th><th scope="col">Home handicap</th><th scope="col">Away player</th><th scope="col">Away handicap</th><th scope="col">Format</th></tr></thead>
+        <div class="table-wrap"><table class="matchups-table">
+            <thead><tr><th scope="col">Slot</th><th scope="col">Home player</th><th scope="col">Home handicap</th><th scope="col">Away player</th><th scope="col">Away handicap</th></tr></thead>
             <tbody>{% for a, b in match.slots %}<tr>
                 <th scope="row">{{ a.label }}</th>
                 <td>{{ a.golfer.first_name }} {{ a.golfer.last_name }}{% if a.is_sub %} <span>(substitute)</span>{% endif %}</td>
                 <td>{% if a.handicap is none %}Not recorded{% else %}{{ a.handicap }}{% endif %}</td>
                 <td>{{ b.golfer.first_name }} {{ b.golfer.last_name }}{% if b.is_sub %} <span>(substitute)</span>{% endif %}</td>
                 <td>{% if b.handicap is none %}Not recorded{% else %}{{ b.handicap }}{% endif %}</td>
-                <td>{% if a.vs_own_handicap %}Against own handicap{% else %}Head to head{% endif %}</td>
             </tr>{% endfor %}</tbody>
         </table></div>
         {% endif %}

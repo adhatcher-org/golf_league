@@ -632,6 +632,18 @@ tbody tr:hover {
     table {
         min-width: 34rem;
     }
+
+    /* Matchups table (player/week): fit a phone screen without sideways scroll.
+       Desktop rules (min-width, default padding) are unchanged above; this only
+       relaxes them at the 720px mobile breakpoint. .table-wrap keeps overflow-x:
+       auto as a fallback for any table that still overflows. */
+    .matchups-table { min-width: auto; }
+    .matchups-table th,
+    .matchups-table td {
+        white-space: normal;
+        padding: 0.5rem 0.6rem;
+        font-size: 0.85rem;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
