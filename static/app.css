@@ -1634,8 +1634,12 @@ pre { max-width: 100%; overflow-x: auto; }
         font-size: 0.78rem;
     }
     .score-input {
-        width: 2.2rem;
+        width: 2rem;
         padding: 0.25rem 0.1rem;
         font-size: 0.78rem;
     }
+
+    /* GL-95: smaller matchup title and state text on the enter-scores page on phones. */
+    .score-match h2 { font-size: 1.5rem; }
+    .score-match__state { font-size: 0.85rem; }
 }
