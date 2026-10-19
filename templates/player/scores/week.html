@@ -7,15 +7,50 @@
     <p>{% if week.nine %}{{ week.nine|title }} nine{% else %}Rain date{% endif %}</p>
 </section>
 <nav aria-label="Week navigation"><p><a class="tap-link" href="/weeks/{{ week.id }}">Week {{ week.index }} details</a> · <a class="tap-link" href="/my/schedule?season_id={{ week.season_id }}">My Schedule</a></p></nav>
+
+<form class="score-toolbar" method="get" action="/weeks/{{ week.id }}/scores">
+    <label for="score-week">Week</label>
+    <select id="score-week" name="week" onchange="this.form.submit()">
+        {% for w in weeks %}
+        <option value="{{ w.id }}" {% if w.id == week.id %}selected{% endif %}>
+            Week {{ w.index }}{% if w.play_date %} · {{ w.play_date.strftime('%b %-d') }}{% endif %}
+        </option>
+        {% endfor %}
+    </select>
+</form>
+{% if teams %}
+<form class="score-toolbar" method="get" action="/weeks/{{ week.id }}/scores">
+    <label for="score-team">Filter by team</label>
+    <select id="score-team" name="team" onchange="this.form.submit()">
+        <option value="">All teams</option>
+        {% for name in teams %}
+        <option value="{{ name }}" {% if name == team %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+    </select>
+</form>
+{% endif %}
 {% if saved %}<p class="notice" role="status">Your scores were saved.</p>{% endif %}
-{% if not matches %}<p class="empty-state">This week has no generated matches.</p>{% endif %}
-{% for item in matches %}
-<section class="score-match" id="match-{{ item.match.player_match_id }}" aria-labelledby="match-title-{{ item.match.player_match_id }}">
-    <h2 id="match-title-{{ item.match.player_match_id }}">{{ item.title }}</h2>
-    <p class="score-match__state">{{ item.match.home_team_name }} vs {{ item.match.away_team_name }} · Match {{ item.match.position_label }}. {{ item.state_line }}</p>
-    {% set view = item.view %}
-    {% include "scores/_match_table.html" %}
-    {% if item.link %}<div class="score-match__actions"><a class="tap-link" href="{{ item.link.href }}">{{ item.link.text }}<span class="visually-hidden"> for {{ item.title }}</span></a></div>{% endif %}
-</section>
-{% endfor %}
+{% if not groups %}<p class="empty-state">This week has no generated matches.</p>{% endif %}
+
+<div class="score-columns">
+    <button id="collapse-toggle" type="button" class="collapse-toggle" aria-pressed="false">
+        Collapse hole details
+    </button>
+    <div id="score-tables" class="score-tables">
+        {% for group in groups %}
+        <section class="score-group" aria-labelledby="group-title-{{ loop.index }}">
+            <h2 id="group-title-{{ loop.index }}">{{ group.label }}</h2>
+            {% for item in group.matches %}
+            <section class="score-match" id="match-{{ item.match.player_match_id }}" aria-labelledby="match-title-{{ item.match.player_match_id }}">
+                <h2 id="match-title-{{ item.match.player_match_id }}">{{ item.title }}</h2>
+                <p class="score-match__state">{{ item.match.home_team_name }} vs {{ item.match.away_team_name }} · Match {{ item.match.position_label }}. {{ item.state_line }}</p>
+                {% set view = item.view %}
+                {% include "scores/_match_table.html" %}
+                {% if item.link %}<div class="score-match__actions"><a class="tap-link" href="{{ item.link.href }}">{{ item.link.text }}<span class="visually-hidden"> for {{ item.title }}</span></a></div>{% endif %}
+            </section>
+            {% endfor %}
+        </section>
+        {% endfor %}
+    </div>
+</div>
 {% endblock %}

@@ -14,6 +14,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -186,6 +187,24 @@ def _match_form(request: Request, session: Session, week: Week, match: SheetMatc
     }
 
 
+def _group_matches(matches: list[dict], week_type: str) -> list[dict]:
+    """Group match views for the scores page.
+
+    Match weeks group by Team 1 vs Team 2 so the matchups between two teams sit
+    together. Play-with-team weeks group by team so each team's players sit under
+    the team. Groups keep the sheet's schedule order.
+    """
+    groups: dict[str, list[dict]] = {}
+    for item in matches:
+        match = item["match"]
+        if week_type == "play_with_team":
+            key = match.home_team_name  # home == away for a self-match
+        else:
+            key = f"{match.home_team_name} vs {match.away_team_name}"
+        groups.setdefault(key, []).append(item)
+    return [{"label": label, "matches": items} for label, items in groups.items()]
+
+
 # --- the week's scores ---------------------------------------------------------
 
 
@@ -195,9 +214,31 @@ async def week_scores(week_id: int, request: Request,
                       user: User = Depends(require_verified_user)) -> Response:  # noqa: B008
     week = _week(session, week_id)
     actor, today = _actor(user), _today(request)
+    team = request.query_params.get("team")
+    # The week dropdown at the top of the page GETs ?week=<id>; follow it to that
+    # week's scores page so the URL stays the page the user actually asked for.
+    target_week = request.query_params.get("week")
+    if target_week is not None:
+        try:
+            target_id = int(target_week)
+        except ValueError:
+            target_id = None
+        if target_id is not None and target_id != week_id:
+            target = session.get(Week, target_id)
+            if target is not None and target.season_id == week.season_id:
+                return RedirectResponse(f"/weeks/{target_id}/scores", status_code=303,
+                                        headers=PRIVATE_HEADERS)
     sheet = week_sheet(session, week.id)
     hole_numbers = [hole.number for hole in week_holes(session, week.id)]
     open_to_viewer = _open_to(session, week, actor, today)
+    # Weeks of this season for the week switcher; teams present this week for the filter.
+    weeks = list(session.scalars(
+        select(Week).where(Week.season_id == week.season_id).order_by(Week.index)
+    ))
+    teams = sorted({match.home_team_name for match in sheet} | {match.away_team_name for match in sheet})
+    if team:
+        sheet = [match for match in sheet
+                 if match.home_team_name == team or match.away_team_name == team]
     matches = []
     for match in sheet:
         link = None
@@ -210,8 +251,10 @@ async def week_scores(week_id: int, request: Request,
             "match": match, "title": _title(match), "state_line": _state_line(request, match), "link": link,
             "view": {"rows": _rows(match, hole_numbers, frozenset(), {}, set())},
         })
+    groups = _group_matches(matches, week.week_type)
     return _page(request, "player/scores/week.html", {
-        "week": week, "matches": matches, "hole_numbers": hole_numbers,
+        "week": week, "matches": matches, "groups": groups, "hole_numbers": hole_numbers,
+        "weeks": weeks, "teams": teams, "team": team,
         "saved": request.query_params.get("saved") == "1", "errors": {},
     })
 
