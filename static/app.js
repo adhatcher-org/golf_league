@@ -214,6 +214,22 @@ document.addEventListener('DOMContentLoaded', function() {
         if (row) scoreRowTotal(row);
     });
 
+    // Collapse the hole-detail columns of every score grid on the page, leaving
+    // only Golfer, Gross, HC and Net. Toggled from the scores page toolbar.
+    const collapseToggle = document.getElementById('collapse-toggle');
+    const scoreTables = document.getElementById('score-tables');
+    if (collapseToggle && scoreTables) {
+        const holeCells = scoreTables.querySelectorAll('.score-hole');
+        const setCollapsed = (collapsed) => {
+            scoreTables.classList.toggle('is-collapsed', collapsed);
+            collapseToggle.setAttribute('aria-pressed', String(collapsed));
+            collapseToggle.textContent = collapsed ? 'Show hole details' : 'Collapse hole details';
+        };
+        collapseToggle.addEventListener('click', () =>
+            setCollapsed(!scoreTables.classList.contains('is-collapsed')));
+        setCollapsed(false);
+    }
+
     // Roster page: golfer detail dialog (contact fetched on demand), plus
     // client-side column sort and text filter. Guards on element ids so this
     // only runs on /roster.
