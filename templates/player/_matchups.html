@@ -5,7 +5,7 @@
     <article>
         <h3>{{ match.pairing.home_team.name }} vs {{ match.pairing.away_team.name }}</h3>
         <p class="matchup__scores-link"><a class="tap-link" href="/weeks/{{ week.id }}/scores?match={{ match.player_match_id }}">View scores</a></p>
-        {% if match.pairing.is_self_match %}<p>This self-match is played against each golfer's own handicap.</p>{% endif %}
+        {% if match.pairing.is_self_match %}<p>This self-match is played against each golfer's own handicap.</p><p class="matchup__format">Against own handicap</p>{% endif %}
         {% if not match.slots %}<p>Player match slots have not been generated.</p>{% endif %}
         {% if match.slots %}
         <div class="table-wrap"><table class="matchups-table">
