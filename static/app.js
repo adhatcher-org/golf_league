@@ -323,8 +323,9 @@ document.addEventListener('DOMContentLoaded', function() {
         rosterFilter.addEventListener('input', renderRoster);
     }
 
-    // Detail dialog: fetch contact + handicap for one golfer on demand. The
-    // roster HTML never renders email/phone; they come from this JSON endpoint.
+    // Detail dialog: fetch public roster detail for one golfer on demand. The
+    // roster HTML never renders email/phone; they are admin-only and are never
+    // returned by this JSON endpoint.
     rosterBody.addEventListener('click', (event) => {
         const button = event.target.closest('.roster__detail');
         if (!button) return;
@@ -356,8 +357,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     dl.appendChild(dd);
                 };
                 field('Handicap', (data.handicap_strokes !== null && data.handicap_strokes !== undefined) ? String(data.handicap_strokes) : 'No handicap on file');
-                field('Email', data.email);
-                field('Phone', data.phone);
+                field('Tee', data.tee_color || 'Not recorded');
                 detailFields.appendChild(dl);
             })
             .catch((error) => {

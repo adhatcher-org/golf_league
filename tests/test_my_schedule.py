@@ -153,7 +153,7 @@ def test_schedule_details_link_to_score_entry_by_the_players_state(client):
     page = client.get("/my/schedule").text
     assert page.count("/scores/enter") == 1
     assert f'<a class="tap-link" href="/weeks/{week}/scores/enter"><span class="schedule__icon"' in page
-    assert f'<span class="schedule__label">Enter scores</span>' in page
+    assert '<span class="schedule__label">Enter scores</span>' in page
     assert '<span class="visually-hidden"> for week 1</span>' in page
     with Session(client.app.state.engine) as session:
         session.get(Week, week).status = "played"

@@ -34,11 +34,12 @@ async def roster_golfer_detail(
     session: Session = Depends(get_session),  # noqa: B008
     user: User = Depends(require_verified_user),  # noqa: B008
 ) -> Response:
-    """Contact + handicap detail for one active golfer (JSON only).
+    """Public roster detail for one active golfer (JSON only).
 
-    Fetched on demand by the roster detail dialog. The roster HTML itself
-    never renders email/phone, so this endpoint is the only way to reach
-    contact details and it requires a verified session.
+    Fetched on demand by the roster detail dialog. Returns only the public
+    fields already shown on the roster table — name, handicap, tee color.
+    Contact details (email/phone) are admin-only and are never returned by
+    this endpoint.
     """
     normalized = golfer_id.lstrip("0")
     if (
@@ -54,8 +55,6 @@ async def roster_golfer_detail(
     return JSONResponse(
         {
             "name": f"{golfer.first_name} {golfer.last_name}",
-            "email": golfer.email,
-            "phone": golfer.phone,
             "handicap_strokes": golfer.handicap_strokes,
             "tee_color": golfer.default_tee_label,
         },
