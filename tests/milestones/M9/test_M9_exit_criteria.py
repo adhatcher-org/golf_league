@@ -237,7 +237,7 @@ def test_4_every_verified_user_sees_the_weeks_scores_and_an_anonymous_visitor_do
     for user in ("a1", "c1", "unlinked", "admin"):
         _as(client, ids["users"][user])
         page = client.get(path)
-        assert page.status_code == 200 and page.text.count('class="score-match"') == 4, user
+        assert page.status_code == 200 and len(re.findall(r'id="match-\d+"', page.text)) == 4, user
     assert client.get(f"/weeks/{ids['week']}/scores/enter").status_code == 404  # the admin plays no match
     _as(client, ids["users"]["unlinked"])  # a verified account with no golfer
     assert client.get(f"/weeks/{ids['week']}/scores/enter").status_code == 404

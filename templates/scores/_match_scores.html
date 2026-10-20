@@ -1,5 +1,6 @@
 <tr>
     <th scope="row">{{ row.golfer.name }}{% if row.golfer.is_sub %} (sub){% endif %}</th>
+    <td class="score-position">{{ "ABCD"[row.golfer.position - 1] if row.golfer.position else "—" }}</td>
     {% for number in hole_numbers %}<td class="score-hole">{{ row.golfer.strokes_by_hole.get(number, '—') }}</td>{% endfor %}
     <td>{% if row.golfer.total is not none %}{{ row.golfer.total }}{% else %}—{% endif %}</td>
     <td>{{ row.golfer.handicap if row.golfer.handicap is not none else '—' }}</td>

@@ -36,6 +36,7 @@ from golf_league.models import (
     Season,
     Team,
     TeamMatch,
+    TeamMember,
     User,
     Week,
     WeekHandicap,
@@ -109,6 +110,7 @@ class SheetGolfer:
     strokes_by_hole: dict[int, int]
     total: int | None  # None when the golfer has no scores
     handicap: int | None  # the week's stored strokes for this golfer, or None
+    position: int | None  # the golfer's position (1-4) on their team this season, or None
     entered_by_user_id: int | None
     entered_by_name: str | None
 
@@ -716,6 +718,7 @@ def week_sheet(session: Session, week_id: int) -> list[SheetMatch]:
     after it: a save landing in between pairs newer scores with an older
     revision, which the write then refuses as out of date, never the reverse.
     """
+    week = session.get(Week, week_id)
     hole_number = {hole.id: hole.number for hole in week_holes(session, week_id)}
     handicaps = {
         row.golfer_id: row.strokes
@@ -738,12 +741,29 @@ def week_sheet(session: Session, week_id: int) -> list[SheetMatch]:
         return user_names[user_id]
 
     sheet: list[SheetMatch] = []
+    # One batch read of every team member's position for the teams playing this week,
+    # keyed by (team_id, golfer_id), so each golfer's row can show their position.
+    member_position: dict[tuple[int, int], int] = {}
+    team_ids: set[int] = set()
+    for _match, _pairing in matches:
+        team_ids.add(_pairing.home_team_id)
+        team_ids.add(_pairing.away_team_id)
+    if team_ids:
+        for _member in session.scalars(
+            select(TeamMember).where(
+                TeamMember.team_id.in_(team_ids), TeamMember.season_id == week.season_id
+            )
+        ):
+            member_position[(_member.team_id, _member.golfer_id)] = _member.position
     for match, pairing in matches:
         state = session.get(MatchScoreState, match.id, populate_existing=True)  # first; see above
         revision, locked = _revision(state), _is_locked(state)
         rows = _rows_by_golfer(session, match.id, refresh=True)
         golfers = []
-        for golfer_id, is_sub in ((match.a_golfer_id, match.a_is_sub), (match.b_golfer_id, match.b_is_sub)):
+        for golfer_id, is_sub, team_id in (
+            (match.a_golfer_id, match.a_is_sub, pairing.home_team_id),
+            (match.b_golfer_id, match.b_is_sub, pairing.away_team_id),
+        ):
             saved = rows.get(golfer_id, [])
             strokes = dict(sorted(
                 (hole_number.get(row.hole_id) or session.get(Hole, row.hole_id).number, row.strokes)
@@ -754,6 +774,7 @@ def week_sheet(session: Session, week_id: int) -> list[SheetMatch]:
                 golfer_id=golfer_id, name=_name(session.get(Golfer, golfer_id)), is_sub=bool(is_sub),
                 strokes_by_hole=strokes, total=sum(strokes.values()) if saved else None,
                 handicap=handicaps.get(golfer_id),
+                position=member_position.get((team_id, golfer_id)),
                 entered_by_user_id=entered_by, entered_by_name=user_name(entered_by),
             ))
         counts = [len(golfer.strokes_by_hole) for golfer in golfers]

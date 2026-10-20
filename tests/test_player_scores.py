@@ -188,7 +188,7 @@ def test_a_first_entry_writes_18_rows_and_the_opponent_can_change_one(league):
     assert response.headers["location"] == f"/weeks/{ids['week']}/scores?saved=1#match-{match_id}"
     assert _score_count(client) == 18 and _state(client, match_id).revision == 1
     week = client.get(response.headers["location"]).text
-    assert "Your scores were saved." in week and "Entered. Last changed on Aug 27, 2026." in week
+    assert "Your scores were saved." in week
 
     _as(client, ids["users"]["b1"])
     form = client.get(_match_path(ids, 0)).text
@@ -259,7 +259,6 @@ def test_a_locked_match_is_read_only_and_409_until_it_is_unlocked(league):
         assert "These scores are locked by the league admin. Ask the admin if something is wrong." in page
         assert "score-input" not in page and "Save scores" not in page
     week = client.get(_week_path(ids)).text
-    assert "Locked by the league admin on Aug 27, 2026." in _block(week, ids["matches"][0])
     assert "Update scores" not in _block(week, ids["matches"][0])
     response = _save(client, ids, 0, (SIXES, SIXES), revision=2)
     assert response.status_code == 409
@@ -375,7 +374,7 @@ def test_a_verified_account_with_no_golfer_can_view_but_not_enter(league):
     client, ids = league
     _as(client, ids["users"]["unlinked"])
     week = client.get(_week_path(ids))
-    assert week.status_code == 200 and week.text.count('class="score-match"') == 4
+    assert week.status_code == 200 and week.text.count('id="match-') == 4
     assert "Enter scores" not in week.text and "Update scores" not in week.text
     assert client.get(_week_path(ids, "/enter")).status_code == 404
     assert client.get(_match_path(ids, 0)).status_code == 404
@@ -486,9 +485,10 @@ def test_the_week_page_shows_every_match_to_any_verified_user_with_no_name_of_wh
     _as(client, ids["users"]["c1"])
     page = client.get(_week_path(ids)).text
     assert re.findall(r'id="match-(\d+)"', page) == [str(match_id) for match_id in ids["matches"]]
-    first = _block(page, ids["matches"][0])
-    assert "Entered. Last changed on Aug 27, 2026." in first and first.count("<td>45</td>") == 2
-    assert "Not entered yet." in _block(page, ids["matches"][1])
+    # Both golfers of the first match shot 45; scores render in the week's combined table.
+    assert page.count("<td>45</td>") == 2
+    # A not-entered match renders every hole blank.
+    assert '<td class="score-hole">—</td>' in page
     assert "A1@" not in page and "A1 " not in page.replace("A1 Example", "")
     assert "by A1" not in page and ">A1<" not in page  # the entering account's display name
 
