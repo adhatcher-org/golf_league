@@ -52,9 +52,13 @@
                 </table>
             </div>
             {% for item in group.matches %}
+            {% if item.link %}
             <div id="match-{{ item.match.player_match_id }}" class="score-match score-match__actions">
-                {% if item.link %}<a class="tap-link" href="{{ item.link.href }}">{{ item.link.text }}</a>{% endif %}
+                <a class="tap-link" href="{{ item.link.href }}">{{ item.link.text }}</a>
             </div>
+            {% else %}
+            <div id="match-{{ item.match.player_match_id }}"></div>
+            {% endif %}
             {% endfor %}
         </section>
         {% endfor %}

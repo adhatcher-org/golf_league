@@ -113,6 +113,8 @@ class SheetGolfer:
     position: int | None  # the golfer's position (1-4) on their team this season, or None
     entered_by_user_id: int | None
     entered_by_name: str | None
+    team_name: str  # the team this golfer plays for this week
+    team_side: str  # "home" or "away", used to colour the team cell
 
 
 @dataclass(frozen=True)
@@ -759,6 +761,8 @@ def week_sheet(session: Session, week_id: int) -> list[SheetMatch]:
         state = session.get(MatchScoreState, match.id, populate_existing=True)  # first; see above
         revision, locked = _revision(state), _is_locked(state)
         rows = _rows_by_golfer(session, match.id, refresh=True)
+        home_team_name = session.get(Team, pairing.home_team_id).name
+        away_team_name = session.get(Team, pairing.away_team_id).name
         golfers = []
         for golfer_id, is_sub, team_id in (
             (match.a_golfer_id, match.a_is_sub, pairing.home_team_id),
@@ -770,18 +774,21 @@ def week_sheet(session: Session, week_id: int) -> list[SheetMatch]:
                 for row in saved
             ))
             entered_by = saved[0].entered_by_user_id if saved else None
+            is_home = team_id == pairing.home_team_id
             golfers.append(SheetGolfer(
                 golfer_id=golfer_id, name=_name(session.get(Golfer, golfer_id)), is_sub=bool(is_sub),
                 strokes_by_hole=strokes, total=sum(strokes.values()) if saved else None,
                 handicap=handicaps.get(golfer_id),
                 position=member_position.get((team_id, golfer_id)),
                 entered_by_user_id=entered_by, entered_by_name=user_name(entered_by),
+                team_name=home_team_name if is_home else away_team_name,
+                team_side="home" if is_home else "away",
             ))
         counts = [len(golfer.strokes_by_hole) for golfer in golfers]
         sheet.append(SheetMatch(
             player_match_id=match.id, team_match_id=pairing.id,
-            home_team_name=session.get(Team, pairing.home_team_id).name,
-            away_team_name=session.get(Team, pairing.away_team_id).name,
+            home_team_name=home_team_name,
+            away_team_name=away_team_name,
             position_label=match.position_label, golfers=(golfers[0], golfers[1]),
             revision=revision, locked=locked,
             locked_at=state.locked_at if state else None,

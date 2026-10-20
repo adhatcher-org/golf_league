@@ -119,8 +119,12 @@ def session(engine):
 
     yield session
 
-    # Rollback the transaction
-    transaction.rollback()
+    # Roll back the transaction unless the session's close already
+    # deassociated it (the session is bound to the connection, so closing
+    # the session can roll back the shared transaction).
+    session.close()
+    if transaction.is_active:
+        transaction.rollback()
     connection.close()
 
 
