@@ -248,7 +248,7 @@ async def week_scores(week_id: int, request: Request,
             link = {"href": match_path(week.id, match.player_match_id),
                     "text": "Update scores" if entered else "Enter scores"}
         matches.append({
-            "match": match, "title": _title(match), "state_line": _state_line(request, match), "link": link,
+            "match": match, "link": link,
             "view": {"rows": _rows(match, hole_numbers, frozenset(), {}, set())},
         })
     groups = _group_matches(matches, week.week_type)
