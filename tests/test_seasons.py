@@ -30,6 +30,7 @@ def _payload(course_id, **overrides):
         "play_weekday": "3",
         "status": "draft",
         "first_week_nine": "front",
+        "scoring_type": "match_play",
     }
     payload.update(overrides)
     return payload
@@ -50,6 +51,39 @@ def test_create_fall_season_round_trips_with_derived_count(session, wyandot_cour
     assert season_display_name(season, Settings(session_secret="test")) == (
         "St. Paul 2026 Fall Golf League"
     )
+
+
+def test_scoring_type_defaults_to_match_play(session, wyandot_course):
+    course = wyandot_course()
+    season = create_season(session, **_payload(course.id))
+    assert season.scoring_type == "match_play"
+
+
+def test_scoring_type_can_be_stroke_play(session, wyandot_course):
+    course = wyandot_course()
+    season = create_season(session, **_payload(course.id, scoring_type="stroke_play"))
+    assert season.scoring_type == "stroke_play"
+
+
+@pytest.mark.parametrize("value", ["", "bogus", "Match Play", "strokeplay", "matchplay"])
+def test_invalid_scoring_type_is_rejected(session, wyandot_course, value):
+    course = wyandot_course()
+    values = _payload(course.id, scoring_type=value)
+    with pytest.raises(SeasonValidationError) as exc_info:
+        create_season(session, **values)
+    assert "scoring_type" in exc_info.value.errors
+    assert session.execute(select(Season)).all() == []
+
+
+def test_scoring_type_can_be_updated(session, wyandot_course):
+    course = wyandot_course()
+    season = create_season(session, **_payload(course.id, scoring_type="match_play"))
+    updated = update_season(
+        session, season.id, **_payload(course.id, scoring_type="stroke_play")
+    )
+    assert updated.scoring_type == "stroke_play"
+    session.refresh(season)
+    assert season.scoring_type == "stroke_play"
 
 
 def test_override_whitespace_becomes_null_and_custom_template_is_used(session, wyandot_course):

@@ -203,6 +203,9 @@ class Season(Base):
             name="ck_seasons_first_week_nine",
         ),
         CheckConstraint("start_date <= end_date", name="ck_seasons_dates"),
+        CheckConstraint(
+            "scoring_type IN ('match_play', 'stroke_play')", name="ck_seasons_scoring_type"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -222,6 +225,9 @@ class Season(Base):
         String(8), nullable=False, default="draft", server_default="draft"
     )
     first_week_nine: Mapped[str] = mapped_column(String(5), nullable=False)
+    scoring_type: Mapped[str] = mapped_column(
+        String(12), nullable=False, server_default="match_play"
+    )
 
     course: Mapped["Course"] = relationship("Course", back_populates="seasons")
 

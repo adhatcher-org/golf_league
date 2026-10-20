@@ -39,7 +39,11 @@ def _form_values(season=None, submitted: dict[str, str] | None = None) -> dict[s
     if submitted is not None:
         return submitted
     if season is None:
-        return {"year": "", "name_override": "", "course_id": "", "start_date": "", "end_date": "", "play_weekday": "3", "status": "draft", "first_week_nine": "front"}
+        return {
+            "year": "", "name_override": "", "course_id": "", "start_date": "", "end_date": "",
+            "play_weekday": "3", "status": "draft", "first_week_nine": "front",
+            "scoring_type": "match_play",
+        }
     return {
         "year": season.year,
         "name_override": season.name_override or "",
@@ -49,6 +53,7 @@ def _form_values(season=None, submitted: dict[str, str] | None = None) -> dict[s
         "play_weekday": season.play_weekday,
         "status": season.status,
         "first_week_nine": season.first_week_nine,
+        "scoring_type": season.scoring_type,
     }
 
 
@@ -83,6 +88,7 @@ def _submitted_values(
     play_weekday: str,
     status_value: str,
     first_week_nine: str,
+    scoring_type: str,
 ) -> dict[str, str]:
     return {
         "year": year,
@@ -93,6 +99,7 @@ def _submitted_values(
         "play_weekday": play_weekday,
         "status": status_value,
         "first_week_nine": first_week_nine,
+        "scoring_type": scoring_type,
     }
 
 
@@ -138,6 +145,7 @@ async def create_season_submit(
     play_weekday: str = Form(""),
     status_value: str = Form("", alias="status"),
     first_week_nine: str = Form(""),
+    scoring_type: str = Form(""),
     csrf_token: str = Form(""),
     session: Session = Depends(get_session),  # noqa: B008
     admin=Depends(require_admin),  # noqa: B008
@@ -152,6 +160,7 @@ async def create_season_submit(
         play_weekday=play_weekday,
         status_value=status_value,
         first_week_nine=first_week_nine,
+        scoring_type=scoring_type,
     )
     try:
         season = create_season(session, **submitted)
@@ -196,6 +205,7 @@ async def update_season_submit(
     play_weekday: str = Form(""),
     status_value: str = Form("", alias="status"),
     first_week_nine: str = Form(""),
+    scoring_type: str = Form(""),
     csrf_token: str = Form(""),
     session: Session = Depends(get_session),  # noqa: B008
     admin=Depends(require_admin),  # noqa: B008
@@ -213,6 +223,7 @@ async def update_season_submit(
         play_weekday=play_weekday,
         status_value=status_value,
         first_week_nine=first_week_nine,
+        scoring_type=scoring_type,
     )
     try:
         update_season(session, season_id, **submitted)

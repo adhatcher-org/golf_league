@@ -173,8 +173,6 @@ def test_snapshot_migration_fresh_and_prior_data_preserved(tmp_path, prior):
         engine = make_engine(url)
         with Session(engine) as session:
             ids = seed_fixture(session)
-            _, rows, _ = create_generated(session, ids)
-            player_ids = [row.id for row in rows]
             session.commit()
         engine.dispose()
     command.upgrade(config, "head")
@@ -188,6 +186,9 @@ def test_snapshot_migration_fresh_and_prior_data_preserved(tmp_path, prior):
                 ids = seed_fixture(session)
             assert session.get(Week, ids["weeks"][0]).play_date == date(2026, 8, 27)
             if prior:
+                _, rows, _ = create_generated(session, ids)
+                player_ids = [row.id for row in rows]
+                session.commit()
                 assert [r.id for r in session.scalars(select(PlayerMatch).order_by(PlayerMatch.id))] == player_ids
             assert snapshots(session) == []
     finally:

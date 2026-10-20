@@ -27,6 +27,7 @@ from golf_league.models import (
 
 VALID_STATUSES = ("draft", "active", "complete")
 VALID_FIRST_WEEK_NINES = ("front", "back")
+VALID_SCORING_TYPES = ("match_play", "stroke_play")
 
 
 class SeasonValidationError(Exception):
@@ -131,6 +132,7 @@ def _validate_season_fields(  # noqa: C901
     play_weekday: object,
     status: object,
     first_week_nine: object,
+    scoring_type: object,
 ) -> tuple[dict[str, str], dict[str, object]]:
     """Validate every field before any season row is mutated."""
     errors: dict[str, str] = {}
@@ -169,6 +171,12 @@ def _validate_season_fields(  # noqa: C901
         errors["first_week_nine"] = "First-week nine must be front or back."
     else:
         parsed["first_week_nine"] = normalized_nine
+
+    normalized_scoring_type = str(scoring_type).strip()
+    if normalized_scoring_type not in VALID_SCORING_TYPES:
+        errors["scoring_type"] = "Scoring type must be match play or stroke play."
+    else:
+        parsed["scoring_type"] = normalized_scoring_type
 
     if parsed_start is not None and parsed_end is not None:
         if parsed_start > parsed_end:
@@ -212,6 +220,7 @@ def create_season(
     play_weekday: object = 3,
     status: object = "draft",
     first_week_nine: object,
+    scoring_type: object = "match_play",
 ) -> Season:
     """Create one validated season atomically, or write nothing."""
     errors, parsed = _validate_season_fields(
@@ -223,6 +232,7 @@ def create_season(
         play_weekday=play_weekday,
         status=status,
         first_week_nine=first_week_nine,
+        scoring_type=scoring_type,
     )
     if errors:
         raise SeasonValidationError(errors)
@@ -261,6 +271,7 @@ def update_season(
     play_weekday: object = 3,
     status: object = "draft",
     first_week_nine: object,
+    scoring_type: object = "match_play",
 ) -> Season | None:
     """Update only GL-30 structural fields; future scheduling is excluded."""
     from golf_league.services.schedule import ScheduleConflict, reserve_schedule_write
@@ -282,6 +293,7 @@ def update_season(
         play_weekday=play_weekday,
         status=status,
         first_week_nine=first_week_nine,
+        scoring_type=scoring_type,
     )
     parsed_course_id = parsed.get("course_id")
     if (parsed_course_id is not None and int(parsed_course_id) != season.course_id
@@ -328,6 +340,7 @@ def update_season(
     season.play_weekday = int(parsed["play_weekday"])
     season.status = str(parsed["status"])
     season.first_week_nine = str(parsed["first_week_nine"])
+    season.scoring_type = str(parsed["scoring_type"])
     session.commit()
     session.refresh(season)
     return season
@@ -339,6 +352,7 @@ def list_courses_for_season_form(session: Session) -> list[Course]:
 
 __all__ = [
     "SeasonValidationError",
+    "VALID_SCORING_TYPES",
     "create_season",
     "get_season",
     "list_courses_for_season_form",

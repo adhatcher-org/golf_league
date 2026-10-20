@@ -223,7 +223,8 @@ def test_admin_preview_commit_csrf_and_repeat_contract(admin_client):
         course_id = session.execute(select(Course.id).where(Course.name == "Wyandot Golf Club")).scalar_one()
     form = {"year": "2026", "name_override": "", "course_id": str(course_id),
             "start_date": "2026-08-27", "end_date": "2026-10-29", "play_weekday": "3",
-            "status": "draft", "first_week_nine": "front", "csrf_token": csrf}
+            "status": "draft", "first_week_nine": "front", "scoring_type": "match_play",
+            "csrf_token": csrf}
     response = client.post("/admin/seasons/new", data=form, follow_redirects=False)
     assert response.status_code == 303
     season_id = int(response.headers["location"].rstrip("/").split("/")[-1]) if "/edit" not in response.headers["location"] else int(response.headers["location"].split("/")[-2])
