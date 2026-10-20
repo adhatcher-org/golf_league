@@ -1619,6 +1619,15 @@ pre { max-width: 100%; overflow-x: auto; }
     overflow-wrap: anywhere;
 }
 
+/* Team name cell on score rows: one team blue, the other black, so they are easy to tell apart. */
+.score-team {
+    font-weight: 600;
+    font-size: 0.9em;
+    white-space: nowrap;
+}
+.score-team--home { color: #1d4ed8; }      /* blue */
+.score-team--away { color: var(--ink); }   /* black/dark */
+
 /* Score entry grids: fit a phone screen without sideways scroll.
    Desktop rules (min-width, nowrap) above are unchanged; this only
    relaxes them at the 720px mobile breakpoint. Placed last so the
@@ -1791,7 +1800,7 @@ pre { max-width: 100%; overflow-x: auto; }
     font-size: 0.86rem;
 }
 
-.score-hole.is-collapsed {
+#score-tables.is-collapsed .score-hole {
     display: none;
 }
 

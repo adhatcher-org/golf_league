@@ -1,6 +1,6 @@
 <div class="table-wrap score-grid score-grid--named">
     <table>
-        <thead><tr><th scope="col">Golfer</th><th scope="col" class="score-position">Pos</th>{% for number in hole_numbers %}<th scope="col" class="score-hole">{{ number }}</th>{% endfor %}<th scope="col">Gross</th><th scope="col">HC</th><th scope="col">Net</th></tr></thead>
+        <thead><tr><th scope="col">Golfer</th><th scope="col" class="score-team">Team</th><th scope="col" class="score-position">Pos</th>{% for number in hole_numbers %}<th scope="col" class="score-hole">{{ number }}</th>{% endfor %}<th scope="col">Gross</th><th scope="col">HC</th><th scope="col">Net</th></tr></thead>
         <tbody>
             {% for row in view.rows %}{% if row.inputs %}{% include "scores/_match_inputs.html" %}{% else %}{% include "scores/_match_scores.html" %}{% endif %}{% endfor %}
         </tbody>
