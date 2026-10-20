@@ -37,12 +37,12 @@ def test_season_migration_schema_constraints_foreign_key_and_index(tmp_path):
         columns = {column["name"] for column in inspector.get_columns("seasons")}
         assert columns == {
             "id", "year", "name_override", "course_id", "start_date", "end_date",
-            "play_weekday", "status", "first_week_nine",
+            "play_weekday", "status", "first_week_nine", "scoring_type",
         }
         checks = {check["name"] for check in inspector.get_check_constraints("seasons")}
         assert checks == {
             "ck_seasons_year_range", "ck_seasons_play_weekday_range", "ck_seasons_status",
-            "ck_seasons_first_week_nine", "ck_seasons_dates",
+            "ck_seasons_first_week_nine", "ck_seasons_dates", "ck_seasons_scoring_type",
         }
         foreign_keys = inspector.get_foreign_keys("seasons")
         assert foreign_keys == [{

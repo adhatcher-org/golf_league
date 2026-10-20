@@ -57,6 +57,13 @@
             {% endfor %}
         </select>
     </label>
+    <label>Scoring type
+        <select name="scoring_type">
+            {% for value in ('match_play', 'stroke_play') %}
+            <option value="{{ value }}" {% if values.scoring_type == value %}selected{% endif %}>{{ value.replace('_', ' ') | title }}</option>
+            {% endfor %}
+        </select>
+    </label>
     <button type="submit">Save</button>
 </form>
 {% endblock %}

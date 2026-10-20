@@ -7,7 +7,7 @@ from threading import Barrier
 import pytest
 from alembic import command
 from alembic.script import ScriptDirectory
-from sqlalchemy import event, func, inspect, select
+from sqlalchemy import event, func, insert, inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -53,13 +53,15 @@ def seed_fixture(session):
     seed_wyandot(session)
     course = session.scalar(select(Course).where(Course.name == "Wyandot Golf Club"))
     tee = session.scalar(select(TeeSet).where(TeeSet.course_id == course.id, TeeSet.name == "Deer"))
-    season = Season(year=2026, course_id=course.id, start_date=date(2026, 8, 27), end_date=date(2026, 10, 29),
-                    play_weekday=3, status="draft", first_week_nine="front")
-    session.add(season)
-    session.flush()
+    season_id = session.execute(
+        insert(Season).values(
+            year=2026, course_id=course.id, start_date=date(2026, 8, 27),
+            end_date=date(2026, 10, 29), play_weekday=3, status="draft", first_week_nine="front",
+        ).returning(Season.id)
+    ).scalar_one()
     teams, golfers = [], []
     for number, label in enumerate("ABCD", 1):
-        team = Team(season_id=season.id, name=label, number=number, sort_order=number)
+        team = Team(season_id=season_id, name=label, number=number, sort_order=number)
         session.add(team)
         session.flush()
         teams.append(team.id)
@@ -69,17 +71,17 @@ def seed_fixture(session):
             session.add(golfer)
             session.flush()
             golfers.append(golfer.id)
-            session.add(SeasonGolfer(season_id=season.id, golfer_id=golfer.id))
-            session.add(TeamMember(team_id=team.id, season_id=season.id, golfer_id=golfer.id, position=position))
+            session.add(SeasonGolfer(season_id=season_id, golfer_id=golfer.id))
+            session.add(TeamMember(team_id=team.id, season_id=season_id, golfer_id=golfer.id, position=position))
     weeks = []
     for index in range(1, 4):
-        week = Week(season_id=season.id, index=index, play_date=date(2026, 8, 27) + timedelta(days=7 * (index - 1)),
+        week = Week(season_id=season_id, index=index, play_date=date(2026, 8, 27) + timedelta(days=7 * (index - 1)),
                     nine="front" if index % 2 else "back", week_type="match", status="scheduled")
         session.add(week)
         session.flush()
         weeks.append(week.id)
     session.commit()
-    return {"season": season.id, "teams": teams, "golfers": golfers, "weeks": weeks, "tee": tee.id}
+    return {"season": season_id, "teams": teams, "golfers": golfers, "weeks": weeks, "tee": tee.id}
 
 
 @pytest.fixture
