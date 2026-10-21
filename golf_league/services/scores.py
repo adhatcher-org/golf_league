@@ -856,12 +856,15 @@ class ResultPlayer:
     """One golfer's points total for a week or season.
 
     `matches` counts completed matches the golfer was a side of, by golfer id.
+    `rank` is the golfer's position in the points order, with ties sharing a
+    rank (competition/"1224" ranking: 10, 10, 8 points ranks 1, 1, 3).
     """
 
     golfer_id: int
     name: str
     points: int
     matches: int
+    rank: int
 
 
 @dataclass(frozen=True)
@@ -870,12 +873,15 @@ class ResultTeam:
 
     `matches` counts completed team matches the team was credited in; a
     self-match counts once for the team even though both sides belong to it.
+    `rank` is the team's position in the points order, with ties sharing a
+    rank (competition/"1224" ranking).
     """
 
     team_id: int
     name: str
     points: int
     matches: int
+    rank: int
 
 
 @dataclass(frozen=True)
@@ -983,6 +989,21 @@ def _score_week_match(session: Session, match: PlayerMatch, stroke_index_by_hole
     return score_result_match(scoring_type, stroke_index_by_hole, cards[a_id], cards[b_id])
 
 
+def _competition_ranks(rows: list[ResultPlayer | ResultTeam]) -> list[int]:
+    """Competition ranks for rows already sorted by (-points, name).
+
+    Tied point totals share a rank and the next rank skips (1, 1, 3, ...), so
+    the ordering is deterministic regardless of how ties are otherwise broken.
+    """
+    ranks: list[int] = []
+    for i, row in enumerate(rows):
+        if i > 0 and row.points == rows[i - 1].points:
+            ranks.append(ranks[-1])
+        else:
+            ranks.append(i + 1)
+    return ranks
+
+
 def week_result(session: Session, week_id: int) -> WeekResult | None:
     """One week's R-RESULTS@1 standings, or None when the week does not exist.
 
@@ -1036,18 +1057,27 @@ def week_result(session: Session, week_id: int) -> WeekResult | None:
             team_match_sets.setdefault(team_id, set()).add(match.team_match_id)
 
     players = [
-        ResultPlayer(gid, golfer_name(gid), player_points[gid], player_matches[gid])
+        ResultPlayer(gid, golfer_name(gid), player_points[gid], player_matches[gid], 0)
         for gid in player_points
     ]
     team_rows = [
-        ResultTeam(tid, teams[tid].name, team_points[tid], len(team_match_sets[tid]))
+        ResultTeam(tid, teams[tid].name, team_points[tid], len(team_match_sets[tid]), 0)
         for tid in team_points
     ]
     players.sort(key=lambda player: (-player.points, player.name))
     team_rows.sort(key=lambda team: (-team.points, team.name))
+    player_ranks = _competition_ranks(players)
+    team_ranks = _competition_ranks(team_rows)
     return WeekResult(
         week_id=week.id, week_index=week.index, play_date=week.play_date,
-        players=players, teams=team_rows,
+        players=[
+            ResultPlayer(p.golfer_id, p.name, p.points, p.matches, rank)
+            for p, rank in zip(players, player_ranks)
+        ],
+        teams=[
+            ResultTeam(t.team_id, t.name, t.points, t.matches, rank)
+            for t, rank in zip(team_rows, team_ranks)
+        ],
     )
 
 
@@ -1253,15 +1283,26 @@ def season_result(session: Session, season_id: int) -> SeasonResult | None:
             team_matches[team.team_id] = team_matches.get(team.team_id, 0) + team.matches
             team_names[team.team_id] = team.name
     players = [
-        ResultPlayer(gid, player_names[gid], player_points[gid], player_matches[gid])
+        ResultPlayer(gid, player_names[gid], player_points[gid], player_matches[gid], 0)
         for gid in player_points
     ]
     team_rows = [
-        ResultTeam(tid, team_names[tid], team_points[tid], team_matches[tid])
+        ResultTeam(tid, team_names[tid], team_points[tid], team_matches[tid], 0)
         for tid in team_points
     ]
     players.sort(key=lambda player: (-player.points, player.name))
     team_rows.sort(key=lambda team: (-team.points, team.name))
+    player_ranks = _competition_ranks(players)
+    team_ranks = _competition_ranks(team_rows)
     return SeasonResult(
-        season_id=season.id, players=players, teams=team_rows, weeks=week_results,
+        season_id=season.id,
+        players=[
+            ResultPlayer(p.golfer_id, p.name, p.points, p.matches, rank)
+            for p, rank in zip(players, player_ranks)
+        ],
+        teams=[
+            ResultTeam(t.team_id, t.name, t.points, t.matches, rank)
+            for t, rank in zip(team_rows, team_ranks)
+        ],
+        weeks=week_results,
     )

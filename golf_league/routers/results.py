@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from golf_league.database import get_session
-from golf_league.models import Season, User, Week
+from golf_league.models import PlayerMatch, Season, TeamMatch, User, Week
 from golf_league.routers.scorecard_flow import _page
 from golf_league.security import require_verified_user
 from golf_league.services.scores import (
@@ -52,7 +52,13 @@ async def season_results(season_id: int, request: Request,
 async def week_results(season_id: int, week_id: int, request: Request,
                        session: Session = Depends(get_session),  # noqa: B008
                        user: User = Depends(require_verified_user)) -> Response:  # noqa: B008
-    """One week's points tables within a season."""
+    """One week's points tables within a season.
+
+    Shows the complete-match point leaders (reconciled with the season page),
+    links to the week's scores page and its gross/net skins pages, and an
+    explicit empty state when the week is cancelled, has no generated matches,
+    or has matches but nothing scored completely yet.
+    """
     season = _season(session, season_id)
     weeks = list(session.scalars(
         select(Week).where(Week.season_id == season_id).order_by(Week.index)))
@@ -60,8 +66,22 @@ async def week_results(season_id: int, week_id: int, request: Request,
     if week is None or week.season_id != season_id:
         raise HTTPException(status_code=404, detail="Not found")
     result = week_result(session, week_id)
-    return _page(request, "player/results.html", {
+
+    generated = session.scalar(
+        select(PlayerMatch.id)
+        .join(TeamMatch, TeamMatch.id == PlayerMatch.team_match_id)
+        .where(TeamMatch.week_id == week_id)
+        .limit(1)
+    ) is not None
+
+    cancelled = week.status == "cancelled"
+    ungenerated = not generated
+    pending = generated and not result.players
+
+    return _page(request, "player/results/week.html", {
         "season": season, "weeks": weeks, "week": week, "result": result,
+        "cancelled": cancelled, "ungenerated": ungenerated, "pending": pending,
+        "show_skins": generated and not cancelled,
     })
 
 

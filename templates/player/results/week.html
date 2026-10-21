@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Week {{ week.index }} results - Golf League{% endblock %}
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title">
+    <p class="eyebrow">Results</p>
+    <h1 id="page-title">Week {{ week.index }} results</h1>
+    <p>
+        {{ season.name_override or ("Season " ~ season.year) }}
+        · Week {{ week.index }}, {{ week.play_date.strftime('%b %-d, %Y') }}
+    </p>
+</section>
+<nav aria-label="Results navigation"><p>
+    <a class="tap-link" href="/my/schedule?season_id={{ season.id }}">My Schedule</a>
+    · <a class="tap-link" href="/seasons/{{ season.id }}/results">Season results</a>
+    · <a class="tap-link" href="/weeks/{{ week.id }}/scores">Week scores</a>
+    {% if show_skins %}
+    · <a class="tap-link" href="/seasons/{{ season.id }}/results/weeks/{{ week.id }}/skins">Gross skins</a>
+    · <a class="tap-link" href="/seasons/{{ season.id }}/results/weeks/{{ week.id }}/net-skins">Net skins</a>
+    {% endif %}
+</p></nav>
+
+{% if cancelled %}
+<section aria-labelledby="cancelled-title">
+    <h2 id="cancelled-title">Week cancelled</h2>
+    <p>Week {{ week.index }} was cancelled, so no matches were played and there are no points to show.</p>
+</section>
+{% elif ungenerated %}
+<section aria-labelledby="ungenerated-title">
+    <h2 id="ungenerated-title">Matches not yet generated</h2>
+    <p>Week {{ week.index }} is scheduled but no matches have been generated yet, so there are no points to show.</p>
+</section>
+{% elif pending %}
+<section aria-labelledby="pending-title">
+    <h2 id="pending-title">Scores pending</h2>
+    <p>Matches are set for week {{ week.index }} but none are complete yet, so there are no points to show.</p>
+</section>
+{% else %}
+<section aria-labelledby="players-title">
+    <h2 id="players-title">Players</h2>
+    <div class="table-wrap">
+    <table class="golfer-table">
+        <thead><tr><th scope="col">Rank</th><th scope="col">Golfer</th><th scope="col">Points</th><th scope="col">Matches</th></tr></thead>
+        <tbody>
+        {% for player in result.players %}
+        <tr><td>{{ player.rank }}</td><td>{{ player.name }}</td><td>{{ player.points }}</td><td>{{ player.matches }}</td></tr>
+        {% endfor %}
+        {% if not result.players %}<tr><td colspan="4">No scored matches yet.</td></tr>{% endif %}
+        </tbody>
+    </table>
+    </div>
+</section>
+
+<section aria-labelledby="teams-title">
+    <h2 id="teams-title">Teams</h2>
+    <div class="table-wrap">
+    <table class="golfer-table">
+        <thead><tr><th scope="col">Rank</th><th scope="col">Team</th><th scope="col">Points</th><th scope="col">Matches</th></tr></thead>
+        <tbody>
+        {% for team in result.teams %}
+        <tr><td>{{ team.rank }}</td><td>{{ team.name }}</td><td>{{ team.points }}</td><td>{{ team.matches }}</td></tr>
+        {% endfor %}
+        {% if not result.teams %}<tr><td colspan="4">No scored matches yet.</td></tr>{% endif %}
+        </tbody>
+    </table>
+    </div>
+</section>
+{% endif %}
+{% endblock %}
