@@ -1081,6 +1081,30 @@ def week_result(session: Session, week_id: int) -> WeekResult | None:
     )
 
 
+def week_points(session: Session, week_id: int) -> dict[int, ResultMatch | None]:
+    """Per-match R-RESULTS@1 result for the week, keyed by player match id.
+
+    A pending match (incomplete scores or a missing handicap snapshot) maps to
+    ``None``; points are derived, never stored.
+    """
+    week = session.get(Week, week_id)
+    if week is None:
+        return {}
+    season = session.get(Season, week.season_id)
+    holes = week_holes(session, week_id)
+    stroke_index_by_hole = {hole.number: hole.stroke_index_9 for hole in holes}
+    hole_number = {hole.id: hole.number for hole in holes}
+    handicaps = {
+        row.golfer_id: row.strokes
+        for row in session.scalars(select(WeekHandicap).where(WeekHandicap.week_id == week_id))
+    }
+    return {
+        match.id: _score_week_match(session, match, stroke_index_by_hole, hole_number, handicaps,
+                                    season.scoring_type)
+        for match in _week_player_matches(session, week_id)
+    }
+
+
 def week_skins(session: Session, week_id: int) -> WeekSkins | None:
     """One week's gross skins, or None when the week does not exist.
 

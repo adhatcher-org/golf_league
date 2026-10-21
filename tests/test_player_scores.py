@@ -36,9 +36,10 @@ from golf_league.models import (
     Week,
 )
 from golf_league.services.auth import create_session_cookie, hash_password
+from golf_league.services.handicaps import ensure_week_handicap
 from golf_league.services.matchups import substitute_player
 from golf_league.services.scorecard_drafts import create_draft
-from golf_league.services.scores import lock_match, submit_card, unlock_match
+from golf_league.services.scores import lock_match, save_match_scores, submit_card, unlock_match
 
 SIXES = (6,) * 9
 
@@ -548,3 +549,66 @@ def test_names_render_escaped_and_no_log_carries_a_name_or_score(league, caplog)
     for record in caplog.records:
         message = record.getMessage()
         assert "Markup" not in message and "Example" not in message and "63" not in message
+
+
+# --- scorecard display -------------------------------------------------------
+
+
+def test_scorecard_shows_course_nine_date_and_hole_metadata(league):
+    client, ids = league
+    page = client.get(_week_path(ids)).text
+    assert "Wyandot Golf Club" in page
+    assert "Front nine scorecard" in page
+    assert "Aug 27, 2026" in page
+    for number in range(1, 10):
+        assert f'<th scope="col" class="score-hole">{number}</th>' in page
+    assert '<th scope="row">Yards</th>' in page
+    assert '<th scope="row">Par</th>' in page
+    assert '<th scope="row">Stroke index</th>' in page
+    # Deer (White) tee yardage for hole 1 of the front nine.
+    assert '<td class="score-yardage">498</td>' in page
+    assert '<td class="score-par">5</td>' in page
+    assert '<td class="score-stroke-index">5</td>' in page
+
+
+def test_scorecard_shows_hole_scores_totals_and_points(league):
+    client, ids = league
+    ids = _with_admin(client, ids)
+    a_id, b_id = ids["sides"][ids["matches"][0]]
+    with Session(_engine(client)) as session:
+        save_match_scores(session, ids["week"], ids["matches"][0],
+                          {a_id: dict.fromkeys(range(1, 10), 4), b_id: dict.fromkeys(range(1, 10), 5)},
+                          Actor(ids["users"]["admin"], True), NOW.date(), base_revision=0, now=NOW)
+        ensure_week_handicap(session, ids["week"], a_id, clock=clock)
+        ensure_week_handicap(session, ids["week"], b_id, clock=clock)
+        session.commit()
+    page = client.get(_week_path(ids)).text
+    assert page.count('<td class="score-hole">4</td>') == 9
+    assert page.count('<td class="score-hole">5</td>') == 9
+    assert '<td>36</td>' in page and '<td>45</td>' in page
+    # A1 and B1 both carry -1, so relative strokes are 0 and net equals gross.
+    # Match play: A wins all 9 holes (18 pts) plus the 2-point round bonus = 20; B = 0.
+    assert 'class="score-points">20' in page
+    assert 'class="score-points">0' in page
+    # Matches with no saved scores are incomplete -> "—" for points.
+    assert 'class="score-points">—' in page
+
+
+def test_scorecard_edit_links_follow_entry_state(league):
+    client, ids = league
+    match_id = ids["matches"][0]
+    page = client.get(_week_path(ids)).text
+    assert f'id="match-{match_id}"' in page
+    assert f'href="{_match_path(ids, 0)}">Enter scores' in page
+    assert "Update scores" not in page
+    assert _save(client, ids, 0).status_code == 303
+    page = client.get(_week_path(ids)).text
+    assert f'href="{_match_path(ids, 0)}">Update scores' in page
+    assert "Enter scores" not in page
+    ids = _with_admin(client, ids)
+    with Session(_engine(client)) as session:
+        lock_match(session, ids["week"], match_id, _admin(ids), base_revision=1, now=NOW)
+        session.commit()
+    page = client.get(_week_path(ids)).text
+    assert f'id="match-{match_id}"' in page
+    assert "Update scores" not in page and "Enter scores" not in page
