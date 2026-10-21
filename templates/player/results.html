@@ -11,7 +11,11 @@
 </section>
 <nav aria-label="Results navigation"><p>
     <a class="tap-link" href="/my/schedule?season_id={{ season.id }}">My Schedule</a>
-    {% if not week %}
+    {% if week %}
+        · <a class="tap-link" href="/seasons/{{ season.id }}/results/weeks/{{ week.id }}">Week results</a>
+        · <a class="tap-link" href="/seasons/{{ season.id }}/results/weeks/{{ week.id }}/skins">Skins</a>
+        · <a class="tap-link" href="/seasons/{{ season.id }}/results/weeks/{{ week.id }}/net-skins">Net skins</a>
+    {% else %}
         {% for w in weeks %}
         · <a class="tap-link" href="/seasons/{{ season.id }}/results/weeks/{{ w.id }}">Week {{ w.index }}</a>
         {% endfor %}

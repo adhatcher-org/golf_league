@@ -469,3 +469,137 @@ def gross_skins(
         )
     )
     return SkinsCalculation(holes=holes_out, golfers=golfers_out, carried=carry)
+
+
+# --- R-RESULTS@1: net skins --------------------------------------------------
+
+
+@dataclass(frozen=True)
+class NetSkinHole:
+    """One hole's net-skins outcome.
+
+    `winner_id` is None when the low net score is tied: nobody wins the hole
+    and its unit carries to the next hole. `units` is the number of skin
+    units awarded on this hole — one for the hole itself plus any carried
+    units when a golfer wins outright, zero when the hole is tied or carried.
+    """
+
+    hole_number: int
+    low_net: int
+    winner_id: int | None
+    units: int
+
+
+@dataclass(frozen=True)
+class NetGolferSkins:
+    """One golfer's net-skins result for a week, ranked in the score grid."""
+
+    golfer_id: int
+    name: str
+    strokes_by_hole: dict[int, int]      # gross strokes
+    allocated_by_hole: dict[int, int]    # strokes allocated from relative handicap
+    net_by_hole: dict[int, int]          # net = gross - allocated
+    hole_wins: int
+    units: int
+    gross_total: int
+    allocated_total: int
+    net_total: int
+
+
+@dataclass(frozen=True)
+class NetSkinsCalculation:
+    """Pure net-skins outcome for a field of complete cards.
+
+    `carried` holds the units carried past the final hole: visible, unawarded,
+    and never credited to any golfer.
+    """
+
+    holes: list[NetSkinHole]
+    golfers: list[NetGolferSkins]
+    carried: int
+
+
+def net_skins(
+    cards: Iterable[GolferCard],
+    hole_numbers: Iterable[int],
+    stroke_index_by_hole: dict[int, int],
+) -> NetSkinsCalculation:
+    """Calculate net skins hole by hole over one nine.
+
+    Each golfer's relative strokes are ``handicap - min(handicaps in the
+    field)`` (100% of the signed historical nine-hole handicap, never halved),
+    allocated over the played nine with :func:`strokes_for_relative` —
+    ``divmod(relative, 9)`` gives ``q`` strokes on every hole plus one more on
+    stroke indexes 1 through ``r``, so multiple strokes per hole are allowed.
+    Net score is gross minus allocated strokes. Each hole contributes one skin
+    unit; the single outright low net wins the hole and any carried units. A
+    tied low net carries the unit forward; a carry after the last hole stays
+    visible and unawarded.
+
+    Every card must hold a stroke and a non-``None`` handicap for every hole
+    in `hole_numbers`; missing data is never treated as zero. Callers enforce
+    a complete field (and complete snapshots) before calling here.
+    """
+    hole_numbers = list(hole_numbers)
+    by_id: dict[int, GolferCard] = {}
+    for card in cards:
+        by_id[card.golfer_id] = card
+
+    handicaps = {golfer_id: card.handicap for golfer_id, card in by_id.items()}
+    low_handicap = min(handicaps.values())
+    allocated: dict[int, dict[int, int]] = {}
+    for golfer_id, card in by_id.items():
+        allocated[golfer_id] = strokes_for_relative(
+            card.handicap - low_handicap, stroke_index_by_hole
+        )
+
+    units = {golfer_id: 0 for golfer_id in by_id}
+    wins = {golfer_id: 0 for golfer_id in by_id}
+    carry = 0
+    holes_out: list[NetSkinHole] = []
+
+    for hole in hole_numbers:
+        nets = {
+            golfer_id: card.strokes_by_hole[hole] - allocated[golfer_id][hole]
+            for golfer_id, card in by_id.items()
+        }
+        low_net = min(nets.values())
+        leaders = [golfer_id for golfer_id, net in nets.items() if net == low_net]
+        if len(leaders) == 1:
+            winner = leaders[0]
+            units[winner] += 1 + carry
+            wins[winner] += 1
+            holes_out.append(NetSkinHole(hole, low_net, winner, 1 + carry))
+            carry = 0
+        else:
+            carry += 1
+            holes_out.append(NetSkinHole(hole, low_net, None, 0))
+
+    golfers_out = [
+        NetGolferSkins(
+            golfer_id=card.golfer_id,
+            name=card.name,
+            strokes_by_hole=card.strokes_by_hole,
+            allocated_by_hole=allocated[card.golfer_id],
+            net_by_hole={
+                hole: card.strokes_by_hole[hole] - allocated[card.golfer_id][hole]
+                for hole in hole_numbers
+            },
+            hole_wins=wins[card.golfer_id],
+            units=units[card.golfer_id],
+            gross_total=sum(card.strokes_by_hole[hole] for hole in hole_numbers),
+            allocated_total=sum(allocated[card.golfer_id][hole] for hole in hole_numbers),
+            net_total=sum(
+                card.strokes_by_hole[hole] - allocated[card.golfer_id][hole]
+                for hole in hole_numbers
+            ),
+        )
+        for card in by_id.values()
+    ]
+    golfers_out.sort(
+        key=lambda golfer: (
+            -golfer.units, -golfer.hole_wins, golfer.net_total,
+            golfer.name, golfer.golfer_id,
+        )
+    )
+    return NetSkinsCalculation(holes=holes_out, golfers=golfers_out, carried=carry)
