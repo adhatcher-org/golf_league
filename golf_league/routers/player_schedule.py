@@ -95,5 +95,8 @@ async def week_detail(
         "player/week.html",
         {"season": season, "seasons": seasons, "week_view": week_view, "is_admin": user.is_admin,
          "entry_link": entry_links(session, request, [week_id], user).get(week_id),
-         "scores_path": week_path(week_id) if any(match.slots for match in week_view.matches) else None},
+         "scores_path": week_path(week_id) if any(match.slots for match in week_view.matches) else None,
+         "skins_path": (f"/seasons/{season.id}/results/weeks/{week_id}/skins"
+                        if week_view.week.week_type == "match"
+                        and week_view.week.status == "scheduled" else None)},
     )
