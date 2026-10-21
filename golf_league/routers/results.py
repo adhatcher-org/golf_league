@@ -17,7 +17,7 @@ from golf_league.database import get_session
 from golf_league.models import Season, User, Week
 from golf_league.routers.scorecard_flow import _page
 from golf_league.security import require_verified_user
-from golf_league.services.scores import season_result, week_result
+from golf_league.services.scores import season_result, week_result, week_skins
 from golf_league.services.seasons import get_season
 
 logger = logging.getLogger(__name__)
@@ -60,4 +60,23 @@ async def week_results(season_id: int, week_id: int, request: Request,
     result = week_result(session, week_id)
     return _page(request, "player/results.html", {
         "season": season, "weeks": weeks, "week": week, "result": result,
+    })
+
+
+@router.get("/seasons/{season_id}/results/weeks/{week_id}/skins")
+async def week_skins_page(season_id: int, week_id: int, request: Request,
+                          session: Session = Depends(get_session),  # noqa: B008
+                          user: User = Depends(require_verified_user)) -> Response:  # noqa: B008
+    """One week's gross-skins winners and ranked gross score grid (R-RESULTS@1).
+
+    Verified users only; the response carries `Cache-Control: no-store`.
+    """
+    season = _season(session, season_id)
+    week = session.get(Week, week_id)
+    if week is None or week.season_id != season_id:
+        raise HTTPException(status_code=404, detail="Not found")
+    skins = week_skins(session, week_id)
+    winner_names = {golfer.golfer_id: golfer.name for golfer in skins.golfers}
+    return _page(request, "player/skins.html", {
+        "season": season, "week": week, "skins": skins, "winner_names": winner_names,
     })

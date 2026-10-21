@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Skins - Week {{ week.index }} - Golf League{% endblock %}
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title">
+    <p class="eyebrow">Results &middot; Skins</p>
+    <h1 id="page-title">Week {{ week.index }} gross skins</h1>
+    <p>
+        {{ season.name_override or ("Season " ~ season.year) }}
+        &middot; {{ week.play_date.strftime('%b %-d, %Y') }}
+        &middot; {{ week.nine|title }} nine
+    </p>
+</section>
+<nav aria-label="Skins navigation"><p>
+    <a class="tap-link" href="/my/schedule?season_id={{ season.id }}">My Schedule</a>
+    &middot; <a class="tap-link" href="/seasons/{{ season.id }}/results/weeks/{{ week.id }}">Week results</a>
+</p></nav>
+
+{% if skins.pending %}
+<section aria-labelledby="pending-title">
+    <h2 id="pending-title">Skins pending</h2>
+    <p>Not every golfer has a complete nine-hole card for the week yet, so no winners are declared. The page recalculates whenever scores are saved or cleared.</p>
+</section>
+{% else %}
+<section aria-labelledby="carry-title">
+    <h2 id="carry-title">Carried skins</h2>
+    <p>
+        {% if skins.carried %}
+        {{ skins.carried }} skin unit{{ "s" if skins.carried != 1 }} carried past the final hole and not yet awarded.
+        {% else %}
+        No skins are carried past the final hole.
+        {% endif %}
+    </p>
+</section>
+
+<section aria-labelledby="winners-title">
+    <h2 id="winners-title">Hole winners</h2>
+    <div class="table-wrap">
+    <table class="golfer-table">
+        <thead>
+            <tr><th scope="col">Hole</th><th scope="col">Low score</th><th scope="col">Winner</th><th scope="col">Units won</th></tr>
+        </thead>
+        <tbody>
+        {% for hole in skins.holes %}
+        <tr>
+            <td>Hole {{ hole.hole_number }}</td>
+            <td>{{ hole.low_score }}</td>
+            <td>{% if hole.winner_id is none %}<span class="tie">Tied &mdash; carries forward</span>{% else %}{{ winner_names[hole.winner_id] }}{% endif %}</td>
+            <td>{{ hole.units }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</section>
+
+<section aria-labelledby="grid-title">
+    <h2 id="grid-title">Gross score grid</h2>
+    <p>Nine-hole gross scores, ranked by skins earned, then holes won, then total strokes.</p>
+    <div class="table-wrap">
+    <table class="golfer-table">
+        <thead>
+            <tr><th scope="col">Rank</th><th scope="col">Golfer</th>
+            {% for hole in skins.holes %}<th scope="col">H{{ hole.hole_number }}</th>{% endfor %}
+            <th scope="col">Total</th><th scope="col">Wins</th><th scope="col">Units</th></tr>
+        </thead>
+        <tbody>
+        {% for golfer in skins.golfers %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ golfer.name }}</td>
+            {% for hole in skins.holes %}<td>{{ golfer.strokes_by_hole[hole.hole_number] }}</td>{% endfor %}
+            <td>{{ golfer.total_strokes }}</td>
+            <td>{{ golfer.hole_wins }}</td>
+            <td>{{ golfer.units }}</td>
+        </tr>
+        {% endfor %}
+        {% if not skins.golfers %}<tr><td>No golfers on the week&rsquo;s match sides.</td></tr>{% endif %}
+        </tbody>
+    </table>
+    </div>
+</section>
+{% endif %}
+{% endblock %}

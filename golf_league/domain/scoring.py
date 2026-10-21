@@ -1,10 +1,12 @@
-"""Pure scoring rules: net scores, Match Play points and Stroke Play points.
+"""Pure scoring rules: net scores, Match Play points, Stroke Play points
+and gross skins.
 
 No I/O, no database, no HTTP. Every function takes plain values and returns
 plain values so a route or service can use it without import-layer violations
 (enforced by ``tests/test_architecture.py``).
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 VALID_SCORING_TYPES = ("match_play", "stroke_play")
@@ -366,3 +368,104 @@ def score_result_match(
         ]
 
     return ResultMatch(holes=holes, rounds=rounds)
+
+
+# --- R-RESULTS@1: gross skins -------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SkinHole:
+    """One hole's gross-skins outcome.
+
+    `winner_id` is None when the low gross score is tied: nobody wins the hole
+    and its unit carries to the next hole. `units` is the number of skin
+    units awarded on this hole — one for the hole itself plus any carried
+    units when a golfer wins outright, zero when the hole is tied or carried.
+    """
+
+    hole_number: int
+    low_score: int
+    winner_id: int | None
+    units: int
+
+
+@dataclass(frozen=True)
+class GolferSkins:
+    """One golfer's gross-skins result for a week, ranked in the score grid."""
+
+    golfer_id: int
+    name: str
+    strokes_by_hole: dict[int, int]
+    hole_wins: int
+    units: int
+    total_strokes: int
+
+
+@dataclass(frozen=True)
+class SkinsCalculation:
+    """Pure gross-skins outcome for a field of complete cards.
+
+    `carried` holds the units carried past the final hole: visible, unawarded,
+    and never credited to any golfer.
+    """
+
+    holes: list[SkinHole]
+    golfers: list[GolferSkins]
+    carried: int
+
+
+def gross_skins(
+    cards: Iterable[GolferCard], hole_numbers: Iterable[int]
+) -> SkinsCalculation:
+    """Calculate gross skins hole by hole over one nine.
+
+    Each hole contributes one skin unit. The single golfer with the outright
+    low gross score wins the hole and any carried units. When the low gross
+    score is tied, nobody wins the hole and its unit carries forward. A carry
+    remaining after the last hole stays visible and unawarded.
+
+    Every card must hold a stroke for every hole in `hole_numbers`; absent
+    scores are never treated as zero. Callers enforce a complete field before
+    calling here.
+    """
+    hole_numbers = list(hole_numbers)
+    by_id: dict[int, GolferCard] = {}
+    for card in cards:
+        by_id[card.golfer_id] = card
+
+    units = {golfer_id: 0 for golfer_id in by_id}
+    wins = {golfer_id: 0 for golfer_id in by_id}
+    carry = 0
+    holes_out: list[SkinHole] = []
+
+    for hole in hole_numbers:
+        low = min(card.strokes_by_hole[hole] for card in by_id.values())
+        leaders = [card for card in by_id.values() if card.strokes_by_hole[hole] == low]
+        if len(leaders) == 1:
+            winner = leaders[0]
+            units[winner.golfer_id] += 1 + carry
+            wins[winner.golfer_id] += 1
+            holes_out.append(SkinHole(hole, low, winner.golfer_id, 1 + carry))
+            carry = 0
+        else:
+            carry += 1
+            holes_out.append(SkinHole(hole, low, None, 0))
+
+    golfers_out = [
+        GolferSkins(
+            golfer_id=card.golfer_id,
+            name=card.name,
+            strokes_by_hole=card.strokes_by_hole,
+            hole_wins=wins[card.golfer_id],
+            units=units[card.golfer_id],
+            total_strokes=sum(card.strokes_by_hole[hole] for hole in hole_numbers),
+        )
+        for card in by_id.values()
+    ]
+    golfers_out.sort(
+        key=lambda golfer: (
+            -golfer.units, -golfer.hole_wins, golfer.total_strokes,
+            golfer.name, golfer.golfer_id,
+        )
+    )
+    return SkinsCalculation(holes=holes_out, golfers=golfers_out, carried=carry)
