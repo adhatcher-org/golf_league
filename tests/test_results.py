@@ -9,8 +9,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from golf_league.models import (
-    Course, Golfer, HoleScore, PlayerMatch, Season, SeasonGolfer, Team,
-    TeamMatch, TeamMember, User, Week, WeekHandicap,
+    Course,
+    Golfer,
+    HoleScore,
+    PlayerMatch,
+    Season,
+    SeasonGolfer,
+    Team,
+    TeamMatch,
+    TeamMember,
+    User,
+    Week,
+    WeekHandicap,
 )
 from golf_league.services.auth import create_session_cookie, hash_password
 from golf_league.services.scores import week_holes
@@ -227,7 +237,7 @@ def _complete_week(client, season_id, week_id, tee_set_id, complete=True):
                 pm = session.get(PlayerMatch, pm_id)
                 for golfer_id in (pm.a_golfer_id, pm.b_golfer_id):
                     strokes = 4 if golfer_id in (golfers[0], golfers[1]) else 5
-                    for number, hole_id in hole_by_number.items():
+                    for _number, hole_id in hole_by_number.items():
                         session.add(HoleScore(
                             player_match_id=pm_id, golfer_id=golfer_id,
                             hole_id=hole_id, strokes=strokes,
@@ -293,7 +303,6 @@ def test_week_results_reconciles_player_and_team_points(client):
     # Every complete match credits its points to both a player and a team, so
     # the week's player points and team points must agree (reconcile with GL-98).
     import re
-    player_points = [int(m) for m in re.findall(r">(\d+)</td>\s*<td>\d+</td></tr>", text)]
     # The table renders rank, name, points, matches per row; grab the points cell.
     points = [int(m) for m in re.findall(r"<td>(?:A|B)\d Example</td><td>(\d+)</td>", text)]
     assert sum(points) == 40  # 20 + 20 + 0 + 0

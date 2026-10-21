@@ -433,8 +433,8 @@ def gross_skins(
     for card in cards:
         by_id[card.golfer_id] = card
 
-    units = {golfer_id: 0 for golfer_id in by_id}
-    wins = {golfer_id: 0 for golfer_id in by_id}
+    units = dict.fromkeys(by_id, 0)
+    wins = dict.fromkeys(by_id, 0)
     carry = 0
     holes_out: list[SkinHole] = []
 
@@ -553,8 +553,8 @@ def net_skins(
             card.handicap - low_handicap, stroke_index_by_hole
         )
 
-    units = {golfer_id: 0 for golfer_id in by_id}
-    wins = {golfer_id: 0 for golfer_id in by_id}
+    units = dict.fromkeys(by_id, 0)
+    wins = dict.fromkeys(by_id, 0)
     carry = 0
     holes_out: list[NetSkinHole] = []
 

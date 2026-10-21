@@ -20,7 +20,15 @@ from sqlalchemy.orm import Session
 
 from golf_league.database import get_session
 from golf_league.domain.scorecard import Actor
-from golf_league.models import Course, HoleYardage, PlayerMatch, Season, TeeSet, User, Week
+from golf_league.models import (
+    Course,
+    HoleYardage,
+    PlayerMatch,
+    Season,
+    TeeSet,
+    User,
+    Week,
+)
 from golf_league.routers.admin_week_scores import _day
 from golf_league.routers.scorecard_flow import (
     PRIVATE_HEADERS,
@@ -209,6 +217,33 @@ def _group_matches(matches: list[dict], week_type: str) -> list[dict]:
 # --- the week's scores ---------------------------------------------------------
 
 
+def _week_score_matches(
+    session: Session,
+    week: Week,
+    actor: Actor,
+    open_to_viewer: bool,
+    sheet: list[SheetMatch],
+    hole_numbers: list[int],
+    points_by_match: dict,
+) -> list[dict]:
+    """Build the per-match score context for the player week scores page."""
+    matches = []
+    for match in sheet:
+        link = None
+        writable = _writable(session, match.player_match_id, actor) if open_to_viewer else frozenset()
+        if writable and not match.locked:
+            entered = any(golfer.strokes_by_hole for golfer in match.golfers if golfer.golfer_id in writable)
+            link = {"href": match_path(week.id, match.player_match_id),
+                    "text": "Update scores" if entered else "Enter scores"}
+        result = points_by_match.get(match.player_match_id)
+        points_by_golfer = {r.golfer_id: r.points for r in result.rounds} if result is not None else {}
+        matches.append({
+            "match": match, "link": link, "points": points_by_golfer,
+            "view": {"rows": _rows(match, hole_numbers, frozenset(), {}, set())},
+        })
+    return matches
+
+
 @router.get("/weeks/{week_id}/scores")
 async def week_scores(week_id: int, request: Request,
                       session: Session = Depends(get_session),  # noqa: B008
@@ -256,20 +291,9 @@ async def week_scores(week_id: int, request: Request,
             ):
                 yards_by_number[hy.hole_id] = hy.yards
     points_by_match = week_points(session, week.id)
-    matches = []
-    for match in sheet:
-        link = None
-        writable = _writable(session, match.player_match_id, actor) if open_to_viewer else frozenset()
-        if writable and not match.locked:
-            entered = any(golfer.strokes_by_hole for golfer in match.golfers if golfer.golfer_id in writable)
-            link = {"href": match_path(week.id, match.player_match_id),
-                    "text": "Update scores" if entered else "Enter scores"}
-        result = points_by_match.get(match.player_match_id)
-        points_by_golfer = {r.golfer_id: r.points for r in result.rounds} if result is not None else {}
-        matches.append({
-            "match": match, "link": link, "points": points_by_golfer,
-            "view": {"rows": _rows(match, hole_numbers, frozenset(), {}, set())},
-        })
+    matches = _week_score_matches(
+        session, week, actor, open_to_viewer, sheet, hole_numbers, points_by_match,
+    )
     groups = _group_matches(matches, week.week_type)
     return _page(request, "player/scores/week.html", {
         "week": week, "matches": matches, "groups": groups, "hole_numbers": hole_numbers,

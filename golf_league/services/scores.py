@@ -32,10 +32,8 @@ from golf_league.domain.scoring import (
     GolferSkins,
     NetGolferSkins,
     NetSkinHole,
-    NetSkinsCalculation,
     ResultMatch,
     SkinHole,
-    SkinsCalculation,
     gross_skins,
     net_skins,
     score_result_match,
@@ -1072,11 +1070,11 @@ def week_result(session: Session, week_id: int) -> WeekResult | None:
         week_id=week.id, week_index=week.index, play_date=week.play_date,
         players=[
             ResultPlayer(p.golfer_id, p.name, p.points, p.matches, rank)
-            for p, rank in zip(players, player_ranks)
+            for p, rank in zip(players, player_ranks, strict=False)
         ],
         teams=[
             ResultTeam(t.team_id, t.name, t.points, t.matches, rank)
-            for t, rank in zip(team_rows, team_ranks)
+            for t, rank in zip(team_rows, team_ranks, strict=False)
         ],
     )
 
@@ -1103,6 +1101,33 @@ def week_points(session: Session, week_id: int) -> dict[int, ResultMatch | None]
                                     season.scoring_type)
         for match in _week_player_matches(session, week_id)
     }
+
+
+def _golfer_score_cards(
+    expected: dict[int, None],
+    rows_by_golfer: dict[int, list[HoleScore]],
+    hole_id_by_number: dict[int, int],
+    hole_numbers: list[int],
+) -> tuple[dict[int, dict[int, int]], bool]:
+    """Build one complete stroke card per golfer; flag the field pending when any
+    golfer lacks a complete, non-conflicting card.
+    """
+    pending = False
+    cards: dict[int, dict[int, int]] = {}
+    for golfer_id in expected:
+        incomplete = False
+        strokes_by_hole: dict[int, int] = {}
+        for row in rows_by_golfer.get(golfer_id, ()):
+            number = hole_id_by_number.get(row.hole_id)
+            if number is None or number in strokes_by_hole:
+                incomplete = True
+                continue
+            strokes_by_hole[number] = row.strokes
+        if incomplete or len(strokes_by_hole) != len(hole_numbers):
+            pending = True
+            continue
+        cards[golfer_id] = strokes_by_hole
+    return cards, pending
 
 
 def week_skins(session: Session, week_id: int) -> WeekSkins | None:
@@ -1141,21 +1166,7 @@ def week_skins(session: Session, week_id: int) -> WeekSkins | None:
         for row in rows:
             rows_by_golfer.setdefault(row.golfer_id, []).append(row)
 
-    pending = False
-    cards: dict[int, dict[int, int]] = {}
-    for golfer_id in expected:
-        incomplete = False
-        strokes_by_hole: dict[int, int] = {}
-        for row in rows_by_golfer.get(golfer_id, ()):
-            number = hole_id_by_number.get(row.hole_id)
-            if number is None or number in strokes_by_hole:
-                incomplete = True
-                continue
-            strokes_by_hole[number] = row.strokes
-        if incomplete or len(strokes_by_hole) != len(hole_numbers):
-            pending = True
-            continue
-        cards[golfer_id] = strokes_by_hole
+    cards, pending = _golfer_score_cards(expected, rows_by_golfer, hole_id_by_number, hole_numbers)
 
     if pending or not cards:
         return WeekSkins(week_id=week.id, pending=True, holes=[], golfers=[], carried=0)
@@ -1225,21 +1236,7 @@ def week_net_skins(session: Session, week_id: int) -> WeekNetSkins | None:
         for row in rows:
             rows_by_golfer.setdefault(row.golfer_id, []).append(row)
 
-    pending = False
-    cards: dict[int, dict[int, int]] = {}
-    for golfer_id in expected:
-        incomplete = False
-        strokes_by_hole: dict[int, int] = {}
-        for row in rows_by_golfer.get(golfer_id, ()):
-            number = hole_id_by_number.get(row.hole_id)
-            if number is None or number in strokes_by_hole:
-                incomplete = True
-                continue
-            strokes_by_hole[number] = row.strokes
-        if incomplete or len(strokes_by_hole) != len(hole_numbers):
-            pending = True
-            continue
-        cards[golfer_id] = strokes_by_hole
+    cards, pending = _golfer_score_cards(expected, rows_by_golfer, hole_id_by_number, hole_numbers)
 
     handicaps = {
         row.golfer_id: row.strokes
@@ -1322,11 +1319,11 @@ def season_result(session: Session, season_id: int) -> SeasonResult | None:
         season_id=season.id,
         players=[
             ResultPlayer(p.golfer_id, p.name, p.points, p.matches, rank)
-            for p, rank in zip(players, player_ranks)
+            for p, rank in zip(players, player_ranks, strict=False)
         ],
         teams=[
             ResultTeam(t.team_id, t.name, t.points, t.matches, rank)
-            for t, rank in zip(team_rows, team_ranks)
+            for t, rank in zip(team_rows, team_ranks, strict=False)
         ],
         weeks=week_results,
     )

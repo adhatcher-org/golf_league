@@ -39,7 +39,12 @@ from golf_league.services.auth import create_session_cookie, hash_password
 from golf_league.services.handicaps import ensure_week_handicap
 from golf_league.services.matchups import substitute_player
 from golf_league.services.scorecard_drafts import create_draft
-from golf_league.services.scores import lock_match, save_match_scores, submit_card, unlock_match
+from golf_league.services.scores import (
+    lock_match,
+    save_match_scores,
+    submit_card,
+    unlock_match,
+)
 
 SIXES = (6,) * 9
 

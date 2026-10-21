@@ -5,10 +5,14 @@ Synthetic data only.
 
 from datetime import UTC, date, datetime
 
-import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from golf_league.domain.scoring import (
+    GolferCard,
+    NetSkinsCalculation,
+    net_skins,
+)
 from golf_league.models import (
     Course,
     Golfer,
@@ -22,13 +26,6 @@ from golf_league.models import (
     User,
     Week,
     WeekHandicap,
-)
-from golf_league.domain.scoring import (
-    GolferCard,
-    NetGolferSkins,
-    NetSkinHole,
-    NetSkinsCalculation,
-    net_skins,
 )
 from golf_league.services.auth import create_session_cookie, hash_password
 from golf_league.services.course_seed import seed_wyandot
@@ -155,7 +152,7 @@ def test_back_nine_uses_its_own_stroke_index_9():
 def test_unique_low_wins_hole_and_prior_carry():
     # Hole 1 tied at net 4 carries one; hole 2 Aaron's net 3 wins it and the
     # carry; holes 3-9 Aaron wins outright, so nothing carries past hole nine.
-    aaron = _card(1, "Aaron", 0, {1: 4, 2: 3} | {hole: 3 for hole in FRONT[2:]})
+    aaron = _card(1, "Aaron", 0, {1: 4, 2: 3} | dict.fromkeys(FRONT[2:], 3))
     beatrice = _card(2, "Beatrice", 0, {1: 4} | _full(4, FRONT[1:]))
     result = net_skins([aaron, beatrice], FRONT, SI_FRONT)
     assert result.holes[0].winner_id is None and result.holes[0].units == 0

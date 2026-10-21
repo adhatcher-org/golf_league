@@ -18,7 +18,10 @@ from golf_league.models import PlayerMatch, Season, TeamMatch, User, Week
 from golf_league.routers.scorecard_flow import _page
 from golf_league.security import require_verified_user
 from golf_league.services.scores import (
-    season_result, week_net_skins, week_result, week_skins,
+    season_result,
+    week_net_skins,
+    week_result,
+    week_skins,
 )
 from golf_league.services.seasons import get_season
 

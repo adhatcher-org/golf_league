@@ -5,10 +5,10 @@ Synthetic data only.
 
 from datetime import UTC, date, datetime
 
-import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from golf_league.domain.scoring import GolferCard, gross_skins
 from golf_league.models import (
     Course,
     Golfer,
@@ -22,7 +22,6 @@ from golf_league.models import (
     User,
     Week,
 )
-from golf_league.domain.scoring import GolferCard, gross_skins
 from golf_league.services.auth import create_session_cookie, hash_password
 from golf_league.services.course_seed import seed_wyandot
 from golf_league.services.scores import week_skins
@@ -64,7 +63,7 @@ def test_unique_low_wins_hole_and_prior_carry():
     # Hole 1 tied at 3 carries one unit; hole 2 a unique low 4 wins it and the
     # carry; later holes are decided outright so nothing carries past hole nine.
     rest = dict.fromkeys(FRONT[2:], 5)
-    a = _card(1, "Aaron", {1: 3, 2: 4} | {hole: 4 for hole in FRONT[2:]})
+    a = _card(1, "Aaron", {1: 3, 2: 4} | dict.fromkeys(FRONT[2:], 4))
     b = _card(2, "Beatrice", {1: 3, 2: 5} | rest)
     result = gross_skins([a, b], FRONT)
     hole1, hole2 = result.holes[0], result.holes[1]
@@ -124,8 +123,8 @@ def test_grid_ranked_by_units_then_wins_then_total():
 
 
 def test_back_nine_uses_ten_through_eighteen():
-    tail_aaron = {hole: 4 for hole in BACK[2:]}
-    tail_beatrice = {hole: 5 for hole in BACK[2:]}
+    tail_aaron = dict.fromkeys(BACK[2:], 4)
+    tail_beatrice = dict.fromkeys(BACK[2:], 5)
     aaron = _card(1, "Aaron", {10: 3, 11: 3} | tail_aaron)
     beatrice = _card(2, "Beatrice", {10: 4, 11: 3} | tail_beatrice)
     result = gross_skins([aaron, beatrice], BACK)
