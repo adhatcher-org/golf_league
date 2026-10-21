@@ -230,3 +230,139 @@ def score_match(
         rounds = _stroke_play_round_points(rounds)
 
     return MatchResult(scoring_type=scoring_type, holes=holes, rounds=rounds)
+
+
+# --- R-RESULTS@1: signed nine-hole snapshot scoring -------------------------
+
+
+def strokes_for_relative(relative: int, stroke_index_by_hole: dict[int, int]) -> dict[int, int]:
+    """Allocate nonnegative ``relative`` strokes over the played nine.
+
+    Uses ``divmod(relative, 9)``: for ``9q + r`` strokes, give ``q`` strokes on
+    every hole and one more on stroke indexes 1 through ``r``. So 10 gives two
+    strokes on index 1 and one on indexes 2-9; 12 gives two on indexes 1-3 and
+    one on indexes 4-9. Multiple strokes per hole are allowed (nothing is
+    capped at one).
+    """
+    q, r = divmod(relative, 9)
+    return {hole: q + (1 if index <= r else 0)
+            for hole, index in stroke_index_by_hole.items()}
+
+
+@dataclass(frozen=True)
+class ResultHole:
+    """One hole's gross strokes, allocated strokes, net scores and points."""
+
+    hole_number: int
+    stroke_index: int
+    gross_by_golfer: dict[int, int]
+    strokes_by_golfer: dict[int, int]
+    net_by_golfer: dict[int, int]
+    points_by_golfer: dict[int, int]
+
+
+@dataclass(frozen=True)
+class ResultRound:
+    """One golfer's round under R-RESULTS@1: gross, net and points."""
+
+    golfer_id: int
+    name: str
+    gross_total: int
+    net_total: int
+    points: int
+
+
+@dataclass(frozen=True)
+class ResultMatch:
+    """One match's complete R-RESULTS@1 result."""
+
+    holes: list[ResultHole]
+    rounds: list[ResultRound]
+
+
+def score_result_match(
+    scoring_type: str,
+    stroke_index_by_hole: dict[int, int],
+    golfer_a: GolferCard,
+    golfer_b: GolferCard,
+) -> ResultMatch | None:
+    """Score one two-golfer match under R-RESULTS@1.
+
+    Returns ``None`` when either handicap is missing (the match is pending;
+    a missing snapshot is never replaced with zero).
+
+    Uses relative signed strokes between the opponents: subtract the lower
+    handicap from both, then allocate each nonnegative difference over the
+    played nine by ``stroke_index_9``. Per-hole net is gross minus the
+    allocated strokes. The net round total is gross minus the *signed*
+    handicap, so a negative handicap adds its absolute value (gross 42 at -2
+    is net 44). Match-play base points apply per hole (2 for the lower net,
+    1 each on a tie) plus 2 bonus points to each golfer tied for the lowest
+    net total; stroke play uses the net-round-total difference.
+    """
+    if scoring_type not in VALID_SCORING_TYPES:
+        raise ValueError(f"Unknown scoring type: {scoring_type!r}")
+
+    hc_a, hc_b = golfer_a.handicap, golfer_b.handicap
+    if hc_a is None or hc_b is None:
+        return None
+
+    hole_numbers = sorted(stroke_index_by_hole)
+    lower = min(hc_a, hc_b)
+    a_strokes = strokes_for_relative(hc_a - lower, stroke_index_by_hole)
+    b_strokes = strokes_for_relative(hc_b - lower, stroke_index_by_hole)
+
+    holes: list[ResultHole] = []
+    for hole in hole_numbers:
+        si = stroke_index_by_hole[hole]
+        gross_a = golfer_a.strokes_by_hole.get(hole, 0)
+        gross_b = golfer_b.strokes_by_hole.get(hole, 0)
+        net_a = gross_a - a_strokes[hole]
+        net_b = gross_b - b_strokes[hole]
+        if scoring_type == "match_play":
+            if net_a < net_b:
+                pts = {golfer_a.golfer_id: 2, golfer_b.golfer_id: 0}
+            elif net_b < net_a:
+                pts = {golfer_a.golfer_id: 0, golfer_b.golfer_id: 2}
+            else:
+                pts = {golfer_a.golfer_id: 1, golfer_b.golfer_id: 1}
+        else:
+            pts = {golfer_a.golfer_id: 0, golfer_b.golfer_id: 0}
+        holes.append(ResultHole(
+            hole_number=hole, stroke_index=si,
+            gross_by_golfer={golfer_a.golfer_id: gross_a, golfer_b.golfer_id: gross_b},
+            strokes_by_golfer={golfer_a.golfer_id: a_strokes[hole],
+                               golfer_b.golfer_id: b_strokes[hole]},
+            net_by_golfer={golfer_a.golfer_id: net_a, golfer_b.golfer_id: net_b},
+            points_by_golfer=pts,
+        ))
+
+    gross_total_a = sum(golfer_a.strokes_by_hole.get(hole, 0) for hole in hole_numbers)
+    gross_total_b = sum(golfer_b.strokes_by_hole.get(hole, 0) for hole in hole_numbers)
+    net_total_a = gross_total_a - hc_a
+    net_total_b = gross_total_b - hc_b
+
+    hole_points_a = sum(h.points_by_golfer[golfer_a.golfer_id] for h in holes)
+    hole_points_b = sum(h.points_by_golfer[golfer_b.golfer_id] for h in holes)
+
+    if scoring_type == "match_play":
+        lowest_net = min(net_total_a, net_total_b)
+        rounds = [
+            ResultRound(golfer_a.golfer_id, golfer_a.name, gross_total_a, net_total_a,
+                        hole_points_a + (2 if net_total_a == lowest_net else 0)),
+            ResultRound(golfer_b.golfer_id, golfer_b.name, gross_total_b, net_total_b,
+                        hole_points_b + (2 if net_total_b == lowest_net else 0)),
+        ]
+    else:
+        if net_total_a < net_total_b:
+            pts_a, pts_b = net_total_b - net_total_a, 0
+        elif net_total_b < net_total_a:
+            pts_a, pts_b = 0, net_total_a - net_total_b
+        else:
+            pts_a = pts_b = 0
+        rounds = [
+            ResultRound(golfer_a.golfer_id, golfer_a.name, gross_total_a, net_total_a, pts_a),
+            ResultRound(golfer_b.golfer_id, golfer_b.name, gross_total_b, net_total_b, pts_b),
+        ]
+
+    return ResultMatch(holes=holes, rounds=rounds)

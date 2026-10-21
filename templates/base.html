@@ -19,6 +19,9 @@
                 {% if request.state.can_view_player_pages %}
                 <a href="/roster">Player roster</a>
                 <a href="/my/schedule">My Schedule</a>
+                {% if request.state.nav_season %}
+                <a href="/seasons/{{ request.state.nav_season.id }}/results">Results</a>
+                {% endif %}
                 {% endif %}
                 {% if request.state.can_view_player_pages and request.state.current_user.is_admin %}
                 <details class="nav-menu">

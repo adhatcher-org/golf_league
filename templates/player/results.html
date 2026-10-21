@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Results - Golf League{% endblock %}
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title">
+    <p class="eyebrow">Results</p>
+    <h1 id="page-title">{% if week %}Week {{ week.index }} results{% else %}Season results{% endif %}</h1>
+    <p>
+        {{ season.name_override or ("Season " ~ season.year) }}
+        {% if week %}· Week {{ week.index }}, {{ week.play_date.strftime('%b %-d, %Y') }}{% endif %}
+    </p>
+</section>
+<nav aria-label="Results navigation"><p>
+    <a class="tap-link" href="/my/schedule?season_id={{ season.id }}">My Schedule</a>
+    {% if not week %}
+        {% for w in weeks %}
+        · <a class="tap-link" href="/seasons/{{ season.id }}/results/weeks/{{ w.id }}">Week {{ w.index }}</a>
+        {% endfor %}
+    {% endif %}
+</p></nav>
+
+<section aria-labelledby="players-title">
+    <h2 id="players-title">Players</h2>
+    <div class="table-wrap">
+    <table class="golfer-table">
+        <thead><tr><th scope="col">Golfer</th><th scope="col">Points</th><th scope="col">Matches</th></tr></thead>
+        <tbody>
+        {% for player in result.players %}
+        <tr><td>{{ player.name }}</td><td>{{ player.points }}</td><td>{{ player.matches }}</td></tr>
+        {% endfor %}
+        {% if not result.players %}<tr><td colspan="3">No scored matches yet.</td></tr>{% endif %}
+        </tbody>
+    </table>
+    </div>
+</section>
+
+<section aria-labelledby="teams-title">
+    <h2 id="teams-title">Teams</h2>
+    <div class="table-wrap">
+    <table class="golfer-table">
+        <thead><tr><th scope="col">Team</th><th scope="col">Points</th><th scope="col">Matches</th></tr></thead>
+        <tbody>
+        {% for team in result.teams %}
+        <tr><td>{{ team.name }}</td><td>{{ team.points }}</td><td>{{ team.matches }}</td></tr>
+        {% endfor %}
+        {% if not result.teams %}<tr><td colspan="3">No scored matches yet.</td></tr>{% endif %}
+        </tbody>
+    </table>
+    </div>
+</section>
+{% endblock %}
