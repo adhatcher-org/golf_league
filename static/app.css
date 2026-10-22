@@ -1836,3 +1836,27 @@ pre { max-width: 100%; overflow-x: auto; }
         padding: 0.3rem 0.15rem;
     }
 }
+
+/* --- GL-100: week scorecard ------------------------------------------------- */
+.scorecard { margin: 0 0 1.5rem; }
+.scorecard__header { margin: 0 0 1rem; }
+.scorecard__title { margin: 0 0 0.25rem; font-size: 1.5rem; font-weight: 600; }
+.scorecard__date { margin: 0; color: var(--muted); font-size: 0.9rem; }
+.scorecard__group { margin: 0 0 1.5rem; }
+.scorecard__group h3 { margin: 0 0 0.5rem; font-size: 1.15rem; font-weight: 600; }
+.scorecard__holes { margin: 0 0 1rem; }
+.scorecard__holes table { min-width: 18rem; }
+.scorecard__holes th,
+.scorecard__holes td { text-align: center; font-size: 0.82rem; }
+.score-yardage { font-variant-numeric: tabular-nums; font-weight: 600; }
+.score-par { font-variant-numeric: tabular-nums; }
+.score-stroke-index { color: var(--muted); font-size: 0.82rem; }
+.score-points { font-variant-numeric: tabular-nums; font-weight: 700; text-align: center; }
+.score-points-header { text-align: center; }
+
+@media (max-width: 720px) {
+    .scorecard__title { font-size: 1.25rem; }
+    .scorecard__holes table { min-width: auto; }
+    .scorecard__holes th,
+    .scorecard__holes td { padding: 0.3rem 0.15rem; font-size: 0.72rem; }
+}

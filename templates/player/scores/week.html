@@ -32,36 +32,70 @@
 {% if saved %}<p class="notice" role="status">Your scores were saved.</p>{% endif %}
 {% if not groups %}<p class="empty-state">This week has no generated matches.</p>{% endif %}
 
-<div class="score-columns">
-    <button id="collapse-toggle" type="button" class="collapse-toggle" aria-pressed="false">
-        Collapse hole details
-    </button>
-    <div id="score-tables" class="score-tables">
-        {% for group in groups %}
-        <section class="score-group" aria-labelledby="group-title-{{ loop.index }}">
-            <h2 id="group-title-{{ loop.index }}">{{ group.label }}</h2>
-            <div class="table-wrap score-grid score-grid--named">
-                <table>
-                    <thead><tr><th scope="col">Golfer</th><th scope="col" class="score-team">Team</th><th scope="col" class="score-position">Pos</th>{% for number in hole_numbers %}<th scope="col" class="score-hole">{{ number }}</th>{% endfor %}<th scope="col">Gross</th><th scope="col">HC</th><th scope="col">Net</th></tr></thead>
-                    <tbody>
-                        {% for item in group.matches %}
-                        {% set view = item.view %}
-                        {% for row in view.rows %}{% if row.inputs %}{% include "scores/_match_inputs.html" %}{% else %}{% include "scores/_match_scores.html" %}{% endif %}{% endfor %}
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% for item in group.matches %}
-            {% if item.link %}
-            <div id="match-{{ item.match.player_match_id }}" class="score-match score-match__actions">
-                <a class="tap-link" href="{{ item.link.href }}">{{ item.link.text }}</a>
-            </div>
-            {% else %}
-            <div id="match-{{ item.match.player_match_id }}"></div>
-            {% endif %}
-            {% endfor %}
-        </section>
-        {% endfor %}
+<section class="scorecard" aria-labelledby="scorecard-title">
+    <div class="scorecard__header">
+        <h2 id="scorecard-title">{{ course_name }} {{ week.nine|title }} nine scorecard</h2>
+        <p class="scorecard__date">{{ week.play_date.strftime('%b %-d, %Y') }}{% if tee_label %} · {{ tee_label }} tees{% endif %}</p>
     </div>
-</div>
+
+    {% if hole_numbers %}
+    <div class="table-wrap scorecard__holes">
+        <table>
+            <thead>
+                <tr><th scope="col">Hole</th>{% for number in hole_numbers %}<th scope="col" class="score-hole">{{ number }}</th>{% endfor %}</tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <th scope="row">Yards</th>
+                    {% for hole in holes %}<td class="score-yardage">{{ yards_by_number.get(hole.id, '—') }}</td>{% endfor %}
+                </tr>
+                <tr>
+                    <th scope="row">Par</th>
+                    {% for hole in holes %}<td class="score-par">{{ hole.par }}</td>{% endfor %}
+                </tr>
+                <tr>
+                    <th scope="row">Stroke index</th>
+                    {% for hole in holes %}<td class="score-stroke-index">{{ hole.stroke_index_9 }}</td>{% endfor %}
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% for group in groups %}
+    <section class="scorecard__group" aria-labelledby="group-title-{{ loop.index }}">
+        <h3 id="group-title-{{ loop.index }}">{{ group.label }}</h3>
+        <div class="table-wrap score-grid score-grid--named">
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">Golfer</th>
+                        <th scope="col" class="score-team">Team</th>
+                        <th scope="col" class="score-position">Pos</th>
+                        {% for number in hole_numbers %}<th scope="col" class="score-hole">{{ number }}</th>{% endfor %}
+                        <th scope="col">Gross</th><th scope="col">HC</th><th scope="col">Net</th><th scope="col" class="score-points-header">Points</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in group.matches %}
+                    {% set view = item.view %}
+                    {% set points = item.points | default({}) %}
+                    {% for row in view.rows %}
+                    {% set golfer_points = points.get(row.golfer.golfer_id, '—') %}
+                    {% include "scores/_match_scores.html" %}
+                    {% endfor %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% for item in group.matches %}
+        <div id="match-{{ item.match.player_match_id }}" class="score-match score-match__actions">
+            {% if item.link %}
+            <a class="tap-link" href="{{ item.link.href }}">{{ item.link.text }}</a>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </section>
+    {% endfor %}
+</section>
 {% endblock %}

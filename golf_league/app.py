@@ -39,6 +39,7 @@ from golf_league.routers.join import router as join_router
 from golf_league.routers.player_schedule import router as player_schedule_router
 from golf_league.routers.player_scorecards import router as player_scorecards_router
 from golf_league.routers.player_scores import router as player_scores_router
+from golf_league.routers.results import router as results_router
 from golf_league.routers.roster import router as roster_router
 from golf_league.security import (
     SESSION_COOKIE_NAME,
@@ -47,6 +48,7 @@ from golf_league.security import (
 )
 from golf_league.services.course_seed import seed_wyandot
 from golf_league.services.email import FakeEmailSender, SmtpEmailSender
+from golf_league.services.player_schedule import select_player_season
 from golf_league.services.scorecard_drafts import (
     mark_interrupted,
     purge_expired,
@@ -96,6 +98,7 @@ async def _navigation_user(request: Request, call_next):
                     or not current_settings.email_verification_required
                 )
                 request.state.nav_csrf_token = generate_csrf_token(cookie_value)
+                request.state.nav_season = select_player_season(nav_session)
         except Exception:
             logger.warning("navigation identity lookup failed")
 
@@ -268,6 +271,7 @@ def create_app(settings=None) -> FastAPI:
     app.include_router(roster_router)
     app.include_router(player_schedule_router)
     app.include_router(player_scores_router)
+    app.include_router(results_router)
     app.include_router(player_scorecards_router)
     app.include_router(admin_config_router)
     app.include_router(admin_courses_router)

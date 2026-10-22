@@ -27,6 +27,17 @@ from golf_league.domain.scorecard import (
     is_blank,
     validate_strokes,
 )
+from golf_league.domain.scoring import (
+    GolferCard,
+    GolferSkins,
+    NetGolferSkins,
+    NetSkinHole,
+    ResultMatch,
+    SkinHole,
+    gross_skins,
+    net_skins,
+    score_result_match,
+)
 from golf_league.models import (
     Golfer,
     Hole,
@@ -833,3 +844,486 @@ def player_entry_state(session: Session, week_id: int, golfer_id: int | None, to
 def player_entry_states(session: Session, week_ids: Iterable[int], golfer_id: int | None,
                         today: date) -> dict[int, EntryState]:
     return {week_id: player_entry_state(session, week_id, golfer_id, today) for week_id in week_ids}
+
+
+# --- R-RESULTS@1: season and week standings ------------------------------------
+
+
+@dataclass(frozen=True)
+class ResultPlayer:
+    """One golfer's points total for a week or season.
+
+    `matches` counts completed matches the golfer was a side of, by golfer id.
+    `rank` is the golfer's position in the points order, with ties sharing a
+    rank (competition/"1224" ranking: 10, 10, 8 points ranks 1, 1, 3).
+    """
+
+    golfer_id: int
+    name: str
+    points: int
+    matches: int
+    rank: int
+
+
+@dataclass(frozen=True)
+class ResultTeam:
+    """One team's points total for a week or season.
+
+    `matches` counts completed team matches the team was credited in; a
+    self-match counts once for the team even though both sides belong to it.
+    `rank` is the team's position in the points order, with ties sharing a
+    rank (competition/"1224" ranking).
+    """
+
+    team_id: int
+    name: str
+    points: int
+    matches: int
+    rank: int
+
+
+@dataclass(frozen=True)
+class WeekResult:
+    """One week's R-RESULTS@1 standings: players and teams."""
+
+    week_id: int
+    week_index: int
+    play_date: date
+    players: list[ResultPlayer]
+    teams: list[ResultTeam]
+
+
+@dataclass(frozen=True)
+class WeekSkins:
+    """One week's gross-skins outcome (R-RESULTS@1).
+
+    `pending` is True when any expected golfer lacks exactly one complete
+    nine-hole card — missing, incomplete or duplicate/conflicting scores
+    leave the field pending and no final winners are declared. The field is
+    recalculated on every read, so edits and clears are reflected immediately.
+    """
+
+    week_id: int
+    pending: bool
+    holes: list[SkinHole]
+    golfers: list[GolferSkins]
+    carried: int
+
+
+@dataclass(frozen=True)
+class WeekNetSkins:
+    """One week's net-skins outcome (R-RESULTS@1).
+
+    `pending` is True when any expected golfer lacks exactly one complete
+    nine-hole card or a WeekHandicap snapshot for the week — missing,
+    incomplete, duplicate or conflicting cards and missing snapshots leave
+    the field pending and no final winners are declared. Recalculated on
+    every read, so score edits and clears are reflected immediately.
+    """
+
+    week_id: int
+    pending: bool
+    holes: list[NetSkinHole]
+    golfers: list[NetGolferSkins]
+    carried: int
+
+
+@dataclass(frozen=True)
+class SeasonResult:
+    """One season's R-RESULTS@1 standings, aggregated across all its weeks."""
+
+    season_id: int
+    players: list[ResultPlayer]
+    teams: list[ResultTeam]
+    weeks: list[WeekResult]
+
+
+def _match_strokes(session: Session, match: PlayerMatch, hole_number: dict[int, int]
+                   ) -> dict[int, dict[int, int]] | None:
+    """Return {golfer_id: {hole number: strokes}} or None when either side is incomplete.
+
+    A side is complete only when it has a saved stroke for every hole of the
+    week's nine.
+    """
+    rows = _rows_by_golfer(session, match.id)
+    strokes_by_golfer: dict[int, dict[int, int]] = {}
+    for golfer_id in (match.a_golfer_id, match.b_golfer_id):
+        saved = rows.get(golfer_id, [])
+        if len(saved) != len(hole_number):
+            return None
+        strokes_by_hole: dict[int, int] = {}
+        for row in saved:
+            number = hole_number.get(row.hole_id)
+            if number is None:
+                return None
+            strokes_by_hole[number] = row.strokes
+        strokes_by_golfer[golfer_id] = strokes_by_hole
+    return strokes_by_golfer
+
+
+def _score_week_match(session: Session, match: PlayerMatch, stroke_index_by_hole: dict[int, int],
+                      hole_number: dict[int, int], handicaps: dict[int, int],
+                      scoring_type: str) -> ResultMatch | None:
+    """Score one match under R-RESULTS@1, or None when the match is pending.
+
+    Pending means either side has incomplete scores, or either side lacks a
+    WeekHandicap snapshot for the week. A missing snapshot is never replaced
+    with zero.
+    """
+    strokes_by_golfer = _match_strokes(session, match, hole_number)
+    if strokes_by_golfer is None:
+        return None
+    a_id, b_id = match.a_golfer_id, match.b_golfer_id
+    cards: dict[int, GolferCard] = {}
+    for golfer_id in (a_id, b_id):
+        handicap = handicaps.get(golfer_id)
+        if handicap is None:
+            return None
+        golfer = session.get(Golfer, golfer_id)
+        cards[golfer_id] = GolferCard(
+            golfer_id=golfer_id, name=_name(golfer), handicap=handicap,
+            strokes_by_hole=strokes_by_golfer[golfer_id],
+        )
+    return score_result_match(scoring_type, stroke_index_by_hole, cards[a_id], cards[b_id])
+
+
+def _competition_ranks(rows: list[ResultPlayer | ResultTeam]) -> list[int]:
+    """Competition ranks for rows already sorted by (-points, name).
+
+    Tied point totals share a rank and the next rank skips (1, 1, 3, ...), so
+    the ordering is deterministic regardless of how ties are otherwise broken.
+    """
+    ranks: list[int] = []
+    for i, row in enumerate(rows):
+        if i > 0 and row.points == rows[i - 1].points:
+            ranks.append(ranks[-1])
+        else:
+            ranks.append(i + 1)
+    return ranks
+
+
+def week_result(session: Session, week_id: int) -> WeekResult | None:
+    """One week's R-RESULTS@1 standings, or None when the week does not exist.
+
+    Each side is credited to its scheduled team: side a to the home team,
+    side b to the away team, and both sides to the same team in a self-match.
+    Substitutes count too. Appearances are counted by golfer id. A pending
+    match contributes no points.
+    """
+    week = session.get(Week, week_id)
+    if week is None:
+        return None
+    season = session.get(Season, week.season_id)
+    holes = week_holes(session, week_id)
+    stroke_index_by_hole = {hole.number: hole.stroke_index_9 for hole in holes}
+    hole_number = {hole.id: hole.number for hole in holes}
+    handicaps = {
+        row.golfer_id: row.strokes
+        for row in session.scalars(select(WeekHandicap).where(WeekHandicap.week_id == week_id))
+    }
+    team_matches = {
+        tm.id: tm for tm in session.scalars(select(TeamMatch).where(TeamMatch.week_id == week_id))
+    }
+    teams = {
+        team.id: team for team in session.scalars(select(Team).where(Team.season_id == week.season_id))
+    }
+    golfer_cache: dict[int, Golfer] = {}
+
+    def golfer_name(golfer_id: int) -> str:
+        if golfer_id not in golfer_cache:
+            golfer_cache[golfer_id] = session.get(Golfer, golfer_id)
+        return _name(golfer_cache[golfer_id])
+
+    player_points: dict[int, int] = {}
+    player_matches: dict[int, int] = {}
+    team_points: dict[int, int] = {}
+    team_match_sets: dict[int, set[int]] = {}
+
+    for match in _week_player_matches(session, week_id):
+        result = _score_week_match(session, match, stroke_index_by_hole, hole_number, handicaps,
+                                   season.scoring_type)
+        if result is None:
+            continue
+        pairing = team_matches[match.team_match_id]
+        points_by_id = {round_.golfer_id: round_.points for round_ in result.rounds}
+        credited = ((match.a_golfer_id, pairing.home_team_id),
+                    (match.b_golfer_id, pairing.away_team_id))
+        for golfer_id, team_id in credited:
+            player_points[golfer_id] = player_points.get(golfer_id, 0) + points_by_id[golfer_id]
+            player_matches[golfer_id] = player_matches.get(golfer_id, 0) + 1
+            team_points[team_id] = team_points.get(team_id, 0) + points_by_id[golfer_id]
+            team_match_sets.setdefault(team_id, set()).add(match.team_match_id)
+
+    players = [
+        ResultPlayer(gid, golfer_name(gid), player_points[gid], player_matches[gid], 0)
+        for gid in player_points
+    ]
+    team_rows = [
+        ResultTeam(tid, teams[tid].name, team_points[tid], len(team_match_sets[tid]), 0)
+        for tid in team_points
+    ]
+    players.sort(key=lambda player: (-player.points, player.name))
+    team_rows.sort(key=lambda team: (-team.points, team.name))
+    player_ranks = _competition_ranks(players)
+    team_ranks = _competition_ranks(team_rows)
+    return WeekResult(
+        week_id=week.id, week_index=week.index, play_date=week.play_date,
+        players=[
+            ResultPlayer(p.golfer_id, p.name, p.points, p.matches, rank)
+            for p, rank in zip(players, player_ranks, strict=False)
+        ],
+        teams=[
+            ResultTeam(t.team_id, t.name, t.points, t.matches, rank)
+            for t, rank in zip(team_rows, team_ranks, strict=False)
+        ],
+    )
+
+
+def week_points(session: Session, week_id: int) -> dict[int, ResultMatch | None]:
+    """Per-match R-RESULTS@1 result for the week, keyed by player match id.
+
+    A pending match (incomplete scores or a missing handicap snapshot) maps to
+    ``None``; points are derived, never stored.
+    """
+    week = session.get(Week, week_id)
+    if week is None:
+        return {}
+    season = session.get(Season, week.season_id)
+    holes = week_holes(session, week_id)
+    stroke_index_by_hole = {hole.number: hole.stroke_index_9 for hole in holes}
+    hole_number = {hole.id: hole.number for hole in holes}
+    handicaps = {
+        row.golfer_id: row.strokes
+        for row in session.scalars(select(WeekHandicap).where(WeekHandicap.week_id == week_id))
+    }
+    return {
+        match.id: _score_week_match(session, match, stroke_index_by_hole, hole_number, handicaps,
+                                    season.scoring_type)
+        for match in _week_player_matches(session, week_id)
+    }
+
+
+def _golfer_score_cards(
+    expected: dict[int, None],
+    rows_by_golfer: dict[int, list[HoleScore]],
+    hole_id_by_number: dict[int, int],
+    hole_numbers: list[int],
+) -> tuple[dict[int, dict[int, int]], bool]:
+    """Build one complete stroke card per golfer; flag the field pending when any
+    golfer lacks a complete, non-conflicting card.
+    """
+    pending = False
+    cards: dict[int, dict[int, int]] = {}
+    for golfer_id in expected:
+        incomplete = False
+        strokes_by_hole: dict[int, int] = {}
+        for row in rows_by_golfer.get(golfer_id, ()):
+            number = hole_id_by_number.get(row.hole_id)
+            if number is None or number in strokes_by_hole:
+                incomplete = True
+                continue
+            strokes_by_hole[number] = row.strokes
+        if incomplete or len(strokes_by_hole) != len(hole_numbers):
+            pending = True
+            continue
+        cards[golfer_id] = strokes_by_hole
+    return cards, pending
+
+
+def week_skins(session: Session, week_id: int) -> WeekSkins | None:
+    """One week's gross skins, or None when the week does not exist.
+
+    The field is the distinct golfers on the week's generated player-match
+    sides, substitutes included. Final winners require exactly one complete
+    nine-hole card per golfer; missing, incomplete or duplicate/conflicting
+    cards leave the field pending and no final winners are declared.
+    Recalculated on every read, so score edits and clears are reflected
+    immediately.
+    """
+    week = session.get(Week, week_id)
+    if week is None:
+        return None
+    holes = week_holes(session, week_id)
+    hole_numbers = [hole.number for hole in holes]
+    hole_id_by_number = {hole.number: hole.id for hole in holes}
+    if not holes:
+        return WeekSkins(week_id=week.id, pending=True, holes=[], golfers=[], carried=0)
+
+    matches = _week_player_matches(session, week_id)
+    expected: dict[int, None] = {}
+    for match in matches:
+        expected[match.a_golfer_id] = None
+        expected[match.b_golfer_id] = None
+
+    rows_by_golfer: dict[int, list[HoleScore]] = {}
+    if expected:
+        rows = session.scalars(
+            select(HoleScore)
+            .join(PlayerMatch, PlayerMatch.id == HoleScore.player_match_id)
+            .join(TeamMatch, TeamMatch.id == PlayerMatch.team_match_id)
+            .where(TeamMatch.week_id == week_id, HoleScore.golfer_id.in_(tuple(expected)))
+        )
+        for row in rows:
+            rows_by_golfer.setdefault(row.golfer_id, []).append(row)
+
+    cards, pending = _golfer_score_cards(expected, rows_by_golfer, hole_id_by_number, hole_numbers)
+
+    if pending or not cards:
+        return WeekSkins(week_id=week.id, pending=True, holes=[], golfers=[], carried=0)
+
+    golfer_cache: dict[int, Golfer] = {}
+
+    def golfer_name(golfer_id: int) -> str:
+        if golfer_id not in golfer_cache:
+            golfer_cache[golfer_id] = session.get(Golfer, golfer_id)
+        return _name(golfer_cache[golfer_id])
+
+    domain_cards = [
+        GolferCard(
+            golfer_id=golfer_id,
+            name=golfer_name(golfer_id),
+            handicap=None,
+            strokes_by_hole=strokes,
+        )
+        for golfer_id, strokes in cards.items()
+    ]
+    calculation = gross_skins(domain_cards, hole_numbers)
+    return WeekSkins(
+        week_id=week.id,
+        pending=False,
+        holes=list(calculation.holes),
+        golfers=list(calculation.golfers),
+        carried=calculation.carried,
+    )
+
+
+def week_net_skins(session: Session, week_id: int) -> WeekNetSkins | None:
+    """One week's net skins, or None when the week does not exist.
+
+    The field is the distinct golfers on the week's generated player-match
+    sides, substitutes included. Final winners require exactly one complete
+    nine-hole card per golfer and a WeekHandicap snapshot for the week;
+    missing, incomplete, duplicate or conflicting cards and missing
+    snapshots leave the field pending and no final winners are declared.
+    Snapshots are the historical signed nine-hole handicap
+    (``WeekHandicap.strokes``), never the live golfer handicap, never
+    recomputed, never replaced with zero. Recalculated on every read.
+    """
+    week = session.get(Week, week_id)
+    if week is None:
+        return None
+    holes = week_holes(session, week_id)
+    hole_numbers = [hole.number for hole in holes]
+    hole_id_by_number = {hole.number: hole.id for hole in holes}
+    stroke_index_by_hole = {hole.number: hole.stroke_index_9 for hole in holes}
+    if not holes:
+        return WeekNetSkins(week_id=week.id, pending=True, holes=[], golfers=[], carried=0)
+
+    matches = _week_player_matches(session, week_id)
+    expected: dict[int, None] = {}
+    for match in matches:
+        expected[match.a_golfer_id] = None
+        expected[match.b_golfer_id] = None
+
+    rows_by_golfer: dict[int, list[HoleScore]] = {}
+    if expected:
+        rows = session.scalars(
+            select(HoleScore)
+            .join(PlayerMatch, PlayerMatch.id == HoleScore.player_match_id)
+            .join(TeamMatch, TeamMatch.id == PlayerMatch.team_match_id)
+            .where(TeamMatch.week_id == week_id, HoleScore.golfer_id.in_(tuple(expected)))
+        )
+        for row in rows:
+            rows_by_golfer.setdefault(row.golfer_id, []).append(row)
+
+    cards, pending = _golfer_score_cards(expected, rows_by_golfer, hole_id_by_number, hole_numbers)
+
+    handicaps = {
+        row.golfer_id: row.strokes
+        for row in session.scalars(select(WeekHandicap).where(WeekHandicap.week_id == week_id))
+    }
+    if any(golfer_id not in handicaps for golfer_id in expected):
+        pending = True
+
+    if pending or not cards:
+        return WeekNetSkins(week_id=week.id, pending=True, holes=[], golfers=[], carried=0)
+
+    golfer_cache: dict[int, Golfer] = {}
+
+    def golfer_name(golfer_id: int) -> str:
+        if golfer_id not in golfer_cache:
+            golfer_cache[golfer_id] = session.get(Golfer, golfer_id)
+        return _name(golfer_cache[golfer_id])
+
+    domain_cards = [
+        GolferCard(
+            golfer_id=golfer_id,
+            name=golfer_name(golfer_id),
+            handicap=handicaps[golfer_id],
+            strokes_by_hole=strokes,
+        )
+        for golfer_id, strokes in cards.items()
+    ]
+    calculation = net_skins(domain_cards, hole_numbers, stroke_index_by_hole)
+    return WeekNetSkins(
+        week_id=week.id,
+        pending=False,
+        holes=list(calculation.holes),
+        golfers=list(calculation.golfers),
+        carried=calculation.carried,
+    )
+
+
+def season_result(session: Session, season_id: int) -> SeasonResult | None:
+    """One season's R-RESULTS@1 standings, aggregated across all its weeks.
+
+    Returns None when the season does not exist; players and teams are empty
+    when nothing has been scored yet.
+    """
+    season = session.get(Season, season_id)
+    if season is None:
+        return None
+    weeks = list(session.scalars(
+        select(Week).where(Week.season_id == season_id).order_by(Week.index)))
+    week_results = [week_result(session, week.id) for week in weeks]
+    player_points: dict[int, int] = {}
+    player_matches: dict[int, int] = {}
+    player_names: dict[int, str] = {}
+    team_points: dict[int, int] = {}
+    team_matches: dict[int, int] = {}
+    team_names: dict[int, str] = {}
+    for wk in week_results:
+        if wk is None:
+            continue
+        for player in wk.players:
+            player_points[player.golfer_id] = player_points.get(player.golfer_id, 0) + player.points
+            player_matches[player.golfer_id] = player_matches.get(player.golfer_id, 0) + player.matches
+            player_names[player.golfer_id] = player.name
+        for team in wk.teams:
+            team_points[team.team_id] = team_points.get(team.team_id, 0) + team.points
+            team_matches[team.team_id] = team_matches.get(team.team_id, 0) + team.matches
+            team_names[team.team_id] = team.name
+    players = [
+        ResultPlayer(gid, player_names[gid], player_points[gid], player_matches[gid], 0)
+        for gid in player_points
+    ]
+    team_rows = [
+        ResultTeam(tid, team_names[tid], team_points[tid], team_matches[tid], 0)
+        for tid in team_points
+    ]
+    players.sort(key=lambda player: (-player.points, player.name))
+    team_rows.sort(key=lambda team: (-team.points, team.name))
+    player_ranks = _competition_ranks(players)
+    team_ranks = _competition_ranks(team_rows)
+    return SeasonResult(
+        season_id=season.id,
+        players=[
+            ResultPlayer(p.golfer_id, p.name, p.points, p.matches, rank)
+            for p, rank in zip(players, player_ranks, strict=False)
+        ],
+        teams=[
+            ResultTeam(t.team_id, t.name, t.points, t.matches, rank)
+            for t, rank in zip(team_rows, team_ranks, strict=False)
+        ],
+        weeks=week_results,
+    )
