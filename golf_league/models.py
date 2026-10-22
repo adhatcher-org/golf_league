@@ -634,6 +634,47 @@ class MatchScoreState(Base):
     locked_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
 
+class SubstituteRequest(Base):
+    """One player request per generated match; only a token digest is persisted."""
+
+    __tablename__ = "substitute_requests"
+    __table_args__ = (
+        UniqueConstraint("player_match_id", name="uq_substitute_requests_player_match"),
+        CheckConstraint("status IN ('pending', 'fulfilled', 'declined')", name="ck_substitute_requests_status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    week_id: Mapped[int] = mapped_column(ForeignKey("weeks.id"), nullable=False, index=True)
+    player_match_id: Mapped[int] = mapped_column(ForeignKey("player_matches.id"), nullable=False)
+    requesting_golfer_id: Mapped[int] = mapped_column(ForeignKey("golfers.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, default="pending", server_default="pending")
+    token_digest: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    responded_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class WeekRsvp(Base):
+    """One golfer's attendance response for a scheduled week."""
+
+    __tablename__ = "week_rsvps"
+    __table_args__ = (
+        UniqueConstraint("week_id", "golfer_id", name="uq_week_rsvps_week_golfer"),
+        CheckConstraint("status IN ('playing', 'not_playing', 'maybe')", name="ck_week_rsvps_status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    week_id: Mapped[int] = mapped_column(ForeignKey("weeks.id"), nullable=False)
+    golfer_id: Mapped[int] = mapped_column(ForeignKey("golfers.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), nullable=False, server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), nullable=False, server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+    )
+
+
 class ScorecardDraft(Base):
     """An uploaded scorecard awaiting review; a draft is not data (R-SCORES).
 

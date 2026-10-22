@@ -883,6 +883,17 @@ class ResultTeam:
 
 
 @dataclass(frozen=True)
+class ResultTotal:
+    """Gross strokes from complete saved cards and net from week snapshots."""
+
+    golfer_id: int
+    name: str
+    gross_total: int
+    net_total: int | None
+    rounds: int
+
+
+@dataclass(frozen=True)
 class WeekResult:
     """One week's R-RESULTS@1 standings: players and teams."""
 
@@ -891,6 +902,7 @@ class WeekResult:
     play_date: date
     players: list[ResultPlayer]
     teams: list[ResultTeam]
+    totals: list[ResultTotal]
 
 
 @dataclass(frozen=True)
@@ -936,28 +948,32 @@ class SeasonResult:
     players: list[ResultPlayer]
     teams: list[ResultTeam]
     weeks: list[WeekResult]
+    totals: list[ResultTotal]
+
+
+def _card_strokes(saved: list[HoleScore], hole_number: dict[int, int]) -> dict[int, int] | None:
+    """Return one complete saved nine-hole card, independently of its opponent."""
+    if len(saved) != len(hole_number):
+        return None
+    strokes_by_hole = {}
+    for row in saved:
+        number = hole_number.get(row.hole_id)
+        if number is None:
+            return None
+        strokes_by_hole[number] = row.strokes
+    return strokes_by_hole if len(strokes_by_hole) == len(hole_number) else None
 
 
 def _match_strokes(session: Session, match: PlayerMatch, hole_number: dict[int, int]
                    ) -> dict[int, dict[int, int]] | None:
-    """Return {golfer_id: {hole number: strokes}} or None when either side is incomplete.
-
-    A side is complete only when it has a saved stroke for every hole of the
-    week's nine.
-    """
+    """Return both cards only when each golfer has a complete saved nine."""
     rows = _rows_by_golfer(session, match.id)
     strokes_by_golfer: dict[int, dict[int, int]] = {}
     for golfer_id in (match.a_golfer_id, match.b_golfer_id):
-        saved = rows.get(golfer_id, [])
-        if len(saved) != len(hole_number):
+        card = _card_strokes(rows.get(golfer_id, []), hole_number)
+        if card is None:
             return None
-        strokes_by_hole: dict[int, int] = {}
-        for row in saved:
-            number = hole_number.get(row.hole_id)
-            if number is None:
-                return None
-            strokes_by_hole[number] = row.strokes
-        strokes_by_golfer[golfer_id] = strokes_by_hole
+        strokes_by_golfer[golfer_id] = card
     return strokes_by_golfer
 
 
@@ -1038,8 +1054,24 @@ def week_result(session: Session, week_id: int) -> WeekResult | None:
     player_matches: dict[int, int] = {}
     team_points: dict[int, int] = {}
     team_match_sets: dict[int, set[int]] = {}
+    gross_totals: dict[int, int] = {}
+    net_totals: dict[int, int | None] = {}
+    round_counts: dict[int, int] = {}
 
     for match in _week_player_matches(session, week_id):
+        saved = _rows_by_golfer(session, match.id)
+        for golfer_id in (match.a_golfer_id, match.b_golfer_id):
+            card = _card_strokes(saved.get(golfer_id, []), hole_number)
+            if card is not None:
+                gross = sum(card.values())
+                gross_totals[golfer_id] = gross_totals.get(golfer_id, 0) + gross
+                round_counts[golfer_id] = round_counts.get(golfer_id, 0) + 1
+                handicap = handicaps.get(golfer_id)
+                previous_net = net_totals.get(golfer_id)
+                if handicap is None or (golfer_id in net_totals and previous_net is None):
+                    net_totals[golfer_id] = None
+                else:
+                    net_totals[golfer_id] = (previous_net or 0) + gross - handicap
         result = _score_week_match(session, match, stroke_index_by_hole, hole_number, handicaps,
                                    season.scoring_type)
         if result is None:
@@ -1076,6 +1108,11 @@ def week_result(session: Session, week_id: int) -> WeekResult | None:
             ResultTeam(t.team_id, t.name, t.points, t.matches, rank)
             for t, rank in zip(team_rows, team_ranks, strict=False)
         ],
+        totals=sorted(
+            (ResultTotal(gid, golfer_name(gid), gross, net_totals[gid], round_counts[gid])
+             for gid, gross in gross_totals.items()),
+            key=lambda row: row.name,
+        ),
     )
 
 
@@ -1292,6 +1329,9 @@ def season_result(session: Session, season_id: int) -> SeasonResult | None:
     team_points: dict[int, int] = {}
     team_matches: dict[int, int] = {}
     team_names: dict[int, str] = {}
+    gross_totals: dict[int, int] = {}
+    net_totals: dict[int, int | None] = {}
+    round_counts: dict[int, int] = {}
     for wk in week_results:
         if wk is None:
             continue
@@ -1303,6 +1343,16 @@ def season_result(session: Session, season_id: int) -> SeasonResult | None:
             team_points[team.team_id] = team_points.get(team.team_id, 0) + team.points
             team_matches[team.team_id] = team_matches.get(team.team_id, 0) + team.matches
             team_names[team.team_id] = team.name
+        for total in wk.totals:
+            gid = total.golfer_id
+            gross_totals[gid] = gross_totals.get(gid, 0) + total.gross_total
+            round_counts[gid] = round_counts.get(gid, 0) + total.rounds
+            previous_net = net_totals.get(gid)
+            if total.net_total is None or (gid in net_totals and previous_net is None):
+                net_totals[gid] = None
+            else:
+                net_totals[gid] = (previous_net or 0) + total.net_total
+            player_names[gid] = total.name
     players = [
         ResultPlayer(gid, player_names[gid], player_points[gid], player_matches[gid], 0)
         for gid in player_points
@@ -1326,4 +1376,9 @@ def season_result(session: Session, season_id: int) -> SeasonResult | None:
             for t, rank in zip(team_rows, team_ranks, strict=False)
         ],
         weeks=week_results,
+        totals=sorted(
+            (ResultTotal(gid, player_names[gid], gross, net_totals[gid], round_counts[gid])
+             for gid, gross in gross_totals.items()),
+            key=lambda row: row.name,
+        ),
     )

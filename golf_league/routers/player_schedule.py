@@ -2,10 +2,11 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from golf_league.database import get_session
-from golf_league.models import User
+from golf_league.models import MatchScoreState, PlayerMatch, TeamMatch, User
 from golf_league.routers.player_scores import entry_links, week_path
 from golf_league.security import require_verified_user
 from golf_league.services.player_schedule import (
@@ -90,11 +91,31 @@ async def week_detail(
     if season_id is not None and season_id != season.id:
         # The week decides its season; a different one in the URL is a wrong address.
         raise HTTPException(status_code=404, detail="Week not found")
+    substitute_links = ()
+    if (user.golfer_id is not None and week_view.week.week_type == "match"
+            and week_view.week.status == "scheduled"):
+        own_match_ids = session.scalars(
+            select(PlayerMatch.id)
+            .join(TeamMatch, PlayerMatch.team_match_id == TeamMatch.id)
+            .outerjoin(MatchScoreState, MatchScoreState.player_match_id == PlayerMatch.id)
+            .where(
+                TeamMatch.week_id == week_id,
+                or_(PlayerMatch.a_golfer_id == user.golfer_id,
+                    PlayerMatch.b_golfer_id == user.golfer_id),
+                MatchScoreState.locked_at.is_(None),
+            )
+            .order_by(PlayerMatch.id)
+        )
+        substitute_links = tuple(
+            f"/weeks/{week_id}/matches/{match_id}/substitute-request"
+            for match_id in own_match_ids
+        )
     return request.app.state.templates.TemplateResponse(
         request,
         "player/week.html",
         {"season": season, "seasons": seasons, "week_view": week_view, "is_admin": user.is_admin,
          "entry_link": entry_links(session, request, [week_id], user).get(week_id),
+         "substitute_links": substitute_links,
          "scores_path": week_path(week_id) if any(match.slots for match in week_view.matches) else None,
          "skins_path": (f"/seasons/{season.id}/results/weeks/{week_id}/skins"
                         if week_view.week.week_type == "match"

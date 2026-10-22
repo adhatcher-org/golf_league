@@ -75,6 +75,22 @@ orchestrator repo next door.
   `Actor(user.id, False, user.golfer_id)`. Its `entry_links` give My Schedule and the week page
   their "Enter scores" / "Update scores" / "View scores" links; `home_entry_prompt` in
   `golf_league/services/player_schedule.py` is home's "Week N: Enter scores".
+- A linked player's read-only round history is in
+  `golf_league/routers/player_rounds.py`, `golf_league/services/player_rounds.py`,
+  and `templates/player/rounds.html`; it reads saved hole scores and weekly
+  handicap snapshots without changing either.
+- Handicap trend pages are in `golf_league/routers/handicaps.py` and
+  `templates/player/handicap_trend.html` / `templates/admin/handicap_trend.html`.
+  `golf_league/services/handicaps.py:get_handicap_trend` reads stored weekly
+  snapshots for one golfer, optionally within one season; it never recomputes them.
+- Player substitute requests are in `golf_league/routers/substitute_requests.py`
+  and `golf_league/services/substitute_requests.py`; only an admin with the emailed
+  single-use token may fulfill a request through the existing substitution core.
+- Weekly RSVPs and admin reminders are in `golf_league/routers/rsvp.py` and
+  `golf_league/services/rsvp.py`; `week_rsvps` stores only golfer, week, status,
+  and timestamps. The admin week sheet reads headcount from that table.
+- The gross/net presentation toggle on season and week Results pages reads
+  saved hole scores and signed weekly snapshots through `services/scores.py`.
 - Scorecard photo entry (R-SCORES, R-OCR-PROVIDER): the admin pages are
   `golf_league/routers/admin_scorecards.py` with `templates/admin/scorecards/` and the status
   polling script `static/scorecard-status.js`. The five draft pages (page, status, photo, submit,

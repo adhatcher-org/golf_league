@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Request a substitute - Golf League{% endblock %}
+{% block content %}
+<h1>Request a substitute</h1>
+<p>Week {{ week.index }} · Match {{ match.position_label }}</p>
+{% if sent %}
+<p role="status">Your request was sent to the league admin.</p>
+{% else %}
+<p>The league admin will review your request and choose an eligible substitute. This does not change your match yet.</p>
+<form method="post" action="/weeks/{{ week.id }}/matches/{{ match.id }}/substitute-request">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button type="submit">Request sub</button>
+</form>
+{% endif %}
+<p><a href="/weeks/{{ week.id }}">Back to week</a></p>
+{% endblock %}

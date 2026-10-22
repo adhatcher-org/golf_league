@@ -265,7 +265,8 @@ def test_week_results_shows_leaders_points_and_ranks(client):
     assert "A1 Example" in text and "A2 Example" in text
     assert "B1 Example" in text and "B2 Example" in text
     # Tied leaders share rank 1; the two zero-point golfers share rank 3.
-    assert text.count("A1 Example") == 1 and text.count("A2 Example") == 1
+    assert "<td>1</td><td>A1 Example</td><td>20</td>" in text
+    assert "<td>1</td><td>A2 Example</td><td>20</td>" in text
     # Team A = 40 across two matches, team B = 0.
     assert "<td>A</td><td>40</td>" in text and "<td>B</td><td>0</td>" in text
 
@@ -288,9 +289,15 @@ def test_week_results_only_complete_matches_contribute(client):
     response = client.get(f"/seasons/{season_id}/results/weeks/{week_id}")
     assert response.status_code == 200
     text = response.text
-    # Match 1's home side scored 20; match 2 is pending so its golfers earn nothing.
+    # Match 1's home side scored 20; match 2 is pending so its golfers earn no points.
+    # The complete A2 card still has an individual gross total.
     assert "A1 Example" in text and "20" in text
-    assert "A2 Example" not in text and "B2 Example" not in text
+    assert "<td>A2 Example</td><td>20</td>" not in text
+    assert "<td>A2 Example</td><td>36</td>" in text
+    assert "B2 Example" not in text
+    season = client.get(f"/seasons/{season_id}/results")
+    assert season.status_code == 200
+    assert "<td>A2 Example</td><td>1</td><td>36</td>" in season.text
 
 
 def test_week_results_reconciles_player_and_team_points(client):
@@ -304,7 +311,9 @@ def test_week_results_reconciles_player_and_team_points(client):
     # the week's player points and team points must agree (reconcile with GL-98).
     import re
     # The table renders rank, name, points, matches per row; grab the points cell.
-    points = [int(m) for m in re.findall(r"<td>(?:A|B)\d Example</td><td>(\d+)</td>", text)]
+    points = [int(m) for m in re.findall(
+        r"<td>\d+</td><td>(?:A|B)\d Example</td><td>(\d+)</td><td>\d+</td>", text,
+    )]
     assert sum(points) == 40  # 20 + 20 + 0 + 0
 
 
@@ -401,3 +410,94 @@ def test_week_results_links_to_scores_and_skins(client):
     assert f'href="/weeks/{week_id}/scores"' in text
     assert f'href="/seasons/{season_id}/results/weeks/{week_id}/skins"' in text
     assert f'href="/seasons/{season_id}/results/weeks/{week_id}/net-skins"' in text
+
+
+def test_gross_net_totals_use_signed_week_snapshot_and_preserve_navigation(client):
+    season_id, week_id, _ = _season_week_course(client)
+    _teams, golfers, match_ids = _complete_week(client, season_id, week_id, _tee_set_id(client))
+    with Session(_engine(client)) as session:
+        session.scalar(select(WeekHandicap).where(
+            WeekHandicap.week_id == week_id, WeekHandicap.golfer_id == golfers[0],
+        )).strokes = -2
+        score = session.scalar(select(HoleScore).where(
+            HoleScore.player_match_id == match_ids[0], HoleScore.golfer_id == golfers[0],
+        ))
+        score.strokes = 10  # Eight 4s and one 10: gross 42, net 44.
+        session.commit()
+    _as(client, _user(client, "player@example.test"))
+    week_url = f"/seasons/{season_id}/results/weeks/{week_id}"
+    season_url = f"/seasons/{season_id}/results"
+
+    gross = client.get(week_url)
+    assert gross.status_code == 200
+    assert gross.headers["cache-control"] == "no-store"
+    assert "Gross total" in gross.text
+    assert "<td>A1 Example</td><td>42</td>" in gross.text
+    assert f'href="{season_url}?total=gross"' in gross.text
+
+    net = client.get(f"{week_url}?total=net")
+    assert net.status_code == 200
+    assert net.headers["cache-control"] == "no-store"
+    assert "Net total" in net.text
+    assert "<td>A1 Example</td><td>44</td>" in net.text
+    assert f'href="{season_url}?total=net"' in net.text
+
+    season = client.get(f"{season_url}?total=net")
+    assert season.status_code == 200
+    assert season.headers["cache-control"] == "no-store"
+    assert "<td>A1 Example</td><td>1</td><td>44</td>" in season.text
+    assert f'href="{week_url}?total=net"' in season.text
+
+
+def test_net_total_pending_when_historical_snapshot_missing(client):
+    season_id, week_id, _ = _season_week_course(client)
+    _teams, golfers, _matches = _complete_week(client, season_id, week_id, _tee_set_id(client))
+    with Session(_engine(client)) as session:
+        session.execute(WeekHandicap.__table__.delete().where(
+            WeekHandicap.week_id == week_id, WeekHandicap.golfer_id == golfers[0],
+        ))
+        session.commit()
+    _as(client, _user(client, "player@example.test"))
+    for path in (f"/seasons/{season_id}/results/weeks/{week_id}?total=net",
+                 f"/seasons/{season_id}/results?total=net"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-store"
+        assert "A1 Example" in response.text
+        assert "Pending handicap" in response.text
+
+
+def test_completed_cards_keep_pending_points_notice_without_snapshots(client):
+    season_id, week_id, _ = _season_week_course(client)
+    _complete_week(client, season_id, week_id, _tee_set_id(client))
+    with Session(_engine(client)) as session:
+        session.execute(WeekHandicap.__table__.delete().where(WeekHandicap.week_id == week_id))
+        session.commit()
+    _as(client, _user(client, "player@example.test"))
+    response = client.get(f"/seasons/{season_id}/results/weeks/{week_id}?total=net")
+    assert response.status_code == 200
+    assert "Scores pending" in response.text
+    assert "Week round totals" in response.text
+    assert "Pending handicap" in response.text
+
+
+def test_total_toggle_keeps_results_private_and_read_only(client):
+    season_id, week_id, _ = _season_week_course(client)
+    _complete_week(client, season_id, week_id, _tee_set_id(client))
+    paths = (f"/seasons/{season_id}/results?total=net",
+             f"/seasons/{season_id}/results/weeks/{week_id}?total=net")
+    for path in paths:
+        assert client.get(path).status_code == 401
+    _as(client, _user(client, "unverified@example.test", verified=False))
+    for path in paths:
+        assert client.get(path).status_code == 403
+    _as(client, _user(client, "player@example.test"))
+    with Session(_engine(client)) as session:
+        before = [(row.id, row.strokes) for row in session.scalars(select(HoleScore))]
+    for path in paths:
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-store"
+    with Session(_engine(client)) as session:
+        after = [(row.id, row.strokes) for row in session.scalars(select(HoleScore))]
+    assert after == before

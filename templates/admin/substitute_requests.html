@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Substitute requests - Golf League{% endblock %}
+{% block content %}
+<h1>Pending substitute requests</h1>
+{% if notice %}<p role="status">Request updated.</p>{% endif %}
+{% if not requests %}<p>No pending requests.</p>{% endif %}
+{% for item in requests %}
+<section aria-labelledby="request-{{ item.id }}">
+  <h2 id="request-{{ item.id }}">Week {{ weeks[item.week_id].index }} · Match {{ matches[item.player_match_id].position_label }}</h2>
+  <p>Requested by {{ golfers[item.requesting_golfer_id].first_name }} {{ golfers[item.requesting_golfer_id].last_name }}</p>
+  <form method="post" action="/admin/substitute-requests/{{ item.id }}/respond">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label for="token-{{ item.id }}">One-time response token from email</label>
+    <input id="token-{{ item.id }}" name="response_token" type="password" required autocomplete="off">
+    <label for="golfer-{{ item.id }}">Substitute</label>
+    <select id="golfer-{{ item.id }}" name="golfer_id">
+      <option value="">Choose substitute</option>
+      {% for golfer in substitutes[item.id] %}<option value="{{ golfer.id }}">{{ golfer.first_name }} {{ golfer.last_name }}</option>{% endfor %}
+    </select>
+    <button type="submit" name="action" value="fulfill">Fulfill request</button>
+    <button type="submit" name="action" value="decline">Decline request</button>
+  </form>
+</section>
+{% endfor %}
+{% endblock %}

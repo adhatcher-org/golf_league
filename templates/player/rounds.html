@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}My Round History - Golf League{% endblock %}
+
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title">
+    <p class="eyebrow">My scores</p>
+    <h1 id="page-title">Round history</h1>
+</section>
+
+{% if not rounds %}
+<p class="empty-state">No past rounds with saved scores yet.</p>
+{% else %}
+{% for round in rounds %}
+<section aria-labelledby="round-{{ loop.index }}">
+    <h2 id="round-{{ loop.index }}">Week {{ round.week_index }} · {{ round.play_date }} · {{ round.nine|title }} nine</h2>
+    <p>Against {{ round.opponent_name }} · Gross {{ round.gross_total }} ·
+        Net {% if round.net_total is none %}pending{% else %}{{ round.net_total }}{% endif %} ·
+        {% if round.result is none %}Result pending{% else %}{{ round.result }} · {{ round.points }} points{% endif %}
+    </p>
+    <div class="table-wrap">
+        <table class="golfer-table">
+            <caption>Gross strokes by hole, week {{ round.week_index }}</caption>
+            <thead><tr><th scope="col">Hole</th>{% for hole in round.holes %}<th scope="col">{{ hole.number }}</th>{% endfor %}</tr></thead>
+            <tbody><tr><th scope="row">Gross</th>{% for hole in round.holes %}<td>{{ hole.gross }}</td>{% endfor %}</tr></tbody>
+        </table>
+    </div>
+</section>
+{% endfor %}
+{% endif %}
+{% endblock %}

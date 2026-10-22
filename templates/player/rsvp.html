@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Week {{ week.index }} RSVP - Golf League{% endblock %}
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title">
+    <p class="eyebrow">Week {{ week.index }} · {{ week.play_date.strftime('%b %-d, %Y') }}</p>
+    <h1 id="page-title">Your RSVP</h1>
+</section>
+<p><a href="/weeks/{{ week.id }}">Back to week</a></p>
+{% if error %}<p role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="/weeks/{{ week.id }}/rsvp">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <fieldset>
+        <legend>Will you play this week?</legend>
+        <label><input type="radio" name="status" value="playing" {% if selected == 'playing' %}checked{% endif %}> Playing</label>
+        <label><input type="radio" name="status" value="not_playing" {% if selected == 'not_playing' %}checked{% endif %}> Not playing</label>
+        <label><input type="radio" name="status" value="maybe" {% if selected == 'maybe' %}checked{% endif %}> Maybe</label>
+    </fieldset>
+    <button type="submit">Save RSVP</button>
+</form>
+{% endblock %}

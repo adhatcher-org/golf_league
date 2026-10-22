@@ -7,6 +7,7 @@ contributes no points, so it never appears in the totals. Responses carry
 """
 
 import logging
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
@@ -39,6 +40,7 @@ def _season(session: Session, season_id: int) -> Season:
 
 @router.get("/seasons/{season_id}/results")
 async def season_results(season_id: int, request: Request,
+                         total: Literal["gross", "net"] = "gross",
                          session: Session = Depends(get_session),  # noqa: B008
                          user: User = Depends(require_verified_user)) -> Response:  # noqa: B008
     """The season's points tables: every golfer and team, aggregated across weeks."""
@@ -48,11 +50,13 @@ async def season_results(season_id: int, request: Request,
     result = season_result(session, season_id)
     return _page(request, "player/results.html", {
         "season": season, "weeks": weeks, "week": None, "result": result,
+        "total": total,
     })
 
 
 @router.get("/seasons/{season_id}/results/weeks/{week_id}")
 async def week_results(season_id: int, week_id: int, request: Request,
+                       total: Literal["gross", "net"] = "gross",
                        session: Session = Depends(get_session),  # noqa: B008
                        user: User = Depends(require_verified_user)) -> Response:  # noqa: B008
     """One week's points tables within a season.
@@ -85,6 +89,7 @@ async def week_results(season_id: int, week_id: int, request: Request,
         "season": season, "weeks": weeks, "week": week, "result": result,
         "cancelled": cancelled, "ungenerated": ungenerated, "pending": pending,
         "show_skins": generated and not cancelled,
+        "total": total,
     })
 
 

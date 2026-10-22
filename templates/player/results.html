@@ -12,15 +12,36 @@
 <nav aria-label="Results navigation"><p>
     <a class="tap-link" href="/my/schedule?season_id={{ season.id }}">My Schedule</a>
     {% if week %}
-        · <a class="tap-link" href="/seasons/{{ season.id }}/results/weeks/{{ week.id }}">Week results</a>
+        · <a class="tap-link" href="/seasons/{{ season.id }}/results/weeks/{{ week.id }}?total={{ total }}">Week results</a>
         · <a class="tap-link" href="/seasons/{{ season.id }}/results/weeks/{{ week.id }}/skins">Skins</a>
         · <a class="tap-link" href="/seasons/{{ season.id }}/results/weeks/{{ week.id }}/net-skins">Net skins</a>
     {% else %}
         {% for w in weeks %}
-        · <a class="tap-link" href="/seasons/{{ season.id }}/results/weeks/{{ w.id }}">Week {{ w.index }}</a>
+        · <a class="tap-link" href="/seasons/{{ season.id }}/results/weeks/{{ w.id }}?total={{ total }}">Week {{ w.index }}</a>
         {% endfor %}
     {% endif %}
 </p></nav>
+
+<nav aria-label="Round total view"><p>
+    Round totals:
+    <a class="tap-link" href="/seasons/{{ season.id }}/results?total=gross" {% if total == "gross" %}aria-current="page"{% endif %}>Gross</a>
+    · <a class="tap-link" href="/seasons/{{ season.id }}/results?total=net" {% if total == "net" %}aria-current="page"{% endif %}>Net</a>
+</p></nav>
+
+<section aria-labelledby="round-totals-title">
+    <h2 id="round-totals-title">Season round totals</h2>
+    <div class="table-wrap">
+    <table class="golfer-table">
+        <thead><tr><th scope="col">Golfer</th><th scope="col">Rounds</th><th scope="col">{{ total|capitalize }} total</th></tr></thead>
+        <tbody>
+        {% for row in result.totals %}
+        <tr><td>{{ row.name }}</td><td>{{ row.rounds }}</td><td>{% if total == "gross" %}{{ row.gross_total }}{% elif row.net_total is none %}Pending handicap{% else %}{{ row.net_total }}{% endif %}</td></tr>
+        {% endfor %}
+        {% if not result.totals %}<tr><td colspan="3">No complete rounds yet.</td></tr>{% endif %}
+        </tbody>
+    </table>
+    </div>
+</section>
 
 <section aria-labelledby="players-title">
     <h2 id="players-title">Players</h2>

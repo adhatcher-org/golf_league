@@ -89,12 +89,12 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/app.py`
 
-- function `_navigation_user` (line 75)
-- function `_configure_scorecards` (line 108)
-- function `_clean_scorecard_drafts` (line 124)
-- function `lifespan` (line 139)
-- function `create_app` (line 219)
-- function `main` (line 313)
+- function `_navigation_user` (line 79)
+- function `_configure_scorecards` (line 112)
+- function `_clean_scorecard_drafts` (line 128)
+- function `lifespan` (line 143)
+- function `create_app` (line 223)
+- function `main` (line 321)
 
 ### `golf_league/config.py`
 
@@ -328,10 +328,12 @@ Private data, ignored files, and source contents are excluded.
 - class `WeekHandicap` (line 570)
 - class `HoleScore` (line 593)
 - class `MatchScoreState` (line 611)
-- class `ScorecardDraft` (line 637)
-- class `LeagueInviteLink` (line 668)
-- class `GolferSetPasswordToken` (line 691)
-- class `InviteRateWindow` (line 708)
+- class `SubstituteRequest` (line 637)
+- class `WeekRsvp` (line 656)
+- class `ScorecardDraft` (line 678)
+- class `LeagueInviteLink` (line 709)
+- class `GolferSetPasswordToken` (line 732)
+- class `InviteRateWindow` (line 749)
 
 ### `golf_league/routers/__init__.py`
 
@@ -490,34 +492,34 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/routers/admin_week_scores.py`
 
-- function `_sheet_path` (line 69)
-- function `_match_path` (line 73)
-- function `_redirect` (line 77)
-- function `_field_limit` (line 82)
-- function `_week` (line 91)
-- function `_sheet_match` (line 98)
-- function `_day` (line 106)
-- function `_takes_scores` (line 113)
-- function `_closed_reason` (line 117)
-- function `_match_view` (line 124)
-- function `_name` (line 150)
-- function `_missing` (line 157)
-- function `_sheet_notices` (line 164)
-- function `_sheet_page` (line 191)
-- function `week_scores` (line 234)
-- function `_refused_sheet` (line 240)
-- function `_read_sheet` (line 273)
-- function `week_scores_save` (line 318)
-- function `_match_page` (line 357)
-- function `match_scores` (line 390)
-- function `_refused_match` (line 396)
-- function `match_scores_save` (line 417)
-- function `match_lock` (line 461)
-- function `match_unlock` (line 485)
-- function `week_lock_all` (line 504)
-- function `_clear_page` (line 539)
-- function `match_clear_confirm` (line 552)
-- function `match_clear` (line 566)
+- function `_sheet_path` (line 70)
+- function `_match_path` (line 74)
+- function `_redirect` (line 78)
+- function `_field_limit` (line 83)
+- function `_week` (line 92)
+- function `_sheet_match` (line 99)
+- function `_day` (line 107)
+- function `_takes_scores` (line 114)
+- function `_closed_reason` (line 118)
+- function `_match_view` (line 125)
+- function `_name` (line 151)
+- function `_missing` (line 158)
+- function `_sheet_notices` (line 165)
+- function `_sheet_page` (line 195)
+- function `week_scores` (line 239)
+- function `_refused_sheet` (line 245)
+- function `_read_sheet` (line 278)
+- function `week_scores_save` (line 323)
+- function `_match_page` (line 362)
+- function `match_scores` (line 395)
+- function `_refused_match` (line 401)
+- function `match_scores_save` (line 422)
+- function `match_lock` (line 466)
+- function `match_unlock` (line 490)
+- function `week_lock_all` (line 509)
+- function `_clear_page` (line 544)
+- function `match_clear_confirm` (line 557)
+- function `match_clear` (line 571)
 
 ### `golf_league/routers/admin_weeks.py`
 
@@ -540,6 +542,11 @@ Private data, ignored files, and source contents are excluded.
 - function `shift_confirm_submit` (line 381)
 - function `nine_preview_submit` (line 388)
 - function `nine_confirm_submit` (line 395)
+
+### `golf_league/routers/handicaps.py`
+
+- function `my_handicap_trend` (line 16)
+- function `golfer_handicap_trend` (line 42)
 
 ### `golf_league/routers/home.py`
 
@@ -583,11 +590,16 @@ Private data, ignored files, and source contents are excluded.
 - function `set_password_form` (line 192)
 - function `set_password_submit` (line 209)
 
+### `golf_league/routers/player_rounds.py`
+
+- function `player_rounds` (line 20)
+- function `player_rounds_week` (line 49)
+
 ### `golf_league/routers/player_schedule.py`
 
-- function `my_schedule` (line 21)
-- function `opponent_contact` (line 39)
-- function `week_detail` (line 79)
+- function `my_schedule` (line 22)
+- function `opponent_contact` (line 40)
+- function `week_detail` (line 80)
 
 ### `golf_league/routers/player_scorecards.py`
 
@@ -636,16 +648,25 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/routers/results.py`
 
-- function `_season` (line 33)
-- function `season_results` (line 41)
-- function `week_results` (line 55)
-- function `week_skins_page` (line 92)
-- function `week_net_skins_page` (line 111)
+- function `_season` (line 34)
+- function `season_results` (line 42)
+- function `week_results` (line 58)
+- function `week_skins_page` (line 97)
+- function `week_net_skins_page` (line 116)
 
 ### `golf_league/routers/roster.py`
 
 - function `player_roster` (line 16)
 - function `roster_golfer_detail` (line 31)
+
+### `golf_league/routers/rsvp.py`
+
+- function `_week` (line 25)
+- function `_player_page` (line 32)
+- function `_send_reminders` (line 41)
+- function `rsvp_form` (line 55)
+- function `rsvp_submit` (line 64)
+- function `send_rsvp_reminders` (line 82)
 
 ### `golf_league/routers/scorecard_flow.py`
 
@@ -672,6 +693,18 @@ Private data, ignored files, and source contents are excluded.
 - function `submit` (line 288)
 - function `_discarded_path` (line 348)
 - function `discard` (line 354)
+
+### `golf_league/routers/substitute_requests.py`
+
+- function `_now` (line 43)
+- function `_csrf` (line 47)
+- function `_csrf_value` (line 52)
+- function `_request_page` (line 56)
+- function `_send_notice` (line 75)
+- function `request_form` (line 101)
+- function `request_submit` (line 108)
+- function `admin_requests` (line 130)
+- function `admin_respond` (line 153)
 
 ### `golf_league/security.py`
 
@@ -743,8 +776,11 @@ Private data, ignored files, and source contents are excluded.
 
 ### `golf_league/services/handicaps.py`
 
-- function `ensure_week_handicap` (line 17)
-- function `relabel_week_nine` (line 42)
+- function `ensure_week_handicap` (line 20)
+- function `relabel_week_nine` (line 45)
+- class `HandicapTrend` (line 55)
+- class `HandicapWeek` (line 64)
+- function `get_handicap_trend` (line 75)
 
 ### `golf_league/services/identity.py`
 
@@ -831,6 +867,12 @@ Private data, ignored files, and source contents are excluded.
 - function `update_participant_override` (line 195)
 - function `effective_participant` (line 222)
 
+### `golf_league/services/player_rounds.py`
+
+- class `PlayerHole` (line 22)
+- class `PlayerRound` (line 28)
+- function `get_player_rounds` (line 41)
+
 ### `golf_league/services/player_schedule.py`
 
 - class `PlayerSlot` (line 24)
@@ -902,6 +944,16 @@ Private data, ignored files, and source contents are excluded.
 - function `apply_batch` (line 823)
 - function `_compute_row_warnings` (line 863)
 - function `purge_expired` (line 896)
+
+### `golf_league/services/rsvp.py`
+
+- class `RsvpError` (line 20)
+- class `RsvpRow` (line 25)
+- class `RsvpSummary` (line 33)
+- function `get_rsvp` (line 41)
+- function `set_rsvp` (line 47)
+- function `week_summary` (line 63)
+- function `reminder_recipients` (line 91)
 
 ### `golf_league/services/schedule.py`
 
@@ -1082,19 +1134,21 @@ Private data, ignored files, and source contents are excluded.
 - function `player_entry_states` (line 844)
 - class `ResultPlayer` (line 853)
 - class `ResultTeam` (line 869)
-- class `WeekResult` (line 886)
-- class `WeekSkins` (line 897)
-- class `WeekNetSkins` (line 914)
-- class `SeasonResult` (line 932)
-- function `_match_strokes` (line 941)
-- function `_score_week_match` (line 964)
-- function `_competition_ranks` (line 990)
-- function `week_result` (line 1005)
-- function `week_points` (line 1082)
-- function `_golfer_score_cards` (line 1106)
-- function `week_skins` (line 1133)
-- function `week_net_skins` (line 1200)
-- function `season_result` (line 1277)
+- class `ResultTotal` (line 886)
+- class `WeekResult` (line 897)
+- class `WeekSkins` (line 909)
+- class `WeekNetSkins` (line 926)
+- class `SeasonResult` (line 944)
+- function `_card_strokes` (line 954)
+- function `_match_strokes` (line 967)
+- function `_score_week_match` (line 980)
+- function `_competition_ranks` (line 1006)
+- function `week_result` (line 1021)
+- function `week_points` (line 1119)
+- function `_golfer_score_cards` (line 1143)
+- function `week_skins` (line 1170)
+- function `week_net_skins` (line 1237)
+- function `season_result` (line 1314)
 
 ### `golf_league/services/season_roster.py`
 
@@ -1118,6 +1172,17 @@ Private data, ignored files, and source contents are excluded.
 - function `list_seasons` (line 251)
 - function `update_season` (line 262)
 - function `list_courses_for_season_form` (line 349)
+
+### `golf_league/services/substitute_requests.py`
+
+- class `RequestNotFound` (line 23)
+- class `RequestConflict` (line 27)
+- function `_match_context` (line 31)
+- function `_locked` (line 40)
+- function `_digest` (line 45)
+- function `create_request` (line 49)
+- function `pending_requests` (line 83)
+- function `respond` (line 89)
 
 ### `golf_league/services/teams.py`
 
@@ -1186,6 +1251,16 @@ Private data, ignored files, and source contents are excluded.
 
 - function `upgrade` (line 16)
 - function `downgrade` (line 60)
+
+### `migrations/versions/ab74c5d6e105_substitute_requests.py`
+
+- function `upgrade` (line 17)
+- function `downgrade` (line 38)
+
+### `migrations/versions/b4e73c9a1062_week_rsvps.py`
+
+- function `upgrade` (line 17)
+- function `downgrade` (line 35)
 
 ### `migrations/versions/b8d4c0e2f671_manual_teams.py`
 
@@ -1290,6 +1365,9 @@ Private data, ignored files, and source contents are excluded.
 ### `templates/admin/courses/tee_form.html`
 
 
+### `templates/admin/handicap_trend.html`
+
+
 ### `templates/admin/imports/new.html`
 
 
@@ -1347,6 +1425,9 @@ Private data, ignored files, and source contents are excluded.
 ### `templates/admin/seasons/participants.html`
 
 
+### `templates/admin/substitute_requests.html`
+
+
 ### `templates/admin/teams/form.html`
 
 
@@ -1395,6 +1476,9 @@ Private data, ignored files, and source contents are excluded.
 ### `templates/player/_matchups.html`
 
 
+### `templates/player/handicap_trend.html`
+
+
 ### `templates/player/home.html`
 
 
@@ -1411,6 +1495,12 @@ Private data, ignored files, and source contents are excluded.
 
 
 ### `templates/player/results/week.html`
+
+
+### `templates/player/rounds.html`
+
+
+### `templates/player/rsvp.html`
 
 
 ### `templates/player/scorecards/failed.html`
@@ -1438,6 +1528,9 @@ Private data, ignored files, and source contents are excluded.
 
 
 ### `templates/player/skins.html`
+
+
+### `templates/player/substitute_request.html`
 
 
 ### `templates/player/week.html`
@@ -2202,6 +2295,22 @@ Private data, ignored files, and source contents are excluded.
 - function `test_zero_or_negative_rating_raises` (line 88)
 - function `test_a_plus_handicap_index_is_accepted_at_every_rating` (line 95)
 
+### `tests/test_handicap_trend.py`
+
+- function `_login` (line 14)
+- class `TestHandicapTrendService` (line 27)
+  - method `test_get_handicap_trend_empty` (line 30)
+  - method `test_get_handicap_trend_with_data` (line 42)
+  - method `test_get_handicap_trend_nonexistent_golfer` (line 86)
+  - method `test_get_handicap_trend_by_season` (line 91)
+- class `TestHandicapTrendRoutes` (line 126)
+  - method `test_my_handicap_trend_unauthenticated` (line 129)
+  - method `test_my_handicap_trend_unlinked_403` (line 134)
+  - method `test_linked_player_sees_own_empty_trend` (line 153)
+  - method `test_golfer_handicap_trend_not_found` (line 177)
+  - method `test_admin_sees_another_golfer_trend` (line 182)
+  - method `test_admin_handicap_trend_requires_admin` (line 196)
+
 ### `tests/test_hole_grid.py`
 
 - function `_csrf` (line 10)
@@ -2380,6 +2489,12 @@ Private data, ignored files, and source contents are excluded.
 - function `test_redact_hides_token_paths_and_queries_but_keeps_route_diagnostics` (line 36)
 - function `test_uvicorn_access_filter_sanitizes_tuple_args_idempotently` (line 49)
 
+### `tests/test_m13_migrations.py`
+
+- function `_engine` (line 17)
+- function `_shape` (line 29)
+- function `test_m13_fresh_and_prior_head_upgrades_preserve_data` (line 40)
+
 ### `tests/test_matchup_generation.py`
 
 - function `clock` (line 48)
@@ -2527,6 +2642,17 @@ Private data, ignored files, and source contents are excluded.
 - function `test_admin_golfer_delete_reference_check_uses_409_and_csrf` (line 396)
 - function `test_admin_cross_course_override_rerenders_422` (line 415)
 
+### `tests/test_player_rounds.py`
+
+- function `_as` (line 25)
+- function `_saved_week` (line 45)
+- function `test_player_rounds_list_own_gross_signed_net_result_points_and_privacy` (line 121)
+- function `test_missing_snapshot_keeps_gross_and_shows_pending` (line 146)
+- function `test_missing_opponent_snapshot_keeps_own_net_but_result_pending` (line 161)
+- function `test_other_players_rounds_are_never_in_projection` (line 175)
+- function `test_anonymous_unverified_unlinked_and_unknown_week` (line 189)
+- function `test_weeks_without_player_scores_are_omitted` (line 202)
+
 ### `tests/test_player_scorecards.py`
 
 - function `cards` (line 44)
@@ -2671,12 +2797,16 @@ Private data, ignored files, and source contents are excluded.
 - function `_complete_week` (line 175)
 - function `test_anonymous_week_results_is_401` (line 250)
 - function `test_week_results_shows_leaders_points_and_ranks` (line 256)
-- function `test_week_results_only_complete_matches_contribute` (line 273)
-- function `test_week_results_reconciles_player_and_team_points` (line 296)
-- function `test_week_results_cancelled_week_empty_state` (line 311)
-- function `test_week_results_rain_date_ungenerated_week_empty_state` (line 325)
-- function `test_week_results_pending_week_empty_state` (line 344)
-- function `test_week_results_links_to_scores_and_skins` (line 394)
+- function `test_week_results_only_complete_matches_contribute` (line 274)
+- function `test_week_results_reconciles_player_and_team_points` (line 303)
+- function `test_week_results_cancelled_week_empty_state` (line 320)
+- function `test_week_results_rain_date_ungenerated_week_empty_state` (line 334)
+- function `test_week_results_pending_week_empty_state` (line 353)
+- function `test_week_results_links_to_scores_and_skins` (line 403)
+- function `test_gross_net_totals_use_signed_week_snapshot_and_preserve_navigation` (line 415)
+- function `test_net_total_pending_when_historical_snapshot_missing` (line 452)
+- function `test_completed_cards_keep_pending_points_notice_without_snapshots` (line 470)
+- function `test_total_toggle_keeps_results_private_and_read_only` (line 484)
 
 ### `tests/test_roster.py`
 
@@ -2766,6 +2896,14 @@ Private data, ignored files, and source contents are excluded.
 - function `_add_golfer` (line 12)
 - function `_login_as` (line 22)
 - function `test_roster_requires_verified_user_and_exposes_only_projection` (line 35)
+
+### `tests/test_rsvp.py`
+
+- function `_setup` (line 25)
+- function `_as` (line 70)
+- function `test_player_upsert_is_scoped_and_validated` (line 79)
+- function `test_admin_headcount_and_reminder_recipients` (line 104)
+- function `test_unverified_and_unlinked_denied` (line 133)
 
 ### `tests/test_run_local.py`
 
@@ -3113,6 +3251,17 @@ Private data, ignored files, and source contents are excluded.
 - function `test_skins_page_shows_pending_when_a_card_is_missing` (line 568)
 - function `test_unknown_skins_week_is_404` (line 641)
 - function `test_skins_week_not_in_season_is_404` (line 648)
+
+### `tests/test_substitute_requests.py`
+
+- function `_setup` (line 26)
+- function `test_player_request_and_admin_fulfillment_is_single_use` (line 36)
+- function `test_request_rejects_other_golfer_and_locked_match` (line 57)
+- function `test_response_rolls_back_on_ineligible_substitute` (line 75)
+- function `test_email_failure_removes_undelivered_request` (line 88)
+- function `test_notice_contains_response_token_only_in_email` (line 107)
+- function `test_player_route_reports_failed_delivery_and_allows_retry` (line 123)
+- function `test_player_and_admin_routes_enforce_access_and_csrf` (line 160)
 
 ### `tests/test_substitutions.py`
 

@@ -39,6 +39,7 @@ from golf_league.services.match_entry import (
     score_field,
     sheet_score_field,
 )
+from golf_league.services.rsvp import week_summary
 from golf_league.services.scorecard_vision import league_timezone_name
 from golf_league.services.scores import (
     ScoreEntryError,
@@ -177,6 +178,9 @@ def _sheet_notices(request: Request, sheet: list[SheetMatch]) -> list[str]:
         notices.append("The match was unlocked.")
     if query.get("cleared") == "1":
         notices.append("The match's scores were cleared. It can be entered again.")
+    if "reminders" in query:
+        count = parse_revision(query.get("reminders", "")) or 0
+        notices.append(f"RSVP reminders queued for {count} golfer{'s' if count != 1 else ''}.")
     incomplete = parse_revision(query.get("incomplete", ""))
     if incomplete:
         notices.append("1 match is not fully entered and was left open." if incomplete == 1
@@ -220,6 +224,7 @@ def _sheet_page(request: Request, session: Session, week: Week, *, values: dict[
         groups[-1]["matches"].append(view)
     return _page(request, "admin/scorecards/scores.html", {
         "week": week, "groups": groups, "hole_numbers": hole_numbers, "sheet": sheet,
+        "rsvp": week_summary(session, week.id),
         "entered": sum(1 for match in sheet if match.complete),
         "locked": sum(1 for match in sheet if match.locked),
         "has_inputs": any(view["has_inputs"] for group in groups for view in group["matches"]),
