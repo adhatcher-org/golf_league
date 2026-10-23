@@ -10,6 +10,21 @@
 </header>
 {% for notice in notices %}<p class="notice" role="status">{{ notice }}</p>{% endfor %}
 {% include "_error_summary.html" %}
+<section aria-labelledby="rsvp-heading">
+    <h2 id="rsvp-heading">Weekly RSVP</h2>
+    <p>Playing: {{ rsvp.playing }} · Not playing: {{ rsvp.not_playing }} · Maybe: {{ rsvp.maybe }} · No response: {{ rsvp.no_response }}</p>
+    {% if rsvp.rows %}
+    <div class="table-wrap"><table>
+        <caption>Week {{ week.index }} attendance responses</caption>
+        <thead><tr><th scope="col">Golfer</th><th scope="col">RSVP</th></tr></thead>
+        <tbody>{% for row in rsvp.rows %}<tr><th scope="row">{{ row.name }}</th><td>{{ row.status|replace('_', ' ')|title if row.status else 'No response' }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}<p>No golfers are on this week's roster or generated matches.</p>{% endif %}
+    <form method="post" action="/admin/weeks/{{ week.id }}/rsvp/reminders">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit">Send RSVP reminders</button>
+    </form>
+</section>
 <p><a href="/admin/scorecards/new">Enter a scorecard</a></p>
 {% if not sheet %}<p>No scores can be entered yet: this week has no generated matches.</p>{% endif %}
 {% if sheet and not open_week %}<p>{{ closed_reason }} Its scores cannot be entered or changed.</p>{% endif %}

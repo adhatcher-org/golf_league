@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Handicap Trend{% endblock %}
+
+{% block content %}
+    <div class="page-header">
+        <h1>Handicap Trend</h1>
+    </div>
+
+    <div class="page-body">
+        <h2>{{ trend.golfer_name }}</h2>
+
+        {% if trend.weeks|length == 0 %}
+            <p>No handicap on file for this golfer.</p>
+        {% else %}
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Week</th>
+                        <th>Date</th>
+                        <th>Nine</th>
+                        <th>Strokes</th>
+                        <th>Source</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for week in trend.weeks %}
+                        <tr>
+                            <td>{{ week.week_index }}</td>
+                            <td>{{ week.week_date }}</td>
+                            <td>{{ week.nine }}</td>
+                            <td>
+                                {% if week.strokes is not none %}
+                                    {{ week.strokes }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>{{ week.source }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+{% endblock %}

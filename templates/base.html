@@ -19,6 +19,10 @@
                 {% if request.state.can_view_player_pages %}
                 <a href="/roster">Player roster</a>
                 <a href="/my/schedule">My Schedule</a>
+                {% if request.state.current_user.golfer_id %}
+                <a href="/my/rounds">My Rounds</a>
+                <a href="/handicaps/trend">Handicap Trend</a>
+                {% endif %}
                 {% if request.state.nav_season %}
                 <a href="/seasons/{{ request.state.nav_season.id }}/results">Results</a>
                 {% endif %}
@@ -33,6 +37,7 @@
                         <a href="/admin/seasons">Seasons</a>
                         <a href="/admin/invites">League invites</a>
                         <a href="/admin/scorecards/new">Enter scorecard</a>
+                        <a href="/admin/substitute-requests">Substitute requests</a>
                         <a href="/admin/seasons/new">New season</a>
                         <a href="/admin/config">Configuration</a>
                     </div>
