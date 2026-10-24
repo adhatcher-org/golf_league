@@ -56,7 +56,7 @@
                 {% set scorecard_pairing = true %}
                 {% for item in group.matches %}
                 <tbody id="match-{{ item.match.player_match_id }}">
-                    <tr class="scorecard__pairing-heading"><th scope="rowgroup" colspan="{{ hole_numbers|length + 6 }}"><span class="scorecard__pairing-content"><span>{{ item.label }}</span>{% if item.link %}<a class="tap-link" aria-label="{{ item.link.text }} for {{ item.match.golfers[0].name }} and {{ item.match.golfers[1].name }}" href="{{ item.link.href }}">{{ item.link.text }}</a>{% endif %}</span></th></tr>
+                    <tr class="scorecard__pairing-heading"><th scope="rowgroup" colspan="{{ hole_numbers|length + 6 }}"><span class="scorecard__pairing-content"><span>{{ item.label }}</span>{% if item.link %}<a class="tap-link" href="{{ item.link.href }}">{{ item.link.text }}<span class="visually-hidden"> for {{ item.match.golfers[0].name }} and {{ item.match.golfers[1].name }}</span></a>{% endif %}</span></th></tr>
                     {% set points = item.points | default({}) %}
                     {% for row in item.view.rows %}
                     {% set golfer_points = points.get(row.golfer.golfer_id, '—') %}
