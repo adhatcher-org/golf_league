@@ -1842,12 +1842,25 @@ pre { max-width: 100%; overflow-x: auto; }
 .scorecard__header { margin: 0 0 1rem; }
 .scorecard__title { margin: 0 0 0.25rem; font-size: 1.5rem; font-weight: 600; }
 .scorecard__date { margin: 0; color: var(--muted); font-size: 0.9rem; }
-.scorecard__group { margin: 0 0 1.5rem; }
-.scorecard__group h3 { margin: 0 0 0.5rem; font-size: 1.15rem; font-weight: 600; }
-.scorecard__holes { margin: 0 0 1rem; }
-.scorecard__holes table { min-width: 18rem; }
-.scorecard__holes th,
-.scorecard__holes td { text-align: center; font-size: 0.82rem; }
+.scorecard__group { margin: 0 0 1rem; }
+.scorecard__group + .scorecard__group { margin-top: 2rem; }
+.scorecard__group h3 { margin: 0 0 0.4rem; font-size: 1.15rem; font-weight: 600; }
+.scorecard__meta-row th,
+.scorecard__meta-row td { background: var(--fairway-wash); text-align: center; font-size: 0.82rem; }
+.scorecard__sheet .scorecard__meta-row th { text-align: left; }
+.scorecard__pairing-heading th {
+    padding: 0.55rem 0.75rem;
+    background: #e5e8e4;
+    color: var(--ink);
+    font-size: 0.88rem;
+    text-align: left;
+}
+.scorecard__pairing-content { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
+.scorecard__pairing-content a { font-weight: 600; }
+.scorecard__sheet .score-team { min-width: 6rem; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.scorecard__round th,
+.scorecard__round td { background: #f4f6f2; font-size: 0.78rem; }
+.scorecard__round th { text-align: left; }
 .score-yardage { font-variant-numeric: tabular-nums; font-weight: 600; }
 .score-par { font-variant-numeric: tabular-nums; }
 .score-stroke-index { color: var(--muted); font-size: 0.82rem; }
@@ -1856,7 +1869,4 @@ pre { max-width: 100%; overflow-x: auto; }
 
 @media (max-width: 720px) {
     .scorecard__title { font-size: 1.25rem; }
-    .scorecard__holes table { min-width: auto; }
-    .scorecard__holes th,
-    .scorecard__holes td { padding: 0.3rem 0.15rem; font-size: 0.72rem; }
 }
