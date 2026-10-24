@@ -214,6 +214,31 @@ def _group_matches(matches: list[dict], week_type: str) -> list[dict]:
     return [{"label": label, "matches": items} for label, items in groups.items()]
 
 
+def _hole_details(session: Session, week: Week) -> dict:
+    """Course and first tee set details for the played nine."""
+    holes = week_holes(session, week.id)
+    season = session.get(Season, week.season_id)
+    course = session.get(Course, season.course_id)
+    tee_set = session.scalars(
+        select(TeeSet).where(TeeSet.course_id == season.course_id).order_by(TeeSet.sort_order).limit(1)
+    ).one_or_none()
+    yards_by_hole: dict[int, int | None] = {}
+    if tee_set is not None and holes:
+        for yardage in session.scalars(
+            select(HoleYardage).where(
+                HoleYardage.tee_set_id == tee_set.id,
+                HoleYardage.hole_id.in_([hole.id for hole in holes]),
+            )
+        ):
+            yards_by_hole[yardage.hole_id] = yardage.yards
+    return {
+        "holes": holes, "hole_numbers": [hole.number for hole in holes],
+        "yards_by_hole": yards_by_hole,
+        "course_name": course.name, "tee_label": tee_set.color_label if tee_set else None,
+        "scoring_type": season.scoring_type,
+    }
+
+
 # --- the week's scores ---------------------------------------------------------
 
 
@@ -222,23 +247,57 @@ def _week_score_matches(
     week: Week,
     actor: Actor,
     open_to_viewer: bool,
+    is_admin: bool,
     sheet: list[SheetMatch],
     hole_numbers: list[int],
     points_by_match: dict,
+    scoring_type: str,
 ) -> list[dict]:
     """Build the per-match score context for the player week scores page."""
     matches = []
     for match in sheet:
         link = None
+        if is_admin and week.status == "scheduled" and week.week_type == "match":
+            link = {
+                "href": f"/admin/weeks/{week.id}/matches/{match.player_match_id}/scores",
+                "text": "Unlock scores" if match.locked else (
+                    "Enter scores" if match.empty else "Update scores"
+                ),
+            }
         writable = _writable(session, match.player_match_id, actor) if open_to_viewer else frozenset()
-        if writable and not match.locked:
+        if link is None and writable and not match.locked:
             entered = any(golfer.strokes_by_hole for golfer in match.golfers if golfer.golfer_id in writable)
             link = {"href": match_path(week.id, match.player_match_id),
                     "text": "Update scores" if entered else "Enter scores"}
         result = points_by_match.get(match.player_match_id)
         points_by_golfer = {r.golfer_id: r.points for r in result.rounds} if result is not None else {}
+        round_cells = None
+        round_bonus = None
+        if result is not None:
+            first_id, second_id = (golfer.golfer_id for golfer in match.golfers)
+            if scoring_type == "match_play":
+                round_cells = [
+                    f"{hole.points_by_golfer[first_id]} | {hole.points_by_golfer[second_id]}"
+                    for hole in result.holes
+                ]
+                bonus = {
+                    round_.golfer_id: round_.points - sum(
+                        hole.points_by_golfer[round_.golfer_id] for hole in result.holes
+                    )
+                    for round_ in result.rounds
+                }
+                round_bonus = f"{bonus[first_id]} | {bonus[second_id]}"
+            else:
+                lead = 0
+                round_cells = []
+                for hole in result.holes:
+                    lead += hole.net_by_golfer[second_id] - hole.net_by_golfer[first_id]
+                    round_cells.append(lead)
+        slot = match.position_label
         matches.append({
             "match": match, "link": link, "points": points_by_golfer,
+            "label": f"Player {'ABCD'[int(slot) - 1]}" if slot in ("1", "2", "3", "4") else f"Match {slot}",
+            "round_cells": round_cells, "round_bonus": round_bonus,
             "view": {"rows": _rows(match, hole_numbers, frozenset(), {}, set())},
         })
     return matches
@@ -265,8 +324,8 @@ async def week_scores(week_id: int, request: Request,
                 return RedirectResponse(f"/weeks/{target_id}/scores", status_code=303,
                                         headers=PRIVATE_HEADERS)
     sheet = week_sheet(session, week.id)
-    holes = week_holes(session, week.id)
-    hole_numbers = [hole.number for hole in holes]
+    hole_details = _hole_details(session, week)
+    hole_numbers = hole_details["hole_numbers"]
     open_to_viewer = _open_to(session, week, actor, today)
     # Weeks of this season for the week switcher; teams present this week for the filter.
     weeks = list(session.scalars(
@@ -276,29 +335,14 @@ async def week_scores(week_id: int, request: Request,
     if team:
         sheet = [match for match in sheet
                  if match.home_team_name == team or match.away_team_name == team]
-    season = session.get(Season, week.season_id)
-    course = session.get(Course, season.course_id)
-    tee_set = session.scalars(
-        select(TeeSet).where(TeeSet.course_id == season.course_id).order_by(TeeSet.sort_order).limit(1)
-    ).one_or_none()
-    yards_by_number: dict[int, int | None] = {}
-    if tee_set is not None:
-        hole_ids = [hole.id for hole in holes]
-        if hole_ids:
-            for hy in session.scalars(
-                select(HoleYardage).where(HoleYardage.tee_set_id == tee_set.id,
-                                          HoleYardage.hole_id.in_(hole_ids))
-            ):
-                yards_by_number[hy.hole_id] = hy.yards
     points_by_match = week_points(session, week.id)
     matches = _week_score_matches(
-        session, week, actor, open_to_viewer, sheet, hole_numbers, points_by_match,
+        session, week, actor, open_to_viewer, user.is_admin, sheet, hole_numbers, points_by_match,
+        hole_details["scoring_type"],
     )
     groups = _group_matches(matches, week.week_type)
     return _page(request, "player/scores/week.html", {
-        "week": week, "matches": matches, "groups": groups, "hole_numbers": hole_numbers,
-        "holes": holes, "yards_by_number": yards_by_number,
-        "course_name": course.name, "tee_label": tee_set.color_label if tee_set else None,
+        "week": week, "matches": matches, "groups": groups, **hole_details,
         "weeks": weeks, "teams": teams, "team": team,
         "saved": request.query_params.get("saved") == "1", "errors": {},
     })
@@ -374,6 +418,7 @@ def _match_page(request: Request, session: Session, week: Week, player_match_id:
     message = message or notice
     return _page(request, "player/scores/match.html", {
         "week": week, "form": form, "errors": errors or {}, "field_ids": form["field_ids"], "message": message,
+        **_hole_details(session, week),
         "scores_path": week_path(week.id), "enter_path": enter_path(week.id),
     }, status_code)
 
