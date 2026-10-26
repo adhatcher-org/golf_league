@@ -58,6 +58,12 @@ orchestrator repo next door.
   and set-password routes are in `golf_league/routers/join.py`. Their invite and credential
   operations are in `golf_league/services/invites.py`, with password-reset completion in
   `golf_league/services/auth.py`.
+- Handicap trend views (read-only) are `golf_league/routers/handicaps.py` with
+  `templates/player/handicap_trend.html` and `templates/admin/handicap_trend.html`;
+  `golf_league/services/handicaps.py` computes a golfer's trend from week handicaps.
+- Player round history is `golf_league/routers/player_rounds.py` with
+  `templates/player/rounds.html`; `golf_league/services/player_rounds.py` lists a verified
+  player's own past rounds with gross/net strokes and match results.
 - Player home and contact entry points are `golf_league/routers/home.py` and
   `golf_league/routers/player_schedule.py`; projections are in
   `golf_league/services/player_schedule.py`, with markup in `templates/player/`.

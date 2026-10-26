@@ -34,6 +34,7 @@ from golf_league.models import (
     Season,
     User,
     Week,
+    WeekHandicap,
 )
 from golf_league.services.auth import create_session_cookie, hash_password
 from golf_league.services.handicaps import ensure_week_handicap
@@ -127,7 +128,7 @@ def _strokes(client, match_id) -> dict[int, int]:
 
 
 def _block(html: str, match_id: int) -> str:
-    return html.split(f'id="match-{match_id}"')[1].split("</section>")[0]
+    return html.split(f'id="match-{match_id}"')[1].split("</tbody>")[0]
 
 
 def _admin(ids) -> Actor:
@@ -491,6 +492,10 @@ def test_the_week_page_shows_every_match_to_any_verified_user_with_no_name_of_wh
     _as(client, ids["users"]["c1"])
     page = client.get(_week_path(ids)).text
     assert re.findall(r'id="match-(\d+)"', page) == [str(match_id) for match_id in ids["matches"]]
+    assert page.count('<tbody id="match-') == len(ids["matches"])
+    assert page.count('class="scorecard__pairing-heading"') == len(ids["matches"])
+    first_match = _block(page, ids["matches"][0])
+    assert first_match.index("A1 Example") < first_match.index("B1 Example") < first_match.index("Round")
     # Both golfers of the first match shot 45; scores render in the week's combined table.
     assert page.count("<td>45</td>") == 2
     # A not-entered match renders every hole blank.
@@ -574,6 +579,10 @@ def test_scorecard_shows_course_nine_date_and_hole_metadata(league):
     assert '<td class="score-yardage">498</td>' in page
     assert '<td class="score-par">5</td>' in page
     assert '<td class="score-stroke-index">5</td>' in page
+    match_page = client.get(_match_path(ids, 0)).text
+    for detail in ("Yards", "Par", "Stroke index"):
+        assert detail in match_page
+    assert '<td class="score-yardage">498</td>' in match_page
 
 
 def test_scorecard_shows_hole_scores_totals_and_points(league):
@@ -597,6 +606,57 @@ def test_scorecard_shows_hole_scores_totals_and_points(league):
     assert 'class="score-points">0' in page
     # Matches with no saved scores are incomplete -> "—" for points.
     assert 'class="score-points">—' in page
+    first_match = _block(page, ids["matches"][0])
+    round_row = first_match.split('class="scorecard__round"')[1].split("</tr>")[0]
+    assert "Match play" in page
+    assert re.findall(r"<td>(\d+ \| \d+|—)</td>", round_row) == ["2 | 0"] * 10
+    pending = _block(page, ids["matches"][1]).split('class="scorecard__round"')[1].split("</tr>")[0]
+    assert re.findall(r"<td>(\d+ \| \d+|—)</td>", pending) == ["—"] * 9
+
+
+def test_round_line_uses_signed_relative_strokes_on_each_hole(league):
+    client, ids = league
+    ids = _with_admin(client, ids)
+    match_id = ids["matches"][0]
+    first_id, second_id = ids["sides"][match_id]
+    with Session(_engine(client)) as session:
+        session.get(Season, ids["season"]).scoring_type = "stroke_play"
+        save_match_scores(session, ids["week"], match_id,
+                          {first_id: dict.fromkeys(range(1, 10), 5),
+                           second_id: dict.fromkeys(range(1, 10), 5)},
+                          Actor(ids["users"]["admin"], True), NOW.date(), base_revision=0, now=NOW)
+        for golfer_id, handicap in ((first_id, -2), (second_id, 10)):
+            ensure_week_handicap(session, ids["week"], golfer_id, clock=clock)
+            session.scalar(select(WeekHandicap).where(
+                WeekHandicap.week_id == ids["week"], WeekHandicap.golfer_id == golfer_id,
+            )).strokes = handicap
+        session.commit()
+    page = client.get(_week_path(ids)).text
+    round_row = _block(page, match_id).split('class="scorecard__round"')[1].split("</tr>")[0]
+    assert "Stroke play" in page
+    assert re.findall(r"<td>(-?\d+|—)</td>", round_row) == [
+        "-1", "-3", "-5", "-6", "-7", "-8", "-9", "-10", "-12",
+    ]
+    assert " | " not in round_row
+
+
+def test_match_play_round_line_shows_tied_holes_and_shared_bonus(league):
+    client, ids = league
+    ids = _with_admin(client, ids)
+    match_id = ids["matches"][0]
+    first_id, second_id = ids["sides"][match_id]
+    with Session(_engine(client)) as session:
+        save_match_scores(session, ids["week"], match_id,
+                          {first_id: dict.fromkeys(range(1, 10), 5),
+                           second_id: dict.fromkeys(range(1, 10), 5)},
+                          Actor(ids["users"]["admin"], True), NOW.date(), base_revision=0, now=NOW)
+        ensure_week_handicap(session, ids["week"], first_id, clock=clock)
+        ensure_week_handicap(session, ids["week"], second_id, clock=clock)
+        session.commit()
+    page = client.get(_week_path(ids)).text
+    round_row = _block(page, match_id).split('class="scorecard__round"')[1].split("</tr>")[0]
+    assert re.findall(r"<td>(\d+ \| \d+)</td>", round_row) == ["1 | 1"] * 9 + ["2 | 2"]
+    assert page.count('class="score-points">11') >= 2
 
 
 def test_scorecard_edit_links_follow_entry_state(league):
@@ -617,3 +677,32 @@ def test_scorecard_edit_links_follow_entry_state(league):
     page = client.get(_week_path(ids)).text
     assert f'id="match-{match_id}"' in page
     assert "Update scores" not in page and "Enter scores" not in page
+
+
+def test_admin_can_open_every_pairing_from_week_scores(league):
+    client, ids = league
+    ids = _with_admin(client, ids)
+    _as(client, ids["users"]["admin"])
+    page = client.get(_week_path(ids)).text
+    for match_id in ids["matches"]:
+        path = f"/admin/weeks/{ids['week']}/matches/{match_id}/scores"
+        assert f'href="{path}">Enter scores' in _block(page, match_id)
+        form = client.get(path)
+        assert form.status_code == 200
+        assert form.text.count('class="score-input"') == 18
+
+    match_id = ids["matches"][0]
+    first_id, second_id = ids["sides"][match_id]
+    with Session(_engine(client)) as session:
+        save_match_scores(session, ids["week"], match_id,
+                          {first_id: dict.fromkeys(range(1, 10), 5),
+                           second_id: dict.fromkeys(range(1, 10), 5)},
+                          _admin(ids), NOW.date(), base_revision=0, now=NOW)
+        session.commit()
+    path = f"/admin/weeks/{ids['week']}/matches/{match_id}/scores"
+    assert f'href="{path}">Update scores' in _block(client.get(_week_path(ids)).text, match_id)
+    with Session(_engine(client)) as session:
+        lock_match(session, ids["week"], match_id, _admin(ids), base_revision=1, now=NOW)
+        session.commit()
+    assert f'href="{path}">Unlock scores' in _block(client.get(_week_path(ids)).text, match_id)
+    assert "Unlock this match" in client.get(path).text

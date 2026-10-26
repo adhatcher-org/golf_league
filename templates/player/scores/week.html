@@ -35,66 +35,38 @@
 <section class="scorecard" aria-labelledby="scorecard-title">
     <div class="scorecard__header">
         <h2 id="scorecard-title">{{ course_name }} {{ week.nine|title }} nine scorecard</h2>
-        <p class="scorecard__date">{{ week.play_date.strftime('%b %-d, %Y') }}{% if tee_label %} · {{ tee_label }} tees{% endif %}</p>
+        <p class="scorecard__date">{{ week.play_date.strftime('%b %-d, %Y') }}{% if tee_label %} · {{ tee_label }} tees{% endif %} · {{ 'Match play' if scoring_type == 'match_play' else 'Stroke play' }}</p>
     </div>
-
-    {% if hole_numbers %}
-    <div class="table-wrap scorecard__holes">
-        <table>
-            <thead>
-                <tr><th scope="col">Hole</th>{% for number in hole_numbers %}<th scope="col" class="score-hole">{{ number }}</th>{% endfor %}</tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <th scope="row">Yards</th>
-                    {% for hole in holes %}<td class="score-yardage">{{ yards_by_number.get(hole.id, '—') }}</td>{% endfor %}
-                </tr>
-                <tr>
-                    <th scope="row">Par</th>
-                    {% for hole in holes %}<td class="score-par">{{ hole.par }}</td>{% endfor %}
-                </tr>
-                <tr>
-                    <th scope="row">Stroke index</th>
-                    {% for hole in holes %}<td class="score-stroke-index">{{ hole.stroke_index_9 }}</td>{% endfor %}
-                </tr>
-            </tbody>
-        </table>
-    </div>
-    {% endif %}
 
     {% for group in groups %}
     <section class="scorecard__group" aria-labelledby="group-title-{{ loop.index }}">
         <h3 id="group-title-{{ loop.index }}">{{ group.label }}</h3>
-        <div class="table-wrap score-grid score-grid--named">
+        <div class="table-wrap score-grid score-grid--named scorecard__sheet">
             <table>
                 <thead>
+                    <tr class="scorecard__meta-row"><td></td><th scope="row">Yards</th>{% for hole in holes %}<td class="score-yardage">{{ yards_by_hole.get(hole.id, '—') }}</td>{% endfor %}<td colspan="4"></td></tr>
+                    <tr class="scorecard__meta-row"><td></td><th scope="row">Par</th>{% for hole in holes %}<td class="score-par">{{ hole.par }}</td>{% endfor %}<td colspan="4"></td></tr>
+                    <tr class="scorecard__meta-row"><td></td><th scope="row">Stroke index</th>{% for hole in holes %}<td class="score-stroke-index">{{ hole.stroke_index_9 }}</td>{% endfor %}<td colspan="4"></td></tr>
                     <tr>
-                        <th scope="col">Golfer</th>
-                        <th scope="col" class="score-team">Team</th>
-                        <th scope="col" class="score-position">Pos</th>
+                        <th scope="col">Team</th><th scope="col">Golfer</th>
                         {% for number in hole_numbers %}<th scope="col" class="score-hole">{{ number }}</th>{% endfor %}
                         <th scope="col">Gross</th><th scope="col">HC</th><th scope="col">Net</th><th scope="col" class="score-points-header">Points</th>
                     </tr>
                 </thead>
-                <tbody>
-                    {% for item in group.matches %}
-                    {% set view = item.view %}
+                {% set scorecard_pairing = true %}
+                {% for item in group.matches %}
+                <tbody id="match-{{ item.match.player_match_id }}">
+                    <tr class="scorecard__pairing-heading"><th scope="rowgroup" colspan="{{ hole_numbers|length + 6 }}"><span class="scorecard__pairing-content"><span>{{ item.label }}</span>{% if item.link %}<a class="tap-link" href="{{ item.link.href }}">{{ item.link.text }}<span class="visually-hidden"> for {{ item.match.golfers[0].name }} and {{ item.match.golfers[1].name }}</span></a>{% endif %}</span></th></tr>
                     {% set points = item.points | default({}) %}
-                    {% for row in view.rows %}
+                    {% for row in item.view.rows %}
                     {% set golfer_points = points.get(row.golfer.golfer_id, '—') %}
                     {% include "scores/_match_scores.html" %}
                     {% endfor %}
-                    {% endfor %}
+                    <tr class="scorecard__round"><td></td><th scope="row" aria-label="{{ 'Round, first and second player hole points' if scoring_type == 'match_play' else 'Round, first player running net stroke lead' }}">Round</th>{% for number in hole_numbers %}<td>{{ item.round_cells[loop.index0] if item.round_cells is not none else '—' }}</td>{% endfor %}<td colspan="2"></td><td>{{ item.round_bonus if item.round_bonus is not none else '' }}</td><td></td></tr>
                 </tbody>
+                {% endfor %}
             </table>
         </div>
-        {% for item in group.matches %}
-        <div id="match-{{ item.match.player_match_id }}" class="score-match score-match__actions">
-            {% if item.link %}
-            <a class="tap-link" href="{{ item.link.href }}">{{ item.link.text }}</a>
-            {% endif %}
-        </div>
-        {% endfor %}
     </section>
     {% endfor %}
 </section>

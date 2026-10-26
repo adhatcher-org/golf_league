@@ -357,6 +357,9 @@ def test_existing_account_at_capacity_preserves_identity_and_rotates_session(cli
     )
     assert response.status_code == 303
     fresh_cookie = response.cookies["session"]
+    # The TestClient cookie jar holds fresh_cookie (version 2) from the
+    # set-password response; clear it so only old_cookie (version 1) is sent.
+    client.cookies.clear()
     assert client.get("/__gl43_session_probe", cookies={"session": old_cookie}).status_code == 401
     fresh = client.get("/__gl43_session_probe", cookies={"session": fresh_cookie})
     assert fresh.status_code == 200 and fresh.json() == {"id": user_id}

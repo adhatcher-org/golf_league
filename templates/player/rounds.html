@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}My Round History - Golf League{% endblock %}
+
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title">
+    <p class="eyebrow">My Round History</p>
+    <h1 id="page-title">Round History</h1>
+</section>
+
+{% if not rounds %}
+<p class="empty-state">No rounds found. You will see your past rounds here after they have been played.</p>
+{% else %}
+<div class="table-wrap">
+    <table class="golfer-table">
+        <thead>
+            <tr>
+                <th scope="col">Week</th>
+                <th scope="col">Date</th>
+                <th scope="col">Opponent</th>
+                <th scope="col">Gross</th>
+                <th scope="col">Net</th>
+                <th scope="col">Result</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for round in rounds %}
+            <tr>
+                <td>Week {{ round.week_index }}</td>
+                <td>{{ round.play_date }}</td>
+                <td>{{ round.opponent_name }}</td>
+                <td>{{ round.gross_total if round.gross_total is not None else '—' }}</td>
+                <td>{{ round.net_total if round.net_total is not None else 'pending' }}</td>
+                <td>{{ round.result|title if round.result else '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

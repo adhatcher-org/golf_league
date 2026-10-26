@@ -19,6 +19,8 @@
                 {% if request.state.can_view_player_pages %}
                 <a href="/roster">Player roster</a>
                 <a href="/my/schedule">My Schedule</a>
+                <a href="/my/rounds">My Rounds</a>
+                <a href="/handicaps/trend">Handicap Trend</a>
                 {% if request.state.nav_season %}
                 <a href="/seasons/{{ request.state.nav_season.id }}/results">Results</a>
                 {% endif %}
