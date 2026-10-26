@@ -64,6 +64,11 @@ orchestrator repo next door.
 - Player round history is `golf_league/routers/player_rounds.py` with
   `templates/player/rounds.html`; `golf_league/services/player_rounds.py` lists a verified
   player's own past rounds with gross/net strokes and match results.
+- Read-only results and skins pages (M12, GL-98 through GL-102):
+  `golf_league/domain/scoring.py` (pure result/net-skins computation), `golf_league/routers/results.py`,
+  `templates/player/results.html`, `templates/player/results/week.html`,
+  `templates/player/skins.html`, `templates/player/net_skins.html`, wired through
+  `golf_league/routers/player_schedule.py`, `golf_league/routers/player_scores.py`, and `app.py`.
 - Player home and contact entry points are `golf_league/routers/home.py` and
   `golf_league/routers/player_schedule.py`; projections are in
   `golf_league/services/player_schedule.py`, with markup in `templates/player/`.
