@@ -7,6 +7,9 @@
         <h1>Week {{ week.index }} scores</h1>
         <p>{{ week.play_date.strftime('%b %-d, %Y') }}{% if week.nine %} · {{ week.nine|title }} nine{% endif %}. {{ entered }} of {{ sheet|length }} matches entered, {{ locked }} locked.</p>
     </div>
+    {% if open_week %}
+    <p><a href="/admin/weeks/{{ week.id }}/handicaps/reseed">Re-seed handicaps for this week</a></p>
+    {% endif %}
 </header>
 {% for notice in notices %}<p class="notice" role="status">{{ notice }}</p>{% endfor %}
 {% include "_error_summary.html" %}

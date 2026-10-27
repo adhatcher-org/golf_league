@@ -31,6 +31,12 @@ from golf_league.routers.scorecard_flow import (
     _today,
 )
 from golf_league.security import require_admin
+from golf_league.services.handicaps import (
+    HandicapReseedError,
+    ReseedPreview,
+    reseed_preview,
+    reseed_week_handicaps,
+)
 from golf_league.services.match_entry import (
     any_typed,
     parse_revision,
@@ -594,3 +600,73 @@ async def match_clear(week_id: int, player_match_id: int, request: Request,
     logger.info("match cleared week=%d match=%d rows=%d user=%d", week_id, player_match_id, deleted,
                 actor.user_id)
     return _redirect(week_id, "cleared=1", player_match_id)
+
+
+# --- re-seed handicaps --------------------------------------------------------
+
+
+def _reseed_page(request: Request, session: Session, week: Week, *,
+                 preview: ReseedPreview | None = None,
+                 errors: dict[str, str] | None = None,
+                 status_code: int = 200) -> Response:
+    """The re-seed preview page: before/after table plus confirm form."""
+    if preview is None and not errors:
+        preview = reseed_preview(session, week.id)
+    plan = preview.plan if preview is not None else None
+    return _page(request, "admin/scorecards/reseed.html", {
+        "week": week, "preview": preview, "plan": plan,
+        "errors": errors or {}, "field_ids": {}, "form_id": "reseed-form",
+        "sheet_path": _sheet_path(week.id),
+        "open_week": _takes_scores(week), "closed_reason": _closed_reason(week),
+    }, status_code)
+
+
+@router.get("/admin/weeks/{week_id}/handicaps/reseed")
+async def handicap_reseed_preview(week_id: int, request: Request,
+                                  session: Session = Depends(get_session),  # noqa: B008
+                                  admin=Depends(require_admin)) -> Response:  # noqa: B008
+    week = _week(session, week_id)
+    try:
+        preview = reseed_preview(session, week_id)
+    except HandicapReseedError as exc:
+        if exc.code == "not_schedulable":
+            return _reseed_page(request, session, week, status_code=422,
+                                errors={"reseed": exc.message})
+        raise HTTPException(status_code=404, detail="Not found") from exc
+    return _reseed_page(request, session, week, preview=preview)
+
+
+@router.post("/admin/weeks/{week_id}/handicaps/reseed")
+async def handicap_reseed_confirm(week_id: int, request: Request,
+                                  session: Session = Depends(get_session),  # noqa: B008
+                                  admin=Depends(require_admin)) -> Response:  # noqa: B008
+    form = await request.form()
+    _csrf(request, form.get("csrf_token", ""))
+    week = _week(session, week_id)
+    try:
+        preview = reseed_preview(session, week_id)
+    except HandicapReseedError as exc:
+        if exc.code == "not_schedulable":
+            return _reseed_page(request, session, week, status_code=422,
+                                errors={"reseed": exc.message})
+        raise HTTPException(status_code=404, detail="Not found") from exc
+
+    if not preview.plan.changes:
+        return _redirect(week_id, "reseeded=0")
+
+    actor, now = Actor(admin.id, True), _now(request)
+    session.rollback()
+    try:
+        count = reseed_week_handicaps(session, week_id, actor, now)
+        session.commit()
+    except HandicapReseedError as exc:
+        session.rollback()
+        raise HTTPException(status_code=404, detail="Not found") from exc
+    except (SQLAlchemyError, OSError) as exc:
+        session.rollback()
+        logger.warning("handicap re-seed failed week=%d type=%s", week_id, type(exc).__name__)
+        return _reseed_page(request, session, week, preview=preview, status_code=503,
+                            errors={"reseed": "The re-seed could not be saved just now. Try again."})
+
+    logger.info("handicap re-seed week=%d rows=%d user=%d", week_id, count, actor.user_id)
+    return _redirect(week_id, f"reseeded={count}")

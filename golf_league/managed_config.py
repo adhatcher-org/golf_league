@@ -93,6 +93,9 @@ DEPLOY_FILE_KEYS: dict[str, str | None] = {
     "OLLAMA_URL": "ollama_url",
     "OLLAMA_VISION_MODEL": "ollama_vision_model",
     "OLLAMA_VISION_NUM_CTX": "ollama_vision_num_ctx",
+    "OPENAI_API_KEY": "openai_api_key",
+    "OPENAI_MODEL": "openai_model",
+    "OPENAI_BASE_URL": "openai_base_url",
     "LEAGUE_TIMEZONE": "league_timezone",
     # First-boot only; read by `bootstrap_admin`, not a `Settings` field.
     "ADMIN_EMAIL": None,

@@ -60,6 +60,8 @@ from golf_league.services.scorecard_drafts import (
 )
 from golf_league.services.scorecard_vision import (
     OllamaVisionProvider,
+    OpenAIVisionProvider,
+    analysis_provider,
     photo_entry_configured,
     vision_num_ctx,
 )
@@ -168,11 +170,19 @@ async def lifespan(app: FastAPI):
     # assigning a fake to `app.state.vision_provider`, before or after startup;
     # a non-None value is never overwritten here.
     if app.state.vision_provider is None and photo_entry_configured(settings):
-        app.state.vision_provider = OllamaVisionProvider(
-            settings.ollama_url,
-            settings.ollama_vision_model,
-            vision_num_ctx(settings),
-        )
+        provider_name = analysis_provider(settings)
+        if provider_name == "ollama":
+            app.state.vision_provider = OllamaVisionProvider(
+                settings.ollama_url,
+                settings.ollama_vision_model,
+                vision_num_ctx(settings),
+            )
+        elif provider_name == "openai":
+            app.state.vision_provider = OpenAIVisionProvider(
+                settings.openai_api_key,
+                settings.openai_model,
+                settings.openai_base_url,
+            )
     owned_executor = _configure_scorecards(app, settings)
     database_url = settings.database_url
 
