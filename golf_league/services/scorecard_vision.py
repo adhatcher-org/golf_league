@@ -88,13 +88,21 @@ def _valid_http_url(value: str) -> bool:
 
 
 def photo_entry_configured(settings: Any) -> bool:
-    """True only for a usable Ollama configuration; `openai` is never configured."""
-    return (
-        analysis_provider(settings) == "ollama"
-        and _valid_http_url(str(settings.ollama_url or "").strip())
-        and bool(str(settings.ollama_vision_model or "").strip())
-        and vision_num_ctx(settings) is not None
-    )
+    """True only for a usable Ollama or OpenAI configuration."""
+    provider = analysis_provider(settings)
+    if provider == "ollama":
+        return (
+            _valid_http_url(str(settings.ollama_url or "").strip())
+            and bool(str(settings.ollama_vision_model or "").strip())
+            and vision_num_ctx(settings) is not None
+        )
+    elif provider == "openai":
+        return (
+            bool(str(settings.openai_api_key or "").strip())
+            and bool(str(settings.openai_model or "").strip())
+            and _valid_http_url(str(settings.openai_base_url or "").strip())
+        )
+    return False
 
 
 # --- interface ---------------------------------------------------------------
@@ -383,6 +391,110 @@ class OllamaVisionProvider:
             raise
         logger.info(
             "vision read ok provider=ollama model=%s duration_ms=%d",
+            self._model, _elapsed_ms(started),
+        )
+        return card
+
+
+class OpenAIVisionProvider:
+    """Reads a scorecard through OpenAI's Chat Completions API, standard library only."""
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        base_url: str,
+        *,
+        connect_timeout: float = 5.0,
+        total_timeout: float = 180.0,
+    ) -> None:
+        self._api_key = api_key.strip()
+        self._model = model.strip()
+        self._base_url = base_url.strip()
+        self._connect_timeout = connect_timeout
+        self._total_timeout = total_timeout
+
+    def _request_body(self, image_jpeg: bytes, hole_count: int) -> bytes:
+        payload = {
+            "model": self._model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": build_prompt(hole_count)},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64.b64encode(image_jpeg).decode('ascii')}"
+                            },
+                        },
+                    ],
+                }
+            ],
+            "stream": False,
+            "response_format": {"type": "json_object"},
+        }
+        return json.dumps(payload).encode("utf-8")
+
+    def _post(self, body: bytes) -> bytes:
+        """POST to `{base_url}/chat/completions`; map every transport failure to a provider error."""
+        try:
+            parts = urlsplit(self._base_url)
+            host = parts.hostname
+            port = parts.port
+        except ValueError:
+            raise ProviderUnavailable("provider_bad_url") from None
+        if parts.scheme not in ("http", "https") or not host:
+            raise ProviderUnavailable("provider_bad_url")
+        path = parts.path.rstrip("/") + "/chat/completions"
+        connection_class = (
+            http.client.HTTPSConnection if parts.scheme == "https" else http.client.HTTPConnection
+        )
+        conn = connection_class(host, port, timeout=self._connect_timeout)
+        try:
+            conn.connect()
+            conn.sock.settimeout(self._total_timeout)
+            conn.request(
+                "POST", path, body=body,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "Authorization": f"Bearer {self._api_key}",
+                },
+            )
+            response = conn.getresponse()
+            status = response.status
+            reply = response.read(_MAX_REPLY_BYTES + 1)
+        except TimeoutError:  # includes the connect and read socket timeouts
+            raise ProviderTimeout() from None
+        except (OSError, http.client.HTTPException):
+            raise ProviderUnavailable() from None
+        finally:
+            conn.close()
+        if not 200 <= status < 300:
+            raise ProviderUnavailable("provider_http_status")
+        if len(reply) > _MAX_REPLY_BYTES:
+            raise ProviderOutputError("output_too_large")
+        return reply
+
+    def read_scorecard(self, image_jpeg: bytes, *, hole_count: int) -> ExtractedCard:
+        started = time.monotonic()
+        try:
+            reply = self._post(self._request_body(image_jpeg, hole_count))
+            try:
+                envelope = json.loads(reply)
+                content = envelope["choices"][0]["message"]["content"]
+            except (ValueError, KeyError, TypeError, RecursionError, IndexError):
+                raise ProviderOutputError("output_envelope") from None
+            card = parse_card(content, hole_count=hole_count, model_name=self._model)
+        except ProviderError as error:
+            logger.warning(
+                "vision read failed provider=openai model=%s duration_ms=%d code=%s",
+                self._model, _elapsed_ms(started), error.code,
+            )
+            raise
+        logger.info(
+            "vision read ok provider=openai model=%s duration_ms=%d",
             self._model, _elapsed_ms(started),
         )
         return card

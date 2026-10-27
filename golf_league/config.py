@@ -89,6 +89,9 @@ class Settings(BaseSettings):
     ollama_url: str = ""
     ollama_vision_model: str = ""
     ollama_vision_num_ctx: str = ""  # empty means 32768
+    openai_api_key: str = Field(default="", repr=False)
+    openai_model: str = ""
+    openai_base_url: str = ""
     league_timezone: str = "America/Chicago"
 
     @classmethod

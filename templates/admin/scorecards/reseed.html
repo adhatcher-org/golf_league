@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Re-seed handicaps · Week {{ week.index }} - Golf League{% endblock %}
+{% block content %}
+<header class="admin-page-heading">
+    <div>
+        <p class="eyebrow">Manage · Scores · Re-seed handicaps</p>
+        <h1>Re-seed handicaps for week {{ week.index }}</h1>
+        <p>{{ week.play_date.strftime('%b %-d, %Y') }}{% if week.nine %} · {{ week.nine|title }} nine{% endif %}. Re-seeding overwrites saved weekly handicap snapshots with the current effective season seed. Rows already correct, manually adjusted, or without an effective seed are not changed.</p>
+    </div>
+</header>
+
+{% include "_error_summary.html" %}
+
+{% if plan %}
+{% if plan.changes %}
+<section aria-labelledby="reseed-changes-title">
+    <h2 id="reseed-changes-title">Will change ({{ plan.changes|length }})</h2>
+    <table class="reseed-table">
+        <thead>
+            <tr><th>Golfer</th><th>Current strokes</th><th>New strokes</th></tr>
+        </thead>
+        <tbody>
+            {% for change in plan.changes %}
+            <tr>
+                <td>{{ change.golfer_name }}</td>
+                <td>{{ change.current_strokes }}</td>
+                <td>{{ change.new_strokes }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+{% if plan.unchanged %}
+<section aria-labelledby="reseed-unchanged-title">
+    <h2 id="reseed-unchanged-title">Already correct ({{ plan.unchanged|length }})</h2>
+    <ul>
+        {% for golfer_id in plan.unchanged %}
+        <li>Golfer {{ golfer_id }}: strokes already match the effective seed.</li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+{% if plan.blocked_no_seed %}
+<section aria-labelledby="reseed-blocked-title">
+    <h2 id="reseed-blocked-title">Cannot re-seed: no effective seed ({{ plan.blocked_no_seed|length }})</h2>
+    <ul>
+        {% for golfer_id in plan.blocked_no_seed %}
+        <li>Golfer {{ golfer_id }}: no effective tee or season seed handicap. Not changed.</li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+{% if plan.manually_adjusted %}
+<section aria-labelledby="reseed-manual-title">
+    <h2 id="reseed-manual-title">Cannot re-seed: manually adjusted ({{ plan.manually_adjusted|length }})</h2>
+    <ul>
+        {% for golfer_id in plan.manually_adjusted %}
+        <li>Golfer {{ golfer_id }}: match slot was manually adjusted. Not changed.</li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+{% if plan.excluded_no_row %}
+<section aria-labelledby="reseed-excluded-title">
+    <h2 id="reseed-excluded-title">No snapshot to re-seed ({{ plan.excluded_no_row|length }})</h2>
+    <ul>
+        {% for golfer_id in plan.excluded_no_row %}
+        <li>Golfer {{ golfer_id }}: no weekly handicap row exists. Not changed.</li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+{% if plan.changes %}
+<form id="{{ form_id }}" class="reseed-confirm" method="post" action="/admin/weeks/{{ week.id }}/handicaps/reseed">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <p>Confirm overwriting {{ plan.changes|length }} weekly handicap snapshot{% if plan.changes|length != 1 %}s{% endif %} with the current effective season seed. This cannot be undone except by re-seeding again.</p>
+    <p><button class="button" type="submit">Confirm re-seed</button> <a href="{{ sheet_path }}">Cancel</a></p>
+</form>
+{% elif not errors %}
+<p>No handicap snapshots would change. Nothing to confirm.</p>
+{% endif %}
+{% endif %}
+
+{% endblock %}
